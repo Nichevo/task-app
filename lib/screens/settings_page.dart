@@ -1,0 +1,154 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../dropbox.dart';
+import '../models.dart';
+import '../store.dart';
+import '../widgets/task_colors.dart';
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key, required this.store});
+
+  final AppStore store;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late final _key = TextEditingController(text: widget.store.dropboxAppKey);
+
+  AppStore get store => widget.store;
+
+  @override
+  void dispose() {
+    _key.dispose();
+    super.dispose();
+  }
+
+  int get _speedIndex {
+    final h = store.data.hoursToRed;
+    var best = 0;
+    for (var i = 0; i < speedSteps.length; i++) {
+      if ((speedSteps[i] - h).abs() < (speedSteps[best] - h).abs()) best = i;
+    }
+    return best;
+  }
+
+  Future<void> _connect() async {
+    final key = _key.text.trim();
+    if (key.isEmpty) return;
+    store.dropboxAppKey = key;
+    final client = DropboxClient(key);
+    await launchUrl(client.authorizeUrl(), mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    final code = await showDialog<String>(
+      context: context,
+      builder: (c) {
+        final field = TextEditingController();
+        return AlertDialog(
+          title: const Text('Paste the Dropbox code'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Approve access in the browser, then copy the code Dropbox shows and paste it here.'),
+            TextField(controller: field, autofocus: true, decoration: const InputDecoration(labelText: 'Code')),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, field.text), child: const Text('Connect')),
+          ],
+        );
+      },
+    );
+    if (code == null || code.trim().isEmpty) return;
+    try {
+      await store.connectDropbox(client, code);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not connect: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final idx = _speedIndex;
+        final connected = store.dropbox != null;
+        final sample = DateTime.now();
+        return Scaffold(
+          appBar: AppBar(title: const Text('Settings')),
+          body: ListView(padding: const EdgeInsets.all(16), children: [
+            Text('Colour speed', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Tasks go from green to red in ${describeHours(speedSteps[idx])}.'),
+            Slider(
+              value: idx.toDouble(),
+              min: 0,
+              max: (speedSteps.length - 1).toDouble(),
+              divisions: speedSteps.length - 1,
+              label: describeHours(speedSteps[idx]),
+              onChanged: (v) {
+                store.data.hoursToRed = speedSteps[v.round()];
+                store.changed();
+              },
+            ),
+            // Preview of the colour a task has at each fifth of the way to red.
+            Row(children: [
+              for (var i = 0; i <= 5; i++)
+                Expanded(
+                  child: Container(
+                    height: 22,
+                    color: ageColor(
+                      Task(id: '', title: '', createdAt: sample.subtract(
+                          Duration(minutes: (store.data.hoursToRed * 60 * i / 5).round()))),
+                      store.data.hoursToRed,
+                      sample,
+                    ),
+                  ),
+                ),
+            ]),
+            const Divider(height: 40),
+            Text('Dropbox sync', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Status: ${store.syncStatus}'),
+            const SizedBox(height: 12),
+            if (!connected) ...[
+              const Text(
+                'One-time setup: at dropbox.com/developers/apps create an app with '
+                '"Scoped access" and "App folder". On its Permissions tab tick '
+                'files.content.read and files.content.write, then copy the App key here.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _key,
+                decoration: const InputDecoration(labelText: 'Dropbox app key', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _connect,
+                icon: const Icon(Icons.cloud_outlined),
+                label: const Text('Connect Dropbox'),
+              ),
+            ] else
+              Wrap(spacing: 12, children: [
+                FilledButton.icon(
+                  onPressed: store.syncing ? null : store.sync,
+                  icon: const Icon(Icons.sync),
+                  label: const Text('Sync now'),
+                ),
+                OutlinedButton(onPressed: store.disconnectDropbox, child: const Text('Disconnect')),
+              ]),
+            const SizedBox(height: 8),
+            const Text(
+              'Your tasks are saved to Apps/<your app name>/tasks.json in Dropbox. '
+              'Connect the same app key on your phone and PC to share one list.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+}
