@@ -2,6 +2,20 @@
 
 A very simple personal task list for Android and Windows (one Flutter codebase).
 
+<p>
+  <img src="docs/screenshots/list.png" width="240" alt="Task list with blocks fading from green to red">
+  <img src="docs/screenshots/expanded.png" width="240" alt="A block tapped open showing created and due dates">
+  <img src="docs/screenshots/task.png" width="240" alt="Editing a task and its due date">
+</p>
+<p>
+  <img src="docs/screenshots/archive.png" width="240" alt="Archive showing when each task was closed">
+  <img src="docs/screenshots/settings.png" width="240" alt="Settings: colour speed and Dropbox">
+</p>
+
+On a wide screen such as Windows, the blocks stretch across the whole window:
+
+<img src="docs/screenshots/windows.png" width="740" alt="Wide window layout">
+
 - Type a task at the bottom and press Enter or **+**.
 - Each task is a full-width block that starts green and turns red as it ages. Set how fast in **⋮ → Settings → Colour speed**.
 - Thin blocks show the name and the time added. Tap a block to expand it and see the created date, due date and notes.
