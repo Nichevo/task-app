@@ -6,7 +6,7 @@ Running list of changes from Jeff's feedback. Status: ☐ planned · ◐ in prog
 
 **Feedback:** On the Fold's inner screen the single full-width list wastes space.
 
-**Approach (built on the `fold-layout` branch, awaiting Jeff's OK):** when the screen is wide (unfolded Fold, tablet, or a
+**Approach (chosen by Jeff 2026-10-27; PR #1):** when the screen is wide (unfolded Fold, tablet, or a
 wide Windows window) switch to two side-by-side panes:
 
 - **Left:** the task list, exactly as now (colour blocks, drag to reorder, tick off).
