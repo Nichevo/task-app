@@ -6,10 +6,13 @@ import '../widgets/task_block.dart';
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
-  const TaskPage({super.key, required this.store, required this.task});
+  const TaskPage({super.key, required this.store, required this.task, this.onClose});
 
   final AppStore store;
   final Task task;
+
+  /// Set when shown inside the home screen rather than as its own page.
+  final VoidCallback? onClose;
 
   @override
   State<TaskPage> createState() => _TaskPageState();
@@ -62,13 +65,24 @@ class _TaskPageState extends State<TaskPage> {
     );
     if (ok != true || !mounted) return;
     widget.store.delete(task);
-    Navigator.pop(context);
+    _close();
+  }
+
+  void _close() {
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.onClose == null
+            ? null
+            : IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: _close),
         title: Text(archived ? 'Archived task' : 'Task'),
         actions: [
           IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: _delete),

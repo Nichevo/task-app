@@ -26,12 +26,16 @@ class TaskBlock extends StatelessWidget {
     this.onCheck,
     this.trailing,
     this.archived = false,
+    this.selected = false,
   });
 
   final Task task;
   final Color color;
   final bool expanded;
   final bool archived;
+
+  /// Outlined when it is the task open in the side pane.
+  final bool selected;
   final VoidCallback onTap;
   final VoidCallback onOpen;
   final VoidCallback? onCheck;
@@ -45,7 +49,10 @@ class TaskBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Material(
         color: color,
-        borderRadius: BorderRadius.circular(3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(3),
+          side: selected ? const BorderSide(color: Color(0xDD000000), width: 2.5) : BorderSide.none,
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(3),
           onTap: onTap,

@@ -12,6 +12,10 @@ A very simple personal task list for Android and Windows (one Flutter codebase).
   <img src="docs/screenshots/settings.png" width="240" alt="Settings: colour speed and Dropbox">
 </p>
 
+On an unfolded Fold, a tablet or a wide window, the open task sits beside the list:
+
+<img src="docs/screenshots/fold.png" width="480" alt="Two-pane layout on an unfolded Fold">
+
 On a wide screen such as Windows, the blocks stretch across the whole window:
 
 <img src="docs/screenshots/windows.png" width="740" alt="Wide window layout">

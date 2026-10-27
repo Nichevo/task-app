@@ -68,4 +68,40 @@ void main() {
     expect(store.data.active, isEmpty);
     expect(store.data.archived.single.title, 'Call the bank');
   });
+
+  testWidgets('unfolded (wide) screen shows the task beside the list', (tester) async {
+    tester.view.physicalSize = const Size(880 * 3, 900 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final store = AppStore()..addTask('Fix gate latch');
+    await tester.pumpWidget(TaskApp(store: store));
+    expect(find.text('Archive (0)'), findsOneWidget); // archive in the right pane
+
+    await tester.tap(find.text('Fix gate latch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit / set due date'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tasks'), findsOneWidget); // list still visible
+    expect(find.widgetWithText(TextField, 'Fix gate latch'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Archive (0)'), findsOneWidget);
+  });
+
+  testWidgets('folded (narrow) screen opens the task full screen', (tester) async {
+    tester.view.physicalSize = const Size(400 * 3, 800 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final store = AppStore()..addTask('Fix gate latch');
+    await tester.pumpWidget(TaskApp(store: store));
+    expect(find.textContaining('Archive ('), findsNothing);
+
+    await tester.tap(find.text('Fix gate latch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit / set due date'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tasks'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Fix gate latch'), findsOneWidget);
+  });
 }
