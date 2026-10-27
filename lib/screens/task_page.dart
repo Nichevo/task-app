@@ -48,7 +48,7 @@ class _TaskPageState extends State<TaskPage> {
     );
     if (time == null) return;
     setState(() => task.dueAt = DateTime(date.year, date.month, date.day, time.hour, time.minute));
-    widget.store.changed();
+    widget.store.changed(task: task);
   }
 
   Future<void> _delete() async {
@@ -95,7 +95,7 @@ class _TaskPageState extends State<TaskPage> {
           textCapitalization: TextCapitalization.sentences,
           onChanged: (v) {
             task.title = v;
-            widget.store.changed();
+            widget.store.changed(task: task);
           },
         ),
         const SizedBox(height: 12),
@@ -107,7 +107,7 @@ class _TaskPageState extends State<TaskPage> {
           textCapitalization: TextCapitalization.sentences,
           onChanged: (v) {
             task.notes = v;
-            widget.store.changed();
+            widget.store.changed(task: task);
           },
         ),
         const SizedBox(height: 12),
@@ -128,7 +128,7 @@ class _TaskPageState extends State<TaskPage> {
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     setState(() => task.dueAt = null);
-                    widget.store.changed();
+                    widget.store.changed(task: task);
                   },
                 ),
         ),

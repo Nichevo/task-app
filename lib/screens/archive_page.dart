@@ -23,6 +23,12 @@ class ArchivePage extends StatefulWidget {
 
 class _ArchivePageState extends State<ArchivePage> {
   final _expanded = <String>{};
+  String? _query; // null when the search box is closed
+
+  bool _matches(Task t) {
+    final q = _query?.trim().toLowerCase() ?? '';
+    return q.isEmpty || t.title.toLowerCase().contains(q) || t.notes.toLowerCase().contains(q);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,14 +36,28 @@ class _ArchivePageState extends State<ArchivePage> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final tasks = store.data.archived;
+        final tasks = store.data.archived.where(_matches).toList();
+        final searching = _query != null;
         return Scaffold(
           appBar: AppBar(
             automaticallyImplyLeading: !widget.embedded,
-            title: Text('Archive (${tasks.length})'),
+            title: searching
+                ? TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(hintText: 'Search archive…', border: InputBorder.none),
+                    onChanged: (v) => setState(() => _query = v),
+                  )
+                : Text('Archive (${tasks.length})'),
+            actions: [
+              IconButton(
+                tooltip: searching ? 'Close search' : 'Search',
+                icon: Icon(searching ? Icons.close : Icons.search),
+                onPressed: () => setState(() => _query = searching ? null : ''),
+              ),
+            ],
           ),
           body: tasks.isEmpty
-              ? const Center(child: Text('Ticked-off tasks will appear here.'))
+              ? Center(child: Text(searching ? 'No matching tasks.' : 'Ticked-off tasks will appear here.'))
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: tasks.length,

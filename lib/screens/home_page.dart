@@ -72,6 +72,17 @@ class _HomePageState extends State<HomePage> {
       ));
   }
 
+  void _delete(int index) {
+    final t = store.data.active[index];
+    store.delete(t);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('Deleted "${t.title}"'),
+        action: SnackBarAction(label: 'Undo', onPressed: () => store.undelete(t, index)),
+      ));
+  }
+
   void _open(BuildContext context, page) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
 
@@ -167,20 +178,30 @@ class _HomePageState extends State<HomePage> {
                         return ReorderableDelayedDragStartListener(
                           key: ValueKey(t.id),
                           index: i,
-                          child: TaskBlock(
-                            task: t,
-                            color: ageColor(t, store.data.hoursToRed, now),
-                            selected: identical(_selected, t),
-                            expanded: _expanded.contains(t.id),
-                            onTap: () => setState(() =>
-                                _expanded.contains(t.id) ? _expanded.remove(t.id) : _expanded.add(t.id)),
-                            onOpen: () => _select(t),
-                            onCheck: () => _complete(i),
-                            trailing: ReorderableDragStartListener(
-                              index: i,
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 10),
-                                child: Icon(Icons.drag_handle, color: Color(0x99000000)),
+                          // Swipe right to tick off, left to delete (both can be undone).
+                          child: Dismissible(
+                            key: ValueKey('swipe-${t.id}'),
+                            background: const _SwipeBackground(
+                                color: Color(0xFF2E7D32), icon: Icons.check, alignment: Alignment.centerLeft),
+                            secondaryBackground: const _SwipeBackground(
+                                color: Color(0xFFC62828), icon: Icons.delete, alignment: Alignment.centerRight),
+                            onDismissed: (dir) =>
+                                dir == DismissDirection.startToEnd ? _complete(i) : _delete(i),
+                            child: TaskBlock(
+                              task: t,
+                              color: ageColor(t, store.data.hoursToRed, byDue: store.data.colourByDue, now: now),
+                              selected: identical(_selected, t),
+                              expanded: _expanded.contains(t.id),
+                              onTap: () => setState(() =>
+                                  _expanded.contains(t.id) ? _expanded.remove(t.id) : _expanded.add(t.id)),
+                              onOpen: () => _select(t),
+                              onCheck: () => _complete(i),
+                              trailing: ReorderableDragStartListener(
+                                index: i,
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 10),
+                                  child: Icon(Icons.drag_handle, color: Color(0x99000000)),
+                                ),
                               ),
                             ),
                           ),
@@ -213,6 +234,23 @@ class _HomePageState extends State<HomePage> {
           ]),
     );
   }
+}
+
+class _SwipeBackground extends StatelessWidget {
+  const _SwipeBackground({required this.color, required this.icon, required this.alignment});
+
+  final Color color;
+  final IconData icon;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        alignment: alignment,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+        child: Icon(icon, color: Colors.white),
+      );
 }
 
 Future<void> exportCsv(BuildContext context, AppStore store) async {

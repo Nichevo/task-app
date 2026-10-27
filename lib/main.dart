@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'reminders.dart';
 import 'screens/home_page.dart';
 import 'store.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final store = AppStore();
-  store.load();
+  final reminders = Reminders();
+  final store = AppStore(reminders: reminders);
+  // Don't hold up loading the tasks behind the notification-permission prompt.
+  Future.wait([reminders.init(), store.load()]).then((_) => reminders.schedule(store.data.active));
   runApp(TaskApp(store: store));
 }
 

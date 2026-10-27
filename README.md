@@ -25,7 +25,10 @@ On a wide screen such as Windows, the blocks stretch across the whole window:
 - Thin blocks show the name and the time added. Tap a block to expand it and see the created date, due date and notes.
 - **Edit / set due date** opens the task to rename it, add notes or set a due date.
 - Drag the ≡ handle (or long-press a block) to move it up or down.
-- Tick the box to move a task to the **Archive** (box icon, top right), which shows when it was closed. The ↶ button puts it back.
+- Swipe a block right to tick it off, or left to delete it (both can be undone).
+- Tick the box to move a task to the **Archive** (box icon, top right), which shows when it was closed and can be searched. The ↶ button puts it back.
+- Tasks with a due date turn red as the due date approaches, and the phone shows a reminder when it's due.
+- On an unfolded Fold, tablet or wide window, the open task (or the archive) shows beside the list.
 - **⋮ → Export to CSV** saves every task (open and archived) with all details.
 
 ## Getting the app
@@ -36,6 +39,13 @@ Every push to `main` builds both apps on GitHub Actions. Open the **Actions** ta
 - **TaskBlocks-android**: unzip and open `app-release.apk` on the phone (allow "install unknown apps").
 - **TaskBlocks-windows**: unzip anywhere and run `task_blocks.exe`. Keep the files in that folder together.
 
+## Signing key (one-time)
+
+Android only installs an update if it's signed with the same key as the installed app. The key
+lives in the repo's **Settings → Secrets and variables → Actions** as `ANDROID_KEYSTORE_BASE64`
+(the keystore file, base64) and `ANDROID_KEYSTORE_PASSWORD`. Keep a backup of the keystore:
+if it's lost, the app has to be uninstalled and reinstalled to update.
+
 ## Dropbox sync
 
 1. Go to https://www.dropbox.com/developers/apps and **Create app**: *Scoped access*, *App folder*, any name.
@@ -45,8 +55,8 @@ Every push to `main` builds both apps on GitHub Actions. Open the **Actions** ta
 5. Do the same on the other device with the same key.
 
 The list is stored in `Dropbox/Apps/<app name>/tasks.json`. Each change uploads after 2 seconds; the app downloads
-on start and whenever it comes back to the foreground. If both devices change the list while one is offline, the
-most recently changed copy wins.
+on start and whenever it comes back to the foreground. Changes made on both devices are merged task by task; if the
+same task was edited on both, the most recent edit wins.
 
 ## Building locally
 
