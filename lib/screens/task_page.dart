@@ -366,7 +366,8 @@ class _TaskPageState extends State<TaskPage> {
           ListTile(
             leading: const Icon(Icons.notifications_none),
             title: const Text('Remind me'),
-            trailing: DropdownButton<int?>(
+            subtitle: DropdownButton<int?>(
+              isExpanded: true,
               value: task.remindBefore,
               items: [
                 DropdownMenuItem(
@@ -380,7 +381,8 @@ class _TaskPageState extends State<TaskPage> {
         ListTile(
           leading: const Icon(Icons.label_outline),
           title: const Text('Category'),
-          trailing: DropdownButton<String?>(
+          subtitle: DropdownButton<String?>(
+            isExpanded: true,
             value: data.category(task.categoryId)?.id,
             items: [
               const DropdownMenuItem(value: null, child: Text('None')),
