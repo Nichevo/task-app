@@ -6,6 +6,9 @@ import '../models.dart';
 import '../store.dart';
 import '../widgets/task_colors.dart';
 
+/// Choices for how long closed tasks stay in the archive, in days (0 = forever).
+const archiveKeepOptions = {0: 'Never', 30: '1 month', 90: '3 months', 180: '6 months', 365: '1 year'};
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.store});
 
@@ -91,7 +94,7 @@ class _SettingsPageState extends State<SettingsPage> {
               label: describeHours(speedSteps[idx]),
               onChanged: (v) {
                 store.data.hoursToRed = speedSteps[v.round()];
-                store.changed();
+                store.changed(settings: true);
               },
             ),
             // Preview of the colour a task has at each fifth of the way to red.
@@ -104,11 +107,41 @@ class _SettingsPageState extends State<SettingsPage> {
                       Task(id: '', title: '', createdAt: sample.subtract(
                           Duration(minutes: (store.data.hoursToRed * 60 * i / 5).round()))),
                       store.data.hoursToRed,
-                      sample,
+                      now: sample,
                     ),
                   ),
                 ),
             ]),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Colour by due date'),
+              subtitle: const Text('Tasks with a due date turn red as the due date gets closer, '
+                  'instead of by the speed above.'),
+              value: store.data.colourByDue,
+              onChanged: (v) {
+                store.data.colourByDue = v;
+                store.changed(settings: true);
+              },
+            ),
+            const Divider(height: 40),
+            Text('Archive', style: Theme.of(context).textTheme.titleMedium),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Delete archived tasks after'),
+              trailing: DropdownButton<int>(
+                value: archiveKeepOptions.containsKey(store.data.archiveKeepDays)
+                    ? store.data.archiveKeepDays
+                    : 0,
+                items: [
+                  for (final e in archiveKeepOptions.entries)
+                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: (v) {
+                  store.data.archiveKeepDays = v ?? 0;
+                  store.changed(settings: true);
+                },
+              ),
+            ),
             const Divider(height: 40),
             Text('Dropbox sync', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),

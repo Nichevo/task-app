@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 
 /// Green when new, through yellow and orange, to red after [hoursToRed].
-Color ageColor(Task t, double hoursToRed, [DateTime? now]) {
+/// With [byDue], a task that has a due date is red by its due date instead.
+Color ageColor(Task t, double hoursToRed, {bool byDue = false, DateTime? now}) {
   final age = (now ?? DateTime.now()).difference(t.createdAt).inMinutes / 60;
-  final progress = (age / hoursToRed).clamp(0.0, 1.0);
+  final due = t.dueAt;
+  final span = byDue && due != null ? due.difference(t.createdAt).inMinutes / 60 : hoursToRed;
+  final progress = span <= 0 ? 1.0 : (age / span).clamp(0.0, 1.0);
   return HSVColor.fromAHSV(1, 120 * (1 - progress), 0.6, 0.88).toColor();
 }
 
