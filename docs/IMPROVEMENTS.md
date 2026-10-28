@@ -136,11 +136,9 @@ Import tasks from a CSV in the same format as the export (adds them; doesn't rep
 
 ---
 
-# Round 3 (collecting ideas, not started)
+# Round 3 ◐ (PR #3)
 
-Jeff wants the full list agreed before any building starts.
-
-## 20. Statistics page ☐
+## 20. Statistics page ◐ (PR #3)
 
 A **Statistics** page (from the ⋮ menu) to see how things are going:
 
@@ -156,7 +154,7 @@ Archive clean-up deletes old tasks, so the app keeps a small daily tally (done, 
 survives clean-up and syncs through Dropbox. Stats count from when tasks were first archived, so history from
 before this update comes from the archive as it is now.
 
-## 21. Tasks from calendar events ☐
+## 21. Tasks from calendar events ◐ (PR #3)
 
 Look at upcoming calendar events and offer to make tasks from them:
 
@@ -169,7 +167,7 @@ Look at upcoming calendar events and offer to make tasks from them:
 - **Phone only** (agreed 2026-10-28): reads the phone's calendars (Google, Samsung, Outlook accounts added to
   the phone) with permission; nothing leaves the phone. Tasks made from events sync to Windows through Dropbox.
 
-## 22. Calendar view of tasks ☐
+## 22. Calendar view of tasks ◐ (PR #3)
 
 A month grid (switch from the list with a calendar icon):
 
@@ -179,7 +177,7 @@ A month grid (switch from the list with a calendar icon):
 - Undated tasks aren't shown (they stay in the list).
 - On the unfolded Fold: month on the left, the chosen day's tasks on the right. A week view as a second option.
 
-## 23. Reusable subtasks (checklists) ☐
+## 23. Reusable subtasks (checklists) ◐ (PR #3)
 
 - Any task can have a **checklist** of steps. Thin blocks show progress like "2/5".
 - Tick steps in the expanded block or the task page; reorder by dragging.
@@ -192,7 +190,7 @@ A month grid (switch from the list with a calendar icon):
   opens that task when tapped, and ticks itself when that task is ticked off.
 - CSV export lists steps in a column.
 
-## 24. Widget additions (Android) ☐
+## 24. Widget additions (Android) ◐ (PR #3)
 
 Jeff asked for all of these (2026-10-28).
 
@@ -214,7 +212,7 @@ Changes to the existing widgets:
    voice entry as well as typing.
 10. **Fresher colours:** widget colours update more often than every 30 minutes, within Android's battery limits.
 
-## 25. Automatic category for new tasks ☐
+## 25. Automatic category for new tasks ◐ (PR #3)
 
 When a task is added without a category, the app suggests one. It all happens on the device, so there are no
 accounts, costs or internet needed:
@@ -228,7 +226,7 @@ accounts, costs or internet needed:
 - The suggestion shows as a chip beside the date chip while you type; tap ✕ to drop it or tap it to choose another.
 - Settings → **Auto category:** Off, Suggest (default, shows the chip), or Apply automatically.
 
-## 26. More ways to add tasks ☐
+## 26. More ways to add tasks ◐ (PR #3)
 
 Jeff picked these five (2026-10-28):
 
@@ -244,7 +242,7 @@ Jeff picked these five (2026-10-28):
 
 Not wanted: missed calls, Windows shortcut key. Notification suggestions: see item 28 (placeholder only).
 
-## 27. Overdue notifications ☐
+## 27. Overdue notifications ◐ (PR #3)
 
 Today the phone gives one reminder at the due time (and an optional earlier one). New option,
 Settings → **Overdue reminders**:
@@ -256,7 +254,7 @@ Settings → **Overdue reminders**:
 - All task reminders gain **Done** and **Snooze** buttons (1 hour, this evening, tomorrow) so you can deal with
   them from the notification without opening the app.
 
-## 28. Notification suggestions: settings placeholder only ☐
+## 28. Notification suggestions: settings placeholder only ◐ (PR #3)
 
 Jeff wants to consider this later (2026-10-28). Round 3 adds only the **settings, greyed out and marked
 "Coming later"**, with no notification access and no listener code:
@@ -268,3 +266,18 @@ Jeff wants to consider this later (2026-10-28). Round 3 adds only the **settings
 
 If it's built later: Android "Notification access", only from the chosen apps, suggestions only (never added on
 their own), everything stays on the phone.
+
+## 29. Clean-up and speed review ◐ (PR #3)
+
+Jeff asked for a final review before round 3 was built. Done in the same PR:
+
+- **Saving is debounced**: typing in a task used to rewrite the whole file, reschedule every reminder
+  and redraw the widgets on every key. Now the screen updates at once and the rest happens 0.4 s
+  after you stop typing (and straight away when the app goes to the background).
+- **Safer saves**: the file is written to a temporary name and renamed, so a crash mid-write can't
+  corrupt the list.
+- **Lighter redraws**: the add box is its own widget, so typing no longer rebuilds the whole list.
+- **Fewer syncs**: coming back to the app syncs at most once every 30 s.
+- **Widgets** parse the shared data once per redraw instead of once per row.
+- **CI** now runs `flutter analyze` as well as the tests, and caches the Flutter SDK.
+- Removed template leftovers (unused cupertino_icons, TODO comments in Gradle); app version 1.3.0.

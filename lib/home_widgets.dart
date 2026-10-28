@@ -20,6 +20,7 @@ class HomeWidgets {
     'com.jeff.task_blocks.ChecklistWidget',
     'com.jeff.task_blocks.StatsWidget',
     'com.jeff.task_blocks.MonthWidget',
+    'com.jeff.task_blocks.QuickAddWidget',
   ];
 
   /// Writes what the widgets show and asks them to redraw.

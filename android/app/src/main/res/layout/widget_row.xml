@@ -9,10 +9,10 @@
 
     <ImageView
         android:id="@+id/row_tick"
-        android:layout_width="40dp"
+        android:layout_width="44dp"
         android:layout_height="match_parent"
         android:contentDescription="@string/widget_tick"
-        android:padding="9dp"
+        android:padding="10dp"
         android:src="@drawable/ic_widget_box" />
 
     <LinearLayout
@@ -22,7 +22,7 @@
         android:layout_weight="1"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingEnd="10dp">
+        android:paddingEnd="4dp">
 
         <TextView
             android:id="@+id/row_title"
@@ -39,8 +39,16 @@
             android:id="@+id/row_due"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingStart="8dp"
+            android:paddingStart="6dp"
             android:textColor="#DD000000"
             android:textSize="12sp" />
     </LinearLayout>
+
+    <ImageView
+        android:id="@+id/row_snooze"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_snooze"
+        android:padding="10dp"
+        android:src="@drawable/ic_widget_snooze" />
 </LinearLayout>
