@@ -38,7 +38,14 @@ On a wide screen such as Windows, the blocks stretch across the whole window:
 - **Settings → Next 30 days only** hides tasks due later than that behind a "Due later" link. Overdue and undated tasks always show.
 - **Star** a task to keep it at the top. **Snooze** hides it until a date you pick.
 - Reminders can come early (15 minutes, an hour, a day or a week before), per task or as a default in Settings.
-- Android home screen widgets: a **task list** with tick boxes and +, a **summary** of open and overdue tasks with the next 3 due, and a one-tap **quick add**. When you place a list or summary, choose all tasks, due soon, or one category.
+- **Checklists**: add steps inside any task; thin blocks show "2/5". Save a checklist as a **template** (Settings) and add it to other tasks in one tap. Any step can be made into a linked task of its own.
+- **Statistics** (menu): done per week, on-time share, typical time to finish, open tasks over time, totals per category and your streak.
+- **Calendar** (icon, top right): a month or week view with a coloured dot per task due. Tap a day to see its tasks; long-press and drop a task on another day to move it.
+- **Automatic categories**: a new task gets a category from a #tag, from keywords you give each category, or by learning from tasks you've already filed. It shows as a chip you can change or drop. Settings → Auto category: Off, Suggest or Apply.
+- **More ways to add tasks**: share text from any app to Task Blocks; paste a list (one task per line); "OK Google, note to self…"; take a **photo of a written list** (read on the phone); or write lines to `inbox.txt` in the app's Dropbox folder.
+- **Upcoming events** (Android): make tasks from your phone's calendar events, due at the start or a day or week before. Optionally a once-a-day or once-a-week prompt.
+- **Overdue reminders**: a daily summary at a set time, or nudges every 1, 3 or 6 hours with quiet hours. Every reminder has Done and Snooze buttons.
+- Android home screen widgets: **Task list** (tick, snooze, +), **Summary**, **Today** (overdue, due today and today's events), **Focus** (your top task), **Checklist** (steps of one task), **Stats**, **Mini month** and **Quick add** (tap or speak, optionally straight into a category). List and summary widgets can show all tasks, due soon, starred, overdue or a category, with a light, dark or see-through background and normal or compact rows.
 
 ## Getting the app
 

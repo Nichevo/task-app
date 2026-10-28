@@ -16,8 +16,11 @@ class Task {
     this.readyAt,
     this.repeat,
     this.remindBefore,
+    List<TaskStep>? steps,
+    this.eventId,
     DateTime? updatedAt,
-  }) : updatedAt = updatedAt ?? createdAt;
+  })  : steps = steps ?? [],
+        updatedAt = updatedAt ?? createdAt;
 
   final String id;
   String title;
@@ -47,6 +50,14 @@ class Task {
   /// Extra reminder this many minutes before the due time; null uses the default from Settings.
   int? remindBefore;
 
+  /// Checklist of steps inside this task.
+  final List<TaskStep> steps;
+
+  /// The calendar event this task was made from, so it isn't offered twice.
+  String? eventId;
+
+  int get stepsDone => steps.where((s) => s.done).length;
+
   /// Last time anything about this task changed; the newer copy wins when syncing.
   DateTime updatedAt;
 
@@ -72,6 +83,8 @@ class Task {
       ..starred = starred
       ..repeat = r
       ..remindBefore = remindBefore;
+    // Each repeat starts with the checklist unticked.
+    next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
     next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
     return next;
   }
@@ -97,6 +110,8 @@ class Task {
         if (readyAt != null) 'readyAt': readyAt!.toIso8601String(),
         if (repeat != null) 'repeat': repeat!.toJson(),
         if (remindBefore != null) 'remindBefore': remindBefore,
+        if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
+        if (eventId != null) 'eventId': eventId,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -114,10 +129,103 @@ class Task {
         readyAt: _date(j['readyAt']),
         repeat: j['repeat'] is Map ? Repeat.fromJson(j['repeat'] as Map<String, dynamic>) : null,
         remindBefore: (j['remindBefore'] as num?)?.toInt(),
+        steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
+        eventId: j['eventId'] as String?,
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
 }
+
+/// One line of a task's checklist. [taskId] is set when it was made into a full task.
+class TaskStep {
+  TaskStep({required this.id, required this.title, this.done = false, this.taskId});
+
+  final String id;
+  String title;
+  bool done;
+  String? taskId;
+
+  factory TaskStep.create(String title) =>
+      TaskStep(id: 's${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', title: title.trim());
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        if (done) 'done': true,
+        if (taskId != null) 'taskId': taskId,
+      };
+
+  factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
+        id: j['id'] as String,
+        title: j['title'] as String? ?? '',
+        done: j['done'] as bool? ?? false,
+        taskId: j['taskId'] as String?,
+      );
+}
+
+/// A saved checklist that can be added to any task.
+class ChecklistTemplate {
+  ChecklistTemplate({required this.id, required this.name, List<String>? steps}) : steps = steps ?? [];
+
+  final String id;
+  String name;
+  final List<String> steps;
+
+  factory ChecklistTemplate.create(String name, List<String> steps) => ChecklistTemplate(
+      id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim(), steps: steps);
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'steps': steps};
+
+  factory ChecklistTemplate.fromJson(Map<String, dynamic> j) => ChecklistTemplate(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        steps: [for (final s in j['steps'] as List? ?? []) s as String],
+      );
+}
+
+/// A note that a task was ticked off, kept for the statistics after the archive is cleaned up.
+class DoneRecord {
+  const DoneRecord({required this.at, required this.tookMinutes, this.onTime, this.categoryId});
+
+  final DateTime at;
+
+  /// From when it was added to when it was ticked off.
+  final int tookMinutes;
+
+  /// Null when it had no due date.
+  final bool? onTime;
+  final String? categoryId;
+
+  factory DoneRecord.of(Task t, DateTime at) => DoneRecord(
+        at: at,
+        tookMinutes: at.difference(t.createdAt).inMinutes,
+        onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
+        categoryId: t.categoryId,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'took': tookMinutes,
+        if (onTime != null) 'onTime': onTime,
+        if (categoryId != null) 'cat': categoryId,
+      };
+
+  factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
+        at: DateTime.parse(j['at'] as String).toLocal(),
+        tookMinutes: (j['took'] as num?)?.toInt() ?? 0,
+        onTime: j['onTime'] as bool?,
+        categoryId: j['cat'] as String?,
+      );
+}
+
+/// What happens to the category of a task added without one.
+enum AutoCategory { off, suggest, apply }
+
+/// How often the app offers tasks from upcoming calendar events on its own.
+enum EventSuggest { off, daily, weekly }
+
+/// Reminders for tasks that are overdue.
+enum OverdueMode { off, daily, nudge }
 
 enum RepeatUnit { day, week, month, year }
 
@@ -218,18 +326,24 @@ class Repeat {
 }
 
 class TaskCategory {
-  TaskCategory({required this.id, required this.name});
+  TaskCategory({required this.id, required this.name, List<String>? keywords}) : keywords = keywords ?? [];
 
   final String id;
   String name;
 
+  /// Words that always put a new task in this category.
+  final List<String> keywords;
+
   factory TaskCategory.create(String name) =>
       TaskCategory(id: 'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name);
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, if (keywords.isNotEmpty) 'keywords': keywords};
 
-  factory TaskCategory.fromJson(Map<String, dynamic> j) =>
-      TaskCategory(id: j['id'] as String, name: j['name'] as String? ?? '');
+  factory TaskCategory.fromJson(Map<String, dynamic> j) => TaskCategory(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        keywords: [for (final k in j['keywords'] as List? ?? []) k as String],
+      );
 }
 
 /// Everything that gets saved locally and synced to Dropbox.
@@ -245,6 +359,17 @@ class AppData {
     Set<String>? collapsed,
     this.focusNext30 = false,
     this.defaultRemindBefore = 0,
+    List<ChecklistTemplate>? templates,
+    Map<String, DoneRecord>? done,
+    this.autoCategory = AutoCategory.suggest,
+    this.eventSuggest = EventSuggest.off,
+    Set<String>? eventCalendars,
+    Set<String>? dismissedEvents,
+    this.overdueMode = OverdueMode.off,
+    this.overdueAt = 8 * 60,
+    this.nudgeHours = 3,
+    this.quietStart = 22 * 60,
+    this.quietEnd = 7 * 60,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -254,6 +379,10 @@ class AppData {
         deleted = deleted ?? {},
         categories = categories ?? [],
         collapsed = collapsed ?? {},
+        templates = templates ?? [],
+        done = done ?? {},
+        eventCalendars = eventCalendars ?? {},
+        dismissedEvents = dismissedEvents ?? {},
         updatedAt = updatedAt ?? _epoch,
         orderUpdatedAt = orderUpdatedAt ?? _epoch,
         settingsUpdatedAt = settingsUpdatedAt ?? _epoch;
@@ -290,6 +419,34 @@ class AppData {
   /// Default extra reminder before the due time, in minutes (0 = only at the due time).
   int defaultRemindBefore;
 
+  /// Saved checklists.
+  final List<ChecklistTemplate> templates;
+
+  /// Every task ever ticked off, by task id, for the statistics.
+  final Map<String, DoneRecord> done;
+
+  AutoCategory autoCategory;
+
+  EventSuggest eventSuggest;
+
+  /// Calendars (ids on the phone) to take events from; empty means all.
+  final Set<String> eventCalendars;
+
+  /// Calendar events the user chose not to make tasks from.
+  final Set<String> dismissedEvents;
+
+  OverdueMode overdueMode;
+
+  /// Minutes after midnight for the daily overdue summary.
+  int overdueAt;
+
+  /// Hours between nudges for an overdue task.
+  int nudgeHours;
+
+  /// Quiet hours (minutes after midnight) when no overdue reminders are sent.
+  int quietStart;
+  int quietEnd;
+
   /// When anything was last changed.
   DateTime updatedAt;
 
@@ -312,6 +469,17 @@ class AppData {
         'collapsed': collapsed.toList(),
         'focusNext30': focusNext30,
         'defaultRemindBefore': defaultRemindBefore,
+        'templates': templates.map((t) => t.toJson()).toList(),
+        'done': done.map((k, v) => MapEntry(k, v.toJson())),
+        'autoCategory': autoCategory.name,
+        'eventSuggest': eventSuggest.name,
+        'eventCalendars': eventCalendars.toList(),
+        'dismissedEvents': dismissedEvents.toList(),
+        'overdueMode': overdueMode.name,
+        'overdueAt': overdueAt,
+        'nudgeHours': nudgeHours,
+        'quietStart': quietStart,
+        'quietEnd': quietEnd,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
@@ -329,6 +497,15 @@ class AppData {
   /// Waiting for an earlier task that is still open.
   bool isLocked(Task t) => t.afterTaskId != null && active.any((a) => a.id == t.afterTaskId);
 
+  /// Open and archived tasks together.
+  Iterable<Task> get allTasks => active.followedBy(archived);
+
+  /// The task made from a calendar event, if any.
+  Task? taskForEvent(String eventId) => allTasks.where((t) => t.eventId == eventId).firstOrNull;
+
+  static T _enum<T extends Enum>(List<T> values, Object? name, T fallback) =>
+      values.where((v) => v.name == name).firstOrNull ?? fallback;
+
   factory AppData.fromJson(Map<String, dynamic> j) => AppData(
         hoursToRed: (j['hoursToRed'] as num?)?.toDouble() ?? 72,
         colourByDue: j['colourByDue'] as bool? ?? true,
@@ -338,6 +515,20 @@ class AppData {
         collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
         focusNext30: j['focusNext30'] as bool? ?? false,
         defaultRemindBefore: (j['defaultRemindBefore'] as num?)?.toInt() ?? 0,
+        templates: [for (final t in j['templates'] as List? ?? []) ChecklistTemplate.fromJson(t)],
+        done: {
+          for (final e in (j['done'] as Map? ?? {}).entries)
+            e.key as String: DoneRecord.fromJson(e.value as Map<String, dynamic>),
+        },
+        autoCategory: _enum(AutoCategory.values, j['autoCategory'], AutoCategory.suggest),
+        eventSuggest: _enum(EventSuggest.values, j['eventSuggest'], EventSuggest.off),
+        eventCalendars: {for (final c in j['eventCalendars'] as List? ?? []) c as String},
+        dismissedEvents: {for (final c in j['dismissedEvents'] as List? ?? []) c as String},
+        overdueMode: _enum(OverdueMode.values, j['overdueMode'], OverdueMode.off),
+        overdueAt: (j['overdueAt'] as num?)?.toInt() ?? 8 * 60,
+        nudgeHours: (j['nudgeHours'] as num?)?.toInt() ?? 3,
+        quietStart: (j['quietStart'] as num?)?.toInt() ?? 22 * 60,
+        quietEnd: (j['quietEnd'] as num?)?.toInt() ?? 7 * 60,
         updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
         orderUpdatedAt: DateTime.tryParse(j['orderUpdatedAt'] as String? ?? ''),
         settingsUpdatedAt: DateTime.tryParse(j['settingsUpdatedAt'] as String? ?? ''),
@@ -388,6 +579,13 @@ AppData mergeData(AppData a, AppData b) {
   final archived = tasks.values.where((t) => t.closedAt != null).toList()
     ..sort((x, y) => y.closedAt!.compareTo(x.closedAt!));
 
+  // Completion records: keep every one from either side (newest if both have it).
+  final done = <String, DoneRecord>{...a.done};
+  b.done.forEach((id, r) {
+    final mine = done[id];
+    if (mine == null || r.at.isAfter(mine.at)) done[id] = r;
+  });
+
   return AppData(
     active: active,
     archived: archived,
@@ -399,6 +597,17 @@ AppData mergeData(AppData a, AppData b) {
     collapsed: settingsFrom.collapsed,
     focusNext30: settingsFrom.focusNext30,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
+    templates: settingsFrom.templates,
+    done: done,
+    autoCategory: settingsFrom.autoCategory,
+    eventSuggest: settingsFrom.eventSuggest,
+    eventCalendars: settingsFrom.eventCalendars,
+    dismissedEvents: {...a.dismissedEvents, ...b.dismissedEvents},
+    overdueMode: settingsFrom.overdueMode,
+    overdueAt: settingsFrom.overdueAt,
+    nudgeHours: settingsFrom.nudgeHours,
+    quietStart: settingsFrom.quietStart,
+    quietEnd: settingsFrom.quietEnd,
     settingsUpdatedAt: settingsFrom.settingsUpdatedAt,
     updatedAt: b.updatedAt.isAfter(a.updatedAt) ? b.updatedAt : a.updatedAt,
     orderUpdatedAt: orderFrom.orderUpdatedAt,

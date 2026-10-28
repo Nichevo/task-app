@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cell_root"
+    android:layout_width="match_parent"
+    android:layout_height="26dp"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/cell_day"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:gravity="center"
+        android:textColor="#DD000000"
+        android:textSize="10sp" />
+
+    <ImageView
+        android:id="@+id/cell_dot"
+        android:layout_width="5dp"
+        android:layout_height="5dp"
+        android:contentDescription="@null"
+        android:src="@drawable/widget_dot" />
+</LinearLayout>

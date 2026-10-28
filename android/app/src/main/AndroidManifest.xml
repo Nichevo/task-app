@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Upcoming events (only read, only on the phone). -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"/>
     <application
         android:label="Task Blocks"
         android:name="${applicationName}"
@@ -27,6 +29,18 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- "Share to Task Blocks" from any app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+            <!-- "OK Google, note to self…" -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.actions.CREATE_NOTE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
             </intent-filter>
         </activity>
         <!-- Due-date reminders (flutter_local_notifications). -->
@@ -58,10 +72,59 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick_add" />
         </receiver>
+        <receiver android:name=".TodayWidget" android:exported="true" android:label="Today">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today" />
+        </receiver>
+        <receiver android:name=".FocusWidget" android:exported="true" android:label="Focus task">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_focus" />
+        </receiver>
+        <receiver android:name=".ChecklistWidget" android:exported="true" android:label="Checklist">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_checklist" />
+        </receiver>
+        <receiver android:name=".StatsWidget" android:exported="true" android:label="Task stats">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_stats" />
+        </receiver>
+        <receiver android:name=".MonthWidget" android:exported="true" android:label="Mini month">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_month" />
+        </receiver>
         <service
             android:name=".TaskListService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".ChecklistService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".MonthService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WidgetRefreshJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <activity
+            android:name=".VoiceAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity
             android:name=".WidgetActionActivity"
             android:exported="false"
@@ -98,6 +161,9 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH"/>
         </intent>
     </queries>
 </manifest>

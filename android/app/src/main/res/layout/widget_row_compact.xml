@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row"
+    android:layout_width="match_parent"
+    android:layout_height="34dp"
+    android:layout_marginBottom="3dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/row_tick"
+        android:layout_width="34dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_tick"
+        android:padding="7dp"
+        android:src="@drawable/ic_widget_box" />
+
+    <LinearLayout
+        android:id="@+id/row_text"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingEnd="4dp">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#DD000000"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/row_due"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="6dp"
+            android:textColor="#DD000000"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/row_snooze"
+        android:layout_width="34dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/widget_snooze"
+        android:padding="7dp"
+        android:src="@drawable/ic_widget_snooze" />
+</LinearLayout>

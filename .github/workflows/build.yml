@@ -18,6 +18,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
+      - run: flutter analyze
       - run: flutter test
       - name: Restore signing key
         env:
@@ -44,6 +46,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
       - run: flutter build windows --release --build-number=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:

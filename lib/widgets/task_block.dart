@@ -29,6 +29,7 @@ class TaskBlock extends StatelessWidget {
     this.selected = false,
     this.lockedBy,
     this.categoryName,
+    this.onStep,
   });
 
   final Task task;
@@ -48,6 +49,9 @@ class TaskBlock extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onCheck;
   final Widget? trailing;
+
+  /// Ticks a checklist step from the expanded block.
+  final ValueChanged<TaskStep>? onStep;
 
   /// One-line notes preview on the thin block, only when there are notes.
   bool get preview => !expanded && task.notes.trim().isNotEmpty;
@@ -109,6 +113,12 @@ class TaskBlock extends StatelessWidget {
                                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                               ),
                               if (task.starred) _badge(Icons.star, 'Starred', const Color(0xFF8D6E00)),
+                              if (task.steps.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Text('${task.stepsDone}/${task.steps.length}',
+                                      style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
+                                ),
                               if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
                               if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
                             ]),
@@ -152,6 +162,27 @@ class TaskBlock extends StatelessWidget {
         if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),
         if (task.notes.isNotEmpty)
           Padding(padding: const EdgeInsets.only(top: 6), child: Text(task.notes)),
+        if (task.steps.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(children: [
+              for (final s in task.steps)
+                InkWell(
+                  onTap: onStep == null || archived ? null : () => onStep!(s),
+                  child: Row(children: [
+                    Icon(s.done ? Icons.check_box : Icons.check_box_outline_blank, size: 20, color: ink),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(s.title,
+                          style: TextStyle(
+                              decoration: s.done ? TextDecoration.lineThrough : null,
+                              color: s.done ? const Color(0x88000000) : ink)),
+                    ),
+                    if (s.taskId != null) const Icon(Icons.link, size: 16, color: Color(0x88000000)),
+                  ]),
+                ),
+            ]),
+          ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
