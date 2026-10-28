@@ -69,8 +69,8 @@ Jeff wants the full list agreed before any building starts.
 - **Grouped view** (turned on in Settings): a category heading, then that category's tasks, then the next heading,
   and so on. When it's off, the list looks as it does today.
 - Tasks with no category sit in their own group at the top (or bottom).
-- *Open questions:* should each category have its own colour or icon on the heading? Should headings be
-  collapsible? Should the archive and CSV export include the category? (Proposed: yes for CSV.)
+- Headings are plain bold text (no per-category colours) and can be collapsed to hide their tasks.
+- The CSV export gets a Category column.
 
 ## 9. Drag between categories ☐
 
@@ -82,11 +82,22 @@ Jeff wants the full list agreed before any building starts.
 - In the task, choose a repeat: daily, weekly (pick days), monthly, yearly, or every N days.
 - *Proposed:* when a repeating task is ticked off, it goes to the archive as normal and a fresh copy appears
   with the next due date (and its colour starts green again).
-- *Open question:* repeat from the due date (fixed schedule) or from when it was ticked off (e.g. "water plants
-  7 days after last time")?
+- Both modes, chosen per task: **fixed schedule** (next due date counts from the previous due date) or
+  **after completion** (counts from when it was ticked off, e.g. "water plants 7 days after last time").
 
 ## 11. Text details ☐
 
-- *Needs clarifying:* tasks already have a Notes box (shown when a block is expanded). Is this about
-  something more, such as showing part of the notes on the thin block, a checklist of sub-steps inside a task,
-  formatting (bold, bullet points) or links in notes?
+- Keep the current Notes box. When a task has notes, the thin block shows a short one-line preview
+  under the name (blocks without notes stay as thin as now).
+
+## 12. Linked tasks (one after another) ☐
+
+- In a task, choose "Comes after…" another task. The later task stays hidden (or shown greyed with a 🔒)
+  until the earlier one is ticked off, then appears and starts green.
+- *Open question:* hidden until ready, or visible but greyed out?
+
+## 13. Focus filter on the main screen ☐
+
+- A setting / toggle to show only tasks that have no due date or are due soon; tasks due later are tucked
+  away (still visible via a "Later (n)" link and in search).
+- *Open question:* "this calendar month" or "the next 30 days"? Overdue tasks always show.
