@@ -242,7 +242,7 @@ Jeff picked these five (2026-10-28):
 5. **Dropbox inbox** (both): any line written to /inbox.txt in the app's Dropbox folder becomes a task on the
    next sync, then the file is cleared. Works with email-to-Dropbox, IFTTT, Zapier and similar services.
 
-Not wanted: missed calls, Windows shortcut key. Notification suggestions: being discussed.
+Not wanted: missed calls, Windows shortcut key. Notification suggestions: see item 28 (placeholder only).
 
 ## 27. Overdue notifications ☐
 
@@ -255,3 +255,16 @@ Settings → **Overdue reminders**:
 - **Quiet hours** (e.g. 10pm–7am) when no overdue reminders are sent.
 - All task reminders gain **Done** and **Snooze** buttons (1 hour, this evening, tomorrow) so you can deal with
   them from the notification without opening the app.
+
+## 28. Notification suggestions: settings placeholder only ☐
+
+Jeff wants to consider this later (2026-10-28). Round 3 adds only the **settings, greyed out and marked
+"Coming later"**, with no notification access and no listener code:
+
+- Settings → **Suggestions from notifications**: an on/off switch (disabled).
+- **Apps to watch**: a list (disabled).
+- **Look for**: dates and times, and words like "appointment, due, deliver, renew, pay" (disabled, editable list shown).
+- **Where suggestions go**: the same Suggestions list as calendar events.
+
+If it's built later: Android "Notification access", only from the chosen apps, suggestions only (never added on
+their own), everything stays on the phone.
