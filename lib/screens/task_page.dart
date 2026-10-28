@@ -4,7 +4,7 @@ import '../models.dart';
 import '../store.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
-import 'settings_page.dart' show askText, remindOptions;
+import 'settings_page.dart' show askText, askLines, remindOptions;
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
@@ -23,6 +23,8 @@ class TaskPage extends StatefulWidget {
 class _TaskPageState extends State<TaskPage> {
   late final _title = TextEditingController(text: widget.task.title);
   late final _notes = TextEditingController(text: widget.task.notes);
+  final _newStep = TextEditingController();
+  final _newStepFocus = FocusNode();
 
   Task get task => widget.task;
   bool get archived => task.closedAt != null;
@@ -31,7 +33,110 @@ class _TaskPageState extends State<TaskPage> {
   void dispose() {
     _title.dispose();
     _notes.dispose();
+    _newStep.dispose();
+    _newStepFocus.dispose();
     super.dispose();
+  }
+
+  void _addStep() {
+    final text = _newStep.text.trim();
+    if (text.isEmpty) return;
+    setState(() => widget.store.addStep(task, text));
+    _newStep.clear();
+    _newStepFocus.requestFocus();
+  }
+
+  void _toggleStep(TaskStep s) {
+    final finished = widget.store.toggleStep(task, s);
+    setState(() {});
+    if (finished && !archived) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(
+          content: const Text('All steps done'),
+          action: SnackBarAction(
+            label: 'Tick off task',
+            onPressed: () {
+              widget.store.complete(task);
+              _close();
+            },
+          ),
+        ));
+    }
+  }
+
+  Future<void> _stepMenu(TaskStep s) async {
+    final linked = data.task(s.taskId);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: Text(s.title),
+        children: [
+          if (linked != null)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"'))
+          else if (!archived)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'task'),
+              child: const Text('Make into a task of its own (so it can have a date and notes)'),
+            ),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'rename'), child: const Text('Rename')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'remove'), child: const Text('Remove step')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'open':
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: widget.store, task: linked!)));
+      case 'task':
+        final t = widget.store.stepToTask(task, s);
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added "${t.title}" as a task after this one')));
+      case 'rename':
+        final name = await askText(context, 'Rename step', initial: s.title);
+        if (name != null && name.trim().isNotEmpty) {
+          s.title = name.trim();
+          _update(() {});
+        }
+      case 'remove':
+        setState(() => widget.store.removeStep(task, s));
+    }
+  }
+
+  Future<void> _templateMenu() async {
+    final templates = data.templates;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Checklist templates'),
+        children: [
+          for (final t in templates)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'use:${t.id}'), child: Text('Add "${t.name}" (${t.steps.length} steps)')),
+          if (templates.isEmpty)
+            const Padding(padding: EdgeInsets.fromLTRB(24, 8, 24, 8), child: Text('No templates saved yet.')),
+          const Divider(),
+          if (task.steps.isNotEmpty)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'save'), child: const Text('Save this checklist as a template')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'new'), child: const Text('New template…')),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice.startsWith('use:')) {
+      final tpl = templates.where((t) => t.id == choice.substring(4)).firstOrNull;
+      if (tpl != null) setState(() => widget.store.applyTemplate(task, tpl));
+    } else if (choice == 'save') {
+      final name = await askText(context, 'Template name', initial: task.title);
+      if (name != null && name.trim().isNotEmpty) {
+        widget.store.saveTemplate(name, [for (final s in task.steps) s.title]);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved template "${name.trim()}"')));
+      }
+    } else if (choice == 'new') {
+      final name = await askText(context, 'Template name');
+      if (name == null || name.trim().isEmpty || !mounted) return;
+      final lines = await askLines(context, 'Steps for "${name.trim()}"');
+      if (lines != null && lines.isNotEmpty) widget.store.saveTemplate(name, lines);
+    }
   }
 
   Future<void> _pickDue() async {
@@ -180,6 +285,62 @@ class _TaskPageState extends State<TaskPage> {
           },
         ),
         const SizedBox(height: 12),
+        Row(children: [
+          const Icon(Icons.checklist),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              task.steps.isEmpty ? 'Checklist' : 'Checklist  ${task.stepsDone}/${task.steps.length}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _templateMenu,
+            icon: const Icon(Icons.library_add_outlined, size: 18),
+            label: const Text('Templates'),
+          ),
+        ]),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          onReorderItem: (o, n) => setState(() => widget.store.reorderSteps(task, o, n)),
+          children: [
+            for (final (i, s) in task.steps.indexed)
+              ListTile(
+                key: ValueKey(s.id),
+                dense: true,
+                contentPadding: const EdgeInsets.only(left: 4),
+                leading: Checkbox(value: s.done, onChanged: archived ? null : (_) => _toggleStep(s)),
+                title: Text(s.title,
+                    style: TextStyle(
+                        decoration: s.done ? TextDecoration.lineThrough : null,
+                        color: s.done ? Theme.of(context).disabledColor : null)),
+                subtitle: s.taskId == null ? null : Text('Task: ${data.task(s.taskId)?.title ?? '(deleted)'}'),
+                onTap: () => _stepMenu(s),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (s.taskId != null) const Icon(Icons.link, size: 18),
+                  ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle)),
+                ]),
+              ),
+          ],
+        ),
+        if (!archived)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _newStep,
+                  focusNode: _newStepFocus,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(hintText: 'Add a step…', isDense: true, border: UnderlineInputBorder()),
+                  onSubmitted: (_) => _addStep(),
+                ),
+              ),
+              IconButton(tooltip: 'Add step', icon: const Icon(Icons.add), onPressed: _addStep),
+            ]),
+          ),
         ListTile(
           leading: const Icon(Icons.schedule),
           title: const Text('Created'),

@@ -11,6 +11,9 @@ class DropboxClient {
 
   static const filePath = '/tasks.json';
 
+  /// Lines written here by anything else (email-to-Dropbox, IFTTT…) become tasks.
+  static const inboxPath = '/inbox.txt';
+
   final String appKey;
   String? refreshToken;
   String? _accessToken;
@@ -64,22 +67,35 @@ class DropboxClient {
   }
 
   /// Returns the file contents, or null if it doesn't exist yet.
-  Future<String?> download() async {
+  Future<String?> download() => _download(filePath);
+
+  Future<void> upload(String contents) => _upload(filePath, contents);
+
+  /// The inbox file, or null when it is missing or empty.
+  Future<String?> downloadInbox() async {
+    final text = await _download(inboxPath);
+    return text == null || text.trim().isEmpty ? null : text;
+  }
+
+  /// Empties the inbox (keeps the file so it's easy to find and write to again).
+  Future<void> clearInbox() => _upload(inboxPath, '');
+
+  Future<String?> _download(String path) async {
     final res = await http.post(Uri.https('content.dropboxapi.com', '/2/files/download'), headers: {
       'Authorization': 'Bearer ${await _token()}',
-      'Dropbox-API-Arg': jsonEncode({'path': filePath}),
+      'Dropbox-API-Arg': jsonEncode({'path': path}),
     });
     if (res.statusCode == 409 && res.body.contains('not_found')) return null;
     _checkOk(res);
     return utf8.decode(res.bodyBytes);
   }
 
-  Future<void> upload(String contents) async {
+  Future<void> _upload(String path, String contents) async {
     final res = await http.post(Uri.https('content.dropboxapi.com', '/2/files/upload'),
         headers: {
           'Authorization': 'Bearer ${await _token()}',
           'Content-Type': 'application/octet-stream',
-          'Dropbox-API-Arg': jsonEncode({'path': filePath, 'mode': 'overwrite', 'mute': true}),
+          'Dropbox-API-Arg': jsonEncode({'path': path, 'mode': 'overwrite', 'mute': true}),
         },
         body: utf8.encode(contents));
     _checkOk(res);

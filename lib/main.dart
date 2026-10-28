@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'home_widgets.dart';
+import 'native.dart';
 import 'reminders.dart';
 import 'screens/home_page.dart';
 import 'store.dart';
@@ -12,8 +13,12 @@ void main() {
   final reminders = Reminders();
   final widgets = HomeWidgets();
   final store = AppStore(reminders: reminders, widgets: widgets);
+  reminders.onAction = store.applyPending;
   // Don't hold up loading the tasks behind the notification-permission prompt.
-  Future.wait([reminders.init(), store.load()]).then((_) => reminders.schedule(store.data));
+  Future.wait([reminders.init(), store.load()]).then((_) {
+    reminders.dir = store.dirPath;
+    reminders.schedule(store.data);
+  });
   runApp(TaskApp(store: store, widgets: widgets));
 }
 
@@ -40,8 +45,16 @@ class _TaskAppState extends State<TaskApp> {
       w.launchUri().then(_handleUri);
       _clicks = w.clicks.listen(_handleUri);
     }
-    // Pick up ticks made on a widget while the app was in the background.
-    _lifecycle = AppLifecycleListener(onResume: widget.store.applyWidgetTicks);
+    _lifecycle = AppLifecycleListener(
+      // Pick up ticks made on a widget or a notification while the app was in the background.
+      onResume: () {
+        widget.store.applyPending();
+        _takeShared();
+      },
+      // Save straight away rather than waiting for the usual short delay.
+      onPause: widget.store.flush,
+    );
+    _takeShared();
   }
 
   @override
@@ -51,13 +64,33 @@ class _TaskAppState extends State<TaskApp> {
     super.dispose();
   }
 
-  void _handleUri(Uri? uri) {
-    if (uri == null || uri.scheme != 'taskblocks') return;
+  Future<void> _takeShared() async {
+    final shared = await Native.takeShared();
+    if (shared == null) return;
+    _onHome((home) => home.addShared(shared));
+  }
+
+  void _onHome(void Function(HomePageState home) f) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final home = _home.currentState;
-      if (home == null) return;
-      if (uri.host == 'add') home.focusAdd();
-      if (uri.host == 'open' && uri.queryParameters['id'] != null) home.openTask(uri.queryParameters['id']!);
+      if (home != null) f(home);
+    });
+  }
+
+  void _handleUri(Uri? uri) {
+    if (uri == null || uri.scheme != 'taskblocks') return;
+    final q = uri.queryParameters;
+    _onHome((home) {
+      switch (uri.host) {
+        case 'add':
+          home.focusAdd(text: q['text'], categoryId: q['cat']);
+        case 'open':
+          if (q['id'] != null) home.openTask(q['id']!);
+        case 'day':
+          home.openCalendar(DateTime.tryParse(q['d'] ?? ''));
+        case 'stats':
+          home.openStats();
+      }
     });
   }
 
