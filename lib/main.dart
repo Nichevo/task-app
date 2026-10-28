@@ -9,7 +9,7 @@ void main() {
   final reminders = Reminders();
   final store = AppStore(reminders: reminders);
   // Don't hold up loading the tasks behind the notification-permission prompt.
-  Future.wait([reminders.init(), store.load()]).then((_) => reminders.schedule(store.data.active));
+  Future.wait([reminders.init(), store.load()]).then((_) => reminders.schedule(store.data));
   runApp(TaskApp(store: store));
 }
 

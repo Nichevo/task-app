@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets/task_block.dart';
+import '../widgets/repeat_dialog.dart';
+import 'settings_page.dart' show askText, remindOptions;
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
@@ -51,6 +53,67 @@ class _TaskPageState extends State<TaskPage> {
     widget.store.changed(task: task);
   }
 
+  AppData get data => widget.store.data;
+
+  void _update(VoidCallback change) {
+    setState(change);
+    widget.store.changed(task: task);
+  }
+
+  Future<DateTime?> _pickDateTime(DateTime initial, {TimeOfDay? time}) async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (date == null || !mounted) return null;
+    final t = await showTimePicker(context: context, initialTime: time ?? TimeOfDay.fromDateTime(initial));
+    if (t == null) return null;
+    return DateTime(date.year, date.month, date.day, t.hour, t.minute);
+  }
+
+  Future<void> _pickSnooze() async {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final d = await _pickDateTime(task.snoozedUntil ?? tomorrow, time: const TimeOfDay(hour: 8, minute: 0));
+    if (d != null) _update(() => task.snoozedUntil = d);
+  }
+
+  /// Choose the task this one waits for. Tasks that (directly or not) wait for this one are
+  /// left out, so a chain can't loop.
+  Future<void> _pickAfter() async {
+    bool waitsOnThis(Task t) {
+      final seen = <String>{};
+      for (Task? c = t; c != null && seen.add(c.id); c = data.task(c.afterTaskId)) {
+        if (c.afterTaskId == task.id) return true;
+      }
+      return false;
+    }
+
+    final options = data.active.where((t) => t.id != task.id && !waitsOnThis(t)).toList();
+    final picked = await showDialog<Task>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Comes after which task?'),
+        children: [
+          if (options.isEmpty) const Padding(padding: EdgeInsets.all(24), child: Text('No other open tasks.')),
+          for (final t in options)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, t), child: Text(t.title)),
+        ],
+      ),
+    );
+    if (picked != null) _update(() => task.afterTaskId = picked.id);
+  }
+
+  Future<void> _editRepeat() async {
+    final r = await showDialog<Repeat>(
+      context: context,
+      builder: (_) => RepeatDialog(initial: task.repeat),
+    );
+    if (r != null) _update(() => task.repeat = r);
+  }
+
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -85,6 +148,12 @@ class _TaskPageState extends State<TaskPage> {
             : IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: _close),
         title: Text(archived ? 'Archived task' : 'Task'),
         actions: [
+          IconButton(
+            tooltip: task.starred ? 'Unstar' : 'Star (keep at the top)',
+            icon: Icon(task.starred ? Icons.star : Icons.star_border,
+                color: task.starred ? const Color(0xFFFFB300) : null),
+            onPressed: () => _update(() => task.starred = !task.starred),
+          ),
           IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: _delete),
         ],
       ),
@@ -132,6 +201,84 @@ class _TaskPageState extends State<TaskPage> {
                   },
                 ),
         ),
+        if (task.dueAt != null && !archived)
+          ListTile(
+            leading: const Icon(Icons.notifications_none),
+            title: const Text('Remind me'),
+            trailing: DropdownButton<int?>(
+              value: task.remindBefore,
+              items: [
+                DropdownMenuItem(
+                    value: null,
+                    child: Text('Default (${remindOptions[data.defaultRemindBefore] ?? 'at due time'})')),
+                for (final e in remindOptions.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+              ],
+              onChanged: (v) => _update(() => task.remindBefore = v),
+            ),
+          ),
+        ListTile(
+          leading: const Icon(Icons.label_outline),
+          title: const Text('Category'),
+          trailing: DropdownButton<String?>(
+            value: data.category(task.categoryId)?.id,
+            items: [
+              const DropdownMenuItem(value: null, child: Text('None')),
+              for (final c in data.categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
+              const DropdownMenuItem(value: '+', child: Text('New category…')),
+            ],
+            onChanged: (v) async {
+              if (v == '+') {
+                final name = await askText(context, 'New category');
+                if (name == null || name.trim().isEmpty) return;
+                v = widget.store.addCategory(name).id;
+              }
+              _update(() => task.categoryId = v);
+            },
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.repeat),
+          title: const Text('Repeat'),
+          subtitle: Text(task.repeat?.describe() ?? 'Does not repeat'),
+          onTap: _editRepeat,
+          trailing: task.repeat == null
+              ? null
+              : IconButton(
+                  tooltip: 'Stop repeating',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => _update(() => task.repeat = null),
+                ),
+        ),
+        if (!archived) ...[
+          ListTile(
+            leading: Icon(data.isLocked(task) ? Icons.lock_outline : Icons.link),
+            title: const Text('Comes after'),
+            subtitle: Text(data.task(task.afterTaskId)?.title ?? 'Nothing (can be done any time)'),
+            onTap: _pickAfter,
+            trailing: task.afterTaskId == null
+                ? null
+                : IconButton(
+                    tooltip: 'Remove link',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => _update(() => task.afterTaskId = null),
+                  ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.snooze),
+            title: const Text('Snooze'),
+            subtitle: Text(task.isSnoozed(DateTime.now())
+                ? 'Hidden until ${dateTimeFmt.format(task.snoozedUntil!)}'
+                : 'Hide this task until a later date'),
+            onTap: _pickSnooze,
+            trailing: !task.isSnoozed(DateTime.now())
+                ? null
+                : IconButton(
+                    tooltip: 'Unsnooze',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => _update(() => task.snoozedUntil = null),
+                  ),
+          ),
+        ],
         if (archived)
           ListTile(
             leading: const Icon(Icons.check_circle_outline),

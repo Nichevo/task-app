@@ -27,6 +27,8 @@ class TaskBlock extends StatelessWidget {
     this.trailing,
     this.archived = false,
     this.selected = false,
+    this.lockedBy,
+    this.categoryName,
   });
 
   final Task task;
@@ -36,10 +38,24 @@ class TaskBlock extends StatelessWidget {
 
   /// Outlined when it is the task open in the side pane.
   final bool selected;
+
+  /// Title of the earlier task this one is waiting for; shown greyed with a lock.
+  final String? lockedBy;
+
+  /// Shown in the expanded details.
+  final String? categoryName;
   final VoidCallback onTap;
   final VoidCallback onOpen;
   final VoidCallback? onCheck;
   final Widget? trailing;
+
+  /// One-line notes preview on the thin block, only when there are notes.
+  bool get preview => !expanded && task.notes.trim().isNotEmpty;
+
+  Widget _badge(IconData icon, String tip, Color color) => Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Tooltip(message: tip, child: Icon(icon, size: 16, color: color)),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -65,9 +81,14 @@ class TaskBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    height: 42,
+                    height: preview ? 54 : 42,
                     child: Row(children: [
-                      if (onCheck != null)
+                      if (lockedBy != null)
+                        Tooltip(
+                          message: 'Waiting for "$lockedBy"',
+                          child: const SizedBox(width: 48, child: Icon(Icons.lock_outline, color: ink)),
+                        )
+                      else if (onCheck != null)
                         IconButton(
                           tooltip: 'Tick off',
                           icon: const Icon(Icons.check_box_outline_blank, color: ink),
@@ -76,10 +97,28 @@ class TaskBlock extends StatelessWidget {
                       else
                         const SizedBox(width: 12),
                       Expanded(
-                        child: Text(task.title,
-                            maxLines: expanded ? 2 : 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Flexible(
+                                child: Text(task.title,
+                                    maxLines: expanded ? 2 : 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                              ),
+                              if (task.starred) _badge(Icons.star, 'Starred', const Color(0xFF8D6E00)),
+                              if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
+                              if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
+                            ]),
+                            if (preview)
+                              Text(task.notes.split('\n').first,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12.5, color: Color(0xAA000000))),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Text(shortTime(archived ? task.closedAt! : task.createdAt),
@@ -107,6 +146,10 @@ class TaskBlock extends StatelessWidget {
         _line('Due', due == null ? 'No due date' : dateTimeFmt.format(due) + (overdue ? '  (overdue)' : ''),
             bold: overdue),
         if (archived) _line('Closed', dateTimeFmt.format(task.closedAt!)),
+        if (categoryName != null) _line('Category', categoryName!),
+        if (task.repeat != null) _line('Repeats', task.repeat!.describe()),
+        if (lockedBy != null) _line('After', lockedBy!),
+        if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),
         if (task.notes.isNotEmpty)
           Padding(padding: const EdgeInsets.only(top: 6), child: Text(task.notes)),
         Align(
@@ -125,7 +168,7 @@ class TaskBlock extends StatelessWidget {
   Widget _line(String label, String value, {bool bold = false}) => Padding(
         padding: const EdgeInsets.only(top: 2),
         child: Row(children: [
-          SizedBox(width: 64, child: Text(label, style: const TextStyle(fontSize: 13))),
+          SizedBox(width: 72, child: Text(label, style: const TextStyle(fontSize: 13))),
           Expanded(
               child: Text(value,
                   style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w500))),

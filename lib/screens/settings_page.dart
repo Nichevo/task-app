@@ -6,6 +6,30 @@ import '../models.dart';
 import '../store.dart';
 import '../widgets/task_colors.dart';
 
+/// Choices for the extra reminder before a task is due, in minutes.
+const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour before', 1440: '1 day before', 10080: '1 week before'};
+
+/// Asks for a line of text, e.g. a category name.
+Future<String?> askText(BuildContext context, String title, {String initial = ''}) {
+  final field = TextEditingController(text: initial);
+  return showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: field,
+        autofocus: true,
+        textCapitalization: TextCapitalization.sentences,
+        onSubmitted: (v) => Navigator.pop(c, v),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, field.text), child: const Text('OK')),
+      ],
+    ),
+  );
+}
+
 /// Choices for how long closed tasks stay in the archive, in days (0 = forever).
 const archiveKeepOptions = {0: 'Never', 30: '1 month', 90: '3 months', 180: '6 months', 365: '1 year'};
 
@@ -122,6 +146,81 @@ class _SettingsPageState extends State<SettingsPage> {
                 store.data.colourByDue = v;
                 store.changed(settings: true);
               },
+            ),
+            const Divider(height: 40),
+            Text('List', style: Theme.of(context).textTheme.titleMedium),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Only show tasks due in the next 30 days'),
+              subtitle: const Text('Plus tasks with no due date and anything overdue. '
+                  'Tasks due later are under "Due later" at the bottom of the list.'),
+              value: store.data.focusNext30,
+              onChanged: (v) {
+                store.data.focusNext30 = v;
+                store.changed(settings: true);
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Group by category'),
+              subtitle: const Text('Show a bold heading for each category with its tasks underneath. '
+                  'Tap a heading to collapse it; drag a task under another heading to move it.'),
+              value: store.data.groupByCategory,
+              onChanged: (v) {
+                store.data.groupByCategory = v;
+                store.changed(settings: true);
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Reminders'),
+              subtitle: const Text('Default for tasks with a due date (each task can change it)'),
+              trailing: DropdownButton<int>(
+                value: remindOptions.containsKey(store.data.defaultRemindBefore) ? store.data.defaultRemindBefore : 0,
+                items: [for (final e in remindOptions.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                onChanged: (v) {
+                  store.data.defaultRemindBefore = v ?? 0;
+                  store.changed(settings: true);
+                },
+              ),
+            ),
+            const Divider(height: 40),
+            Row(children: [
+              Expanded(child: Text('Categories', style: Theme.of(context).textTheme.titleMedium)),
+              TextButton.icon(
+                onPressed: () async {
+                  final name = await askText(context, 'New category');
+                  if (name != null && name.trim().isNotEmpty) store.addCategory(name);
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add'),
+              ),
+            ]),
+            if (store.data.categories.isEmpty)
+              const Text('No categories yet. Add some, then pick one in each task.'),
+            ReorderableListView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              onReorderItem: store.moveCategory,
+              children: [
+                for (final (i, c) in store.data.categories.indexed)
+                  ListTile(
+                    key: ValueKey(c.id),
+                    contentPadding: EdgeInsets.zero,
+                    leading: ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle)),
+                    title: Text(c.name),
+                    onTap: () async {
+                      final name = await askText(context, 'Rename category', initial: c.name);
+                      if (name != null && name.trim().isNotEmpty) store.renameCategory(c, name);
+                    },
+                    trailing: IconButton(
+                      tooltip: 'Delete category (its tasks are kept)',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => store.deleteCategory(c),
+                    ),
+                  ),
+              ],
             ),
             const Divider(height: 40),
             Text('Archive', style: Theme.of(context).textTheme.titleMedium),

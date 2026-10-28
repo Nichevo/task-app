@@ -5,9 +5,11 @@ import '../models.dart';
 /// Green when new, through yellow and orange, to red after [hoursToRed].
 /// With [byDue], a task that has a due date is red by its due date instead.
 Color ageColor(Task t, double hoursToRed, {bool byDue = false, DateTime? now}) {
-  final age = (now ?? DateTime.now()).difference(t.createdAt).inMinutes / 60;
+  now ??= DateTime.now();
+  final start = t.colourStart(now);
+  final age = now.difference(start).inMinutes / 60;
   final due = t.dueAt;
-  final span = byDue && due != null ? due.difference(t.createdAt).inMinutes / 60 : hoursToRed;
+  final span = byDue && due != null ? due.difference(start).inMinutes / 60 : hoursToRed;
   final progress = span <= 0 ? 1.0 : (age / span).clamp(0.0, 1.0);
   return HSVColor.fromAHSV(1, 120 * (1 - progress), 0.6, 0.88).toColor();
 }
@@ -24,3 +26,6 @@ String describeHours(double h) {
   }
   return '${days.round()} day${days == 1 ? '' : 's'}';
 }
+
+/// Colour for a task waiting on another one.
+const lockedColor = Color(0xFFD5D5D5);

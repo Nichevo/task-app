@@ -41,9 +41,9 @@ void main() {
       ],
     );
     final lines = buildCsv(d).trim().split('\r\n');
-    expect(lines[0], 'Status,Position,Task,Notes,Created,Due,Closed');
-    expect(lines[1], 'Open,1,"Buy milk, eggs",,2026-01-01 09:00,,');
-    expect(lines[2], 'Closed,,"Say ""hi""",,2026-01-01 00:00,,2026-01-02 08:30');
+    expect(lines[0], 'Status,Position,Task,Notes,Category,Created,Due,Closed,Starred,Repeats');
+    expect(lines[1], 'Open,1,"Buy milk, eggs",,,2026-01-01 09:00,,,,');
+    expect(lines[2], 'Closed,,"Say ""hi""",,,2026-01-01 00:00,,2026-01-02 08:30,,');
   });
 
   test('data survives a JSON round trip', () {
