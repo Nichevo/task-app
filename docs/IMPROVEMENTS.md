@@ -56,3 +56,37 @@ created and when it's due, instead of at the colour-speed setting.
 
 Search box in the archive (matches name and notes). Settings → "Delete archived tasks after":
 Never (default), 1, 3, 6 or 12 months.
+
+---
+
+# Round 2 (collecting ideas, not started)
+
+Jeff wants the full list agreed before any building starts.
+
+## 8. Categories ☐
+
+- Each task can be given a category (e.g. Home, Work, Shopping). Categories are created and renamed in Settings.
+- **Grouped view** (turned on in Settings): a category heading, then that category's tasks, then the next heading,
+  and so on. When it's off, the list looks as it does today.
+- Tasks with no category sit in their own group at the top (or bottom).
+- *Open questions:* should each category have its own colour or icon on the heading? Should headings be
+  collapsible? Should the archive and CSV export include the category? (Proposed: yes for CSV.)
+
+## 9. Drag between categories ☐
+
+- In grouped view, dragging a task under a different heading moves it into that category as well as
+  changing its order. Headings can also be dragged to reorder the categories.
+
+## 10. Repeating tasks ☐
+
+- In the task, choose a repeat: daily, weekly (pick days), monthly, yearly, or every N days.
+- *Proposed:* when a repeating task is ticked off, it goes to the archive as normal and a fresh copy appears
+  with the next due date (and its colour starts green again).
+- *Open question:* repeat from the due date (fixed schedule) or from when it was ticked off (e.g. "water plants
+  7 days after last time")?
+
+## 11. Text details ☐
+
+- *Needs clarifying:* tasks already have a Notes box (shown when a block is expanded). Is this about
+  something more, such as showing part of the notes on the thin block, a checklist of sub-steps inside a task,
+  formatting (bold, bullet points) or links in notes?
