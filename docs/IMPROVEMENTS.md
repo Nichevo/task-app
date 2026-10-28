@@ -163,11 +163,11 @@ Look at upcoming calendar events and offer to make tasks from them:
 - An **Upcoming events** page (next 14 days) lists events from the calendars you pick; each has **+ Task**,
   which creates a task named after the event, due at its start time (or a set time before, e.g. a day before
   for "prepare for…"). Events already turned into tasks show a tick.
-- Optional: a small "3 events coming up" prompt at the top of the list once a day.
-- **Android:** reads the phone's calendars (Google, Samsung, Outlook accounts added to the phone) with
-  permission; nothing leaves the phone.
-- **Windows:** no shared calendar store, so it would need signing in to Google or Microsoft. Proposed: Android
-  only at first; tasks made there sync to Windows through Dropbox anyway.
+- Nothing pops up unless you choose to. Settings → **Event suggestions**: Off (only when you open the page,
+  the default), Once a day, or Once a week. When on, a single dismissible "3 events coming up" line shows at
+  the top of the list; events you dismiss or turn into tasks aren't suggested again.
+- **Phone only** (agreed 2026-10-28): reads the phone's calendars (Google, Samsung, Outlook accounts added to
+  the phone) with permission; nothing leaves the phone. Tasks made from events sync to Windows through Dropbox.
 
 ## 22. Calendar view of tasks ☐
 
@@ -187,4 +187,7 @@ A month grid (switch from the list with a calendar icon):
   any task in one tap. Templates are managed in Settings.
 - Repeating tasks start each repeat with the steps unticked.
 - Ticking the last step offers to tick off the whole task.
+- Steps have no dates (agreed 2026-10-28). When a step needs one, **Make into task** turns it into a full task
+  (which can then have a due date, notes, category and so on). The step stays in the checklist with a link icon,
+  opens that task when tapped, and ticks itself when that task is ticked off.
 - CSV export lists steps in a column.
