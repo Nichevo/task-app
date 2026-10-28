@@ -63,7 +63,7 @@ Never (default), 1, 3, 6 or 12 months.
 
 Jeff wants the full list agreed before any building starts.
 
-## 8. Categories ☐
+## 8. Categories ◐ (PR #2)
 
 - Each task can be given a category (e.g. Home, Work, Shopping). Categories are created and renamed in Settings.
 - **Grouped view** (turned on in Settings): a category heading, then that category's tasks, then the next heading,
@@ -72,12 +72,12 @@ Jeff wants the full list agreed before any building starts.
 - Headings are plain bold text (no per-category colours) and can be collapsed to hide their tasks.
 - The CSV export gets a Category column.
 
-## 9. Drag between categories ☐
+## 9. Drag between categories ◐ (PR #2)
 
 - In grouped view, dragging a task under a different heading moves it into that category as well as
   changing its order. Headings can also be dragged to reorder the categories.
 
-## 10. Repeating tasks ☐
+## 10. Repeating tasks ◐ (PR #2)
 
 - In the task, choose a repeat: daily, weekly (pick days), monthly, yearly, or every N days.
 - *Proposed:* when a repeating task is ticked off, it goes to the archive as normal and a fresh copy appears
@@ -85,42 +85,42 @@ Jeff wants the full list agreed before any building starts.
 - Both modes, chosen per task: **fixed schedule** (next due date counts from the previous due date) or
   **after completion** (counts from when it was ticked off, e.g. "water plants 7 days after last time").
 
-## 11. Text details ☐
+## 11. Text details ◐ (PR #2)
 
 - Keep the current Notes box. When a task has notes, the thin block shows a short one-line preview
   under the name (blocks without notes stay as thin as now).
 
-## 12. Linked tasks (one after another) ☐
+## 12. Linked tasks (one after another) ◐ (PR #2)
 
 - In a task, choose "Comes after…" another task. The later task stays hidden (or shown greyed with a 🔒)
   until the earlier one is ticked off, then appears and starts green.
 - Shown greyed out with a 🔒 (so its details can still be edited); it becomes a normal task, starting
   green, when the earlier one is ticked off.
 
-## 13. Focus filter on the main screen ☐
+## 13. Focus filter on the main screen ◐ (PR #2)
 
 - Settings option: show only tasks with no due date or due in the next 30 days (overdue always show);
   tasks due later are tucked away behind a "Later (n)" link.
 
-## 14. Quick dates while typing ☐
+## 14. Quick dates while typing ◐ (PR #2)
 
 Typing "Call bank tomorrow 5pm", "Fri", "next week" or "25 Dec" in the add box sets the due date and
 strips the words from the name (shown as a hint before you press +).
 
-## 15. Earlier reminders ☐
+## 15. Earlier reminders ◐ (PR #2)
 
 Per task (with a default in Settings): remind at the due time and optionally 1 hour / 1 day / 1 week before.
 
-## 16. Priority star ☐
+## 16. Priority star ◐ (PR #2)
 
 Star a task to keep it at the top of its category/list regardless of colour.
 
-## 17. Snooze ☐
+## 17. Snooze ◐ (PR #2)
 
 Hide a task until a chosen date ("Snooze until…"); it reappears then. Snoozed tasks are listed behind a
 "Snoozed (n)" link.
 
-## 18. Home screen widget (Android) ☐
+## 18. Home screen widget (Android) ◐ (PR #2)
 
 The app offers several widgets in Android's widget picker; add any of them, as many times as you like:
 
@@ -132,6 +132,6 @@ The app offers several widgets in Android's widget picker; add any of them, as m
 When placing a list or compact widget you choose what it shows (all tasks, due soon, or one category),
 so e.g. a "Work" widget and a "Home" widget can sit side by side.
 
-## 19. CSV import ☐
+## 19. CSV import ◐ (PR #2)
 
 Import tasks from a CSV in the same format as the export (adds them; doesn't replace the list).

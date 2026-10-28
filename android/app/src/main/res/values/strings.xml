@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Task Blocks</string>
+    <string name="widget_add">Add a task</string>
+    <string name="widget_tick">Tick off</string>
+    <string name="widget_empty">Nothing to do here</string>
+    <string name="widget_list_desc">Task list: coloured tasks you can tick off</string>
+    <string name="widget_compact_desc">Summary: open and overdue counts and the next 3 due</string>
+    <string name="widget_quick_add_desc">Quick add: one tap to type a new task</string>
+</resources>

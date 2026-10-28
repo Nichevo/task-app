@@ -6,17 +6,21 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'dropbox.dart';
+import 'home_widgets.dart';
 import 'models.dart';
 import 'reminders.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
 class AppStore extends ChangeNotifier {
-  AppStore({this.reminders});
+  AppStore({this.reminders, this.widgets});
 
   AppData data = AppData();
 
   /// Due-date notifications; null in tests.
   final Reminders? reminders;
+
+  /// Android home screen widgets; null in tests.
+  final HomeWidgets? widgets;
 
   /// Device-only settings (not synced): Dropbox app key and sign-in.
   String dropboxAppKey = '';
@@ -47,8 +51,23 @@ class AppStore extends ChangeNotifier {
     }
     if (_cleanArchive()) await _writeData();
     notifyListeners();
+    await applyWidgetTicks();
     unawaited(reminders?.schedule(data));
+    unawaited(widgets?.push(data));
     unawaited(sync());
+  }
+
+  /// Archives tasks that were ticked off on a home screen widget.
+  Future<void> applyWidgetTicks() async {
+    final ticks = await widgets?.takeCompleted() ?? const [];
+    var any = false;
+    for (final (id, at) in ticks) {
+      final t = data.active.where((t) => t.id == id).firstOrNull;
+      if (t == null) continue;
+      complete(t, at: at);
+      any = true;
+    }
+    if (any) notifyListeners();
   }
 
   Future<void> _writeData() async {
@@ -76,6 +95,7 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
     _writeData();
     unawaited(reminders?.schedule(data));
+    unawaited(widgets?.push(data));
     if (dropbox?.isConnected ?? false) {
       _uploadTimer?.cancel();
       _uploadTimer = Timer(const Duration(seconds: 2), sync);
@@ -117,6 +137,7 @@ class AppStore extends ChangeNotifier {
           await _writeData();
           notifyListeners();
           unawaited(reminders?.schedule(data));
+          unawaited(widgets?.push(data));
         }
         if (remoteText == null || jsonEncode(data.toJson()) != jsonEncode(remote!.toJson())) {
           await db.upload(jsonEncode(data.toJson()));
@@ -190,10 +211,10 @@ class AppStore extends ChangeNotifier {
 
   /// Ticks a task off. A repeating task's next copy takes its place; tasks waiting on it are
   /// released. Returns the new copy, if any, so an undo can remove it.
-  Task? complete(Task t) {
+  Task? complete(Task t, {DateTime? at}) {
     final index = data.active.indexOf(t);
     data.active.remove(t);
-    final now = DateTime.now();
+    final now = at ?? DateTime.now();
     t.closedAt = now;
     data.archived.insert(0, t);
     _release(t.id, now);
