@@ -9,6 +9,13 @@ class Task {
     this.notes = '',
     this.dueAt,
     this.closedAt,
+    this.categoryId,
+    this.starred = false,
+    this.snoozedUntil,
+    this.afterTaskId,
+    this.readyAt,
+    this.repeat,
+    this.remindBefore,
     DateTime? updatedAt,
   }) : updatedAt = updatedAt ?? createdAt;
 
@@ -19,10 +26,55 @@ class Task {
   DateTime? dueAt;
   DateTime? closedAt;
 
+  /// The [TaskCategory] it belongs to; null for none.
+  String? categoryId;
+
+  /// Starred tasks are kept at the top of their list or category.
+  bool starred;
+
+  /// Hidden from the main list until this time.
+  DateTime? snoozedUntil;
+
+  /// This task waits for that one to be ticked off ("comes after").
+  String? afterTaskId;
+
+  /// When it stopped waiting for [afterTaskId]; its colour starts green again from here.
+  DateTime? readyAt;
+
+  /// How it comes back after being ticked off; null if it doesn't repeat.
+  Repeat? repeat;
+
+  /// Extra reminder this many minutes before the due time; null uses the default from Settings.
+  int? remindBefore;
+
   /// Last time anything about this task changed; the newer copy wins when syncing.
   DateTime updatedAt;
 
   void touch() => updatedAt = DateTime.now().toUtc();
+
+  bool isSnoozed(DateTime now) => snoozedUntil != null && snoozedUntil!.isAfter(now);
+
+  /// When the colour clock started: creation, or later if it was waiting or snoozed.
+  DateTime colourStart(DateTime now) {
+    var start = createdAt;
+    for (final d in [readyAt, snoozedUntil]) {
+      if (d != null && d.isAfter(start) && !d.isAfter(now)) start = d;
+    }
+    return start;
+  }
+
+  /// A fresh copy for the next time a repeating task comes round.
+  Task nextRepeat(DateTime completedAt) {
+    final r = repeat!;
+    final next = Task.create(title)
+      ..notes = notes
+      ..categoryId = categoryId
+      ..starred = starred
+      ..repeat = r
+      ..remindBefore = remindBefore;
+    next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
+    return next;
+  }
 
   factory Task.create(String title) => Task(
         id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}',
@@ -38,6 +90,13 @@ class Task {
         'dueAt': dueAt?.toIso8601String(),
         'closedAt': closedAt?.toIso8601String(),
         'updatedAt': updatedAt.toUtc().toIso8601String(),
+        if (categoryId != null) 'categoryId': categoryId,
+        if (starred) 'starred': true,
+        if (snoozedUntil != null) 'snoozedUntil': snoozedUntil!.toIso8601String(),
+        if (afterTaskId != null) 'afterTaskId': afterTaskId,
+        if (readyAt != null) 'readyAt': readyAt!.toIso8601String(),
+        if (repeat != null) 'repeat': repeat!.toJson(),
+        if (remindBefore != null) 'remindBefore': remindBefore,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -48,9 +107,129 @@ class Task {
         dueAt: _date(j['dueAt']),
         closedAt: _date(j['closedAt']),
         updatedAt: _date(j['updatedAt']),
+        categoryId: j['categoryId'] as String?,
+        starred: j['starred'] as bool? ?? false,
+        snoozedUntil: _date(j['snoozedUntil']),
+        afterTaskId: j['afterTaskId'] as String?,
+        readyAt: _date(j['readyAt']),
+        repeat: j['repeat'] is Map ? Repeat.fromJson(j['repeat'] as Map<String, dynamic>) : null,
+        remindBefore: (j['remindBefore'] as num?)?.toInt(),
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+}
+
+enum RepeatUnit { day, week, month, year }
+
+/// How a task repeats.
+class Repeat {
+  const Repeat({
+    required this.unit,
+    this.every = 1,
+    this.weekdays = const {},
+    this.fromCompletion = false,
+  });
+
+  final RepeatUnit unit;
+
+  /// Every this many [unit]s.
+  final int every;
+
+  /// For weekly repeats every week: which days (DateTime.monday..sunday). Empty = same weekday.
+  final Set<int> weekdays;
+
+  /// Count from when it was ticked off (e.g. "7 days after I last did it") instead of
+  /// keeping to a fixed schedule from the previous due date.
+  final bool fromCompletion;
+
+  /// The next due date. Fixed schedules step on from the old due date until in the future;
+  /// otherwise one step from [completedAt], keeping the old due time of day if there was one.
+  DateTime nextDue({DateTime? due, required DateTime completedAt}) {
+    if (fromCompletion || due == null) {
+      final base = due == null
+          ? completedAt
+          : DateTime(completedAt.year, completedAt.month, completedAt.day, due.hour, due.minute);
+      return _step(base);
+    }
+    var next = _step(due);
+    while (!next.isAfter(completedAt)) {
+      next = _step(next);
+    }
+    return next;
+  }
+
+  DateTime _step(DateTime d) {
+    switch (unit) {
+      case RepeatUnit.day:
+        return DateTime(d.year, d.month, d.day + every, d.hour, d.minute);
+      case RepeatUnit.week:
+        if (every == 1 && weekdays.isNotEmpty) {
+          for (var i = 1; i <= 7; i++) {
+            final c = DateTime(d.year, d.month, d.day + i, d.hour, d.minute);
+            if (weekdays.contains(c.weekday)) return c;
+          }
+        }
+        return DateTime(d.year, d.month, d.day + 7 * every, d.hour, d.minute);
+      case RepeatUnit.month:
+        return _addMonths(d, every);
+      case RepeatUnit.year:
+        return _addMonths(d, 12 * every);
+    }
+  }
+
+  static DateTime _addMonths(DateTime d, int months) {
+    final m = d.month - 1 + months;
+    final year = d.year + m ~/ 12;
+    final month = m % 12 + 1;
+    final lastDay = DateTime(year, month + 1, 0).day;
+    return DateTime(year, month, d.day > lastDay ? lastDay : d.day, d.hour, d.minute);
+  }
+
+  String describe() {
+    final n = every;
+    final base = switch (unit) {
+      RepeatUnit.day => n == 1 ? 'Every day' : 'Every $n days',
+      RepeatUnit.week => n == 1
+          ? (weekdays.isEmpty
+              ? 'Every week'
+              : 'Every ${(weekdays.toList()..sort()).map((d) => _dayNames[d - 1]).join(', ')}')
+          : 'Every $n weeks',
+      RepeatUnit.month => n == 1 ? 'Every month' : 'Every $n months',
+      RepeatUnit.year => n == 1 ? 'Every year' : 'Every $n years',
+    };
+    return fromCompletion ? '$base after done' : base;
+  }
+
+  static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  Map<String, dynamic> toJson() => {
+        'unit': unit.name,
+        'every': every,
+        if (weekdays.isNotEmpty) 'weekdays': (weekdays.toList()..sort()),
+        if (fromCompletion) 'fromCompletion': true,
+      };
+
+  factory Repeat.fromJson(Map<String, dynamic> j) => Repeat(
+        unit: RepeatUnit.values.firstWhere((u) => u.name == j['unit'], orElse: () => RepeatUnit.day),
+        every: (j['every'] as num?)?.toInt() ?? 1,
+        weekdays: {for (final d in j['weekdays'] as List? ?? []) (d as num).toInt()},
+        fromCompletion: j['fromCompletion'] as bool? ?? false,
+      );
+}
+
+class TaskCategory {
+  TaskCategory({required this.id, required this.name});
+
+  final String id;
+  String name;
+
+  factory TaskCategory.create(String name) =>
+      TaskCategory(id: 'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name);
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+
+  factory TaskCategory.fromJson(Map<String, dynamic> j) =>
+      TaskCategory(id: j['id'] as String, name: j['name'] as String? ?? '');
 }
 
 /// Everything that gets saved locally and synced to Dropbox.
@@ -61,6 +240,11 @@ class AppData {
     this.hoursToRed = 72,
     this.colourByDue = true,
     this.archiveKeepDays = 0,
+    List<TaskCategory>? categories,
+    this.groupByCategory = false,
+    Set<String>? collapsed,
+    this.focusNext30 = false,
+    this.defaultRemindBefore = 0,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -68,6 +252,8 @@ class AppData {
   })  : active = active ?? [],
         archived = archived ?? [],
         deleted = deleted ?? {},
+        categories = categories ?? [],
+        collapsed = collapsed ?? {},
         updatedAt = updatedAt ?? _epoch,
         orderUpdatedAt = orderUpdatedAt ?? _epoch,
         settingsUpdatedAt = settingsUpdatedAt ?? _epoch;
@@ -89,6 +275,21 @@ class AppData {
   /// Archived tasks closed longer ago than this are deleted; 0 keeps them forever.
   int archiveKeepDays;
 
+  /// In the order their headings are shown.
+  final List<TaskCategory> categories;
+
+  /// Show the list under category headings.
+  bool groupByCategory;
+
+  /// TaskCategory ids (or '' for "No category") whose headings are collapsed.
+  final Set<String> collapsed;
+
+  /// Only show tasks with no due date or due within the next 30 days.
+  bool focusNext30;
+
+  /// Default extra reminder before the due time, in minutes (0 = only at the due time).
+  int defaultRemindBefore;
+
   /// When anything was last changed.
   DateTime updatedAt;
 
@@ -106,6 +307,11 @@ class AppData {
         'hoursToRed': hoursToRed,
         'colourByDue': colourByDue,
         'archiveKeepDays': archiveKeepDays,
+        'categories': categories.map((c) => c.toJson()).toList(),
+        'groupByCategory': groupByCategory,
+        'collapsed': collapsed.toList(),
+        'focusNext30': focusNext30,
+        'defaultRemindBefore': defaultRemindBefore,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
@@ -114,10 +320,24 @@ class AppData {
         'archived': archived.map((t) => t.toJson()).toList(),
       };
 
+  TaskCategory? category(String? id) => categories.where((c) => c.id == id).firstOrNull;
+
+  Task? task(String? id) => id == null
+      ? null
+      : active.where((t) => t.id == id).firstOrNull ?? archived.where((t) => t.id == id).firstOrNull;
+
+  /// Waiting for an earlier task that is still open.
+  bool isLocked(Task t) => t.afterTaskId != null && active.any((a) => a.id == t.afterTaskId);
+
   factory AppData.fromJson(Map<String, dynamic> j) => AppData(
         hoursToRed: (j['hoursToRed'] as num?)?.toDouble() ?? 72,
         colourByDue: j['colourByDue'] as bool? ?? true,
         archiveKeepDays: (j['archiveKeepDays'] as num?)?.toInt() ?? 0,
+        categories: [for (final c in j['categories'] as List? ?? []) TaskCategory.fromJson(c)],
+        groupByCategory: j['groupByCategory'] as bool? ?? false,
+        collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
+        focusNext30: j['focusNext30'] as bool? ?? false,
+        defaultRemindBefore: (j['defaultRemindBefore'] as num?)?.toInt() ?? 0,
         updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
         orderUpdatedAt: DateTime.tryParse(j['orderUpdatedAt'] as String? ?? ''),
         settingsUpdatedAt: DateTime.tryParse(j['settingsUpdatedAt'] as String? ?? ''),
@@ -174,6 +394,11 @@ AppData mergeData(AppData a, AppData b) {
     hoursToRed: settingsFrom.hoursToRed,
     colourByDue: settingsFrom.colourByDue,
     archiveKeepDays: settingsFrom.archiveKeepDays,
+    categories: settingsFrom.categories,
+    groupByCategory: settingsFrom.groupByCategory,
+    collapsed: settingsFrom.collapsed,
+    focusNext30: settingsFrom.focusNext30,
+    defaultRemindBefore: settingsFrom.defaultRemindBefore,
     settingsUpdatedAt: settingsFrom.settingsUpdatedAt,
     updatedAt: b.updatedAt.isAfter(a.updatedAt) ? b.updatedAt : a.updatedAt,
     orderUpdatedAt: orderFrom.orderUpdatedAt,

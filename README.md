@@ -29,7 +29,16 @@ On a wide screen such as Windows, the blocks stretch across the whole window:
 - Tick the box to move a task to the **Archive** (box icon, top right), which shows when it was closed and can be searched. The ↶ button puts it back.
 - Tasks with a due date turn red as the due date approaches, and the phone shows a reminder when it's due.
 - On an unfolded Fold, tablet or wide window, the open task (or the archive) shows beside the list.
-- **⋮ → Export to CSV** saves every task (open and archived) with all details.
+- **⋮ → Export to CSV** saves every task (open and archived) with all details. **⋮ → Import from CSV** brings tasks back in (only a Task column is needed, so a spreadsheet works too).
+- Type dates as you add a task, such as "Call mum tomorrow 5pm", "Bins friday" or "Report 25 Dec". The date shows as a chip you can tap ✕ on to ignore.
+- Give tasks a **category**. Turn on **Settings → Group by category** to see bold, collapsible headings; drag a task under another heading to move it there.
+- **Repeat** a task on a fixed schedule (every Monday, the 1st of each month) or a set time after you tick it off.
+- Thin blocks show the first line of the notes, if there are any.
+- **Comes after** links a task to an earlier one. It stays greyed out with a lock until the earlier task is ticked off, and you can still edit it.
+- **Settings → Next 30 days only** hides tasks due later than that behind a "Due later" link. Overdue and undated tasks always show.
+- **Star** a task to keep it at the top. **Snooze** hides it until a date you pick.
+- Reminders can come early (15 minutes, an hour, a day or a week before), per task or as a default in Settings.
+- Android home screen widgets: a **task list** with tick boxes and +, a **summary** of open and overdue tasks with the next 3 due, and a one-tap **quick add**. When you place a list or summary, choose all tasks, due soon, or one category.
 
 ## Getting the app
 
