@@ -122,7 +122,15 @@ Hide a task until a chosen date ("Snooze until…"); it reappears then. Snoozed 
 
 ## 18. Home screen widget (Android) ☐
 
-*Options being decided with Jeff.*
+The app offers several widgets in Android's widget picker; add any of them, as many times as you like:
+
+- **Task list:** scrolling coloured blocks in list order, with tick boxes (archive without opening the app)
+  and a + button that opens straight to typing.
+- **Compact:** count of open / overdue tasks and the next 3 due.
+- **Quick add:** a single + icon.
+
+When placing a list or compact widget you choose what it shows (all tasks, due soon, or one category),
+so e.g. a "Work" widget and a "Home" widget can sit side by side.
 
 ## 19. CSV import ☐
 
