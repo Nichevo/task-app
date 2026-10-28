@@ -191,3 +191,39 @@ A month grid (switch from the list with a calendar icon):
   (which can then have a due date, notes, category and so on). The step stays in the checklist with a link icon,
   opens that task when tapped, and ticks itself when that task is ticked off.
 - CSV export lists steps in a column.
+
+## 24. Widget additions (Android) ☐
+
+Jeff asked for all of these (2026-10-28).
+
+New widgets, chosen in Android's widget picker like the existing three:
+
+1. **Today:** overdue tasks, tasks due today, and today's calendar events (uses item 21's calendar access).
+2. **Focus:** one large block for the top starred task (or the next due), with a tick button.
+3. **Checklist:** the steps of one chosen task (item 23), tickable from the home screen.
+4. **Stats:** done this week and the current streak (item 20).
+5. **Mini month:** a small month calendar with dots on days with tasks due (item 22); tap a day to open it.
+
+Changes to the existing widgets:
+
+6. **More filters:** starred only, overdue only, and a category combined with "due soon".
+7. **Look per widget:** light, dark or see-through background; normal or compact rows. Chosen when placing,
+   changeable later (long-press → reconfigure).
+8. **Snooze button** on each list widget row next to the tick box (snooze until tomorrow 8am; change it in the app).
+9. **Quick add into a category:** the quick add widget can be tied to a category (e.g. "Shopping +"), and offers
+   voice entry as well as typing.
+10. **Fresher colours:** widget colours update more often than every 30 minutes, within Android's battery limits.
+
+## 25. Automatic category for new tasks ☐
+
+When a task is added without a category, the app suggests one. It all happens on the device, so there are no
+accounts, costs or internet needed:
+
+- **Learns from you:** it looks at the words in tasks you've already put in each category (e.g. "milk",
+  "bread" → Shopping) and picks the best match. Every time you move a task to another category, it learns from that.
+- **Your own rules:** Settings → Categories → each category can list keywords that always win
+  (e.g. "invoice, client, meeting" → Work).
+- **Type it:** "#work" or "#shopping" in the task text sets the category directly (and is removed from the title).
+- **Where it was added:** a task added from a category's widget, or under a heading in the grouped view, goes into that category.
+- The suggestion shows as a chip beside the date chip while you type; tap ✕ to drop it or tap it to choose another.
+- Settings → **Auto category:** Off, Suggest (default, shows the chip), or Apply automatically.
