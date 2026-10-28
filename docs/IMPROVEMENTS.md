@@ -94,10 +94,36 @@ Jeff wants the full list agreed before any building starts.
 
 - In a task, choose "Comes after…" another task. The later task stays hidden (or shown greyed with a 🔒)
   until the earlier one is ticked off, then appears and starts green.
-- *Open question:* hidden until ready, or visible but greyed out?
+- Shown greyed out with a 🔒 (so its details can still be edited); it becomes a normal task, starting
+  green, when the earlier one is ticked off.
 
 ## 13. Focus filter on the main screen ☐
 
-- A setting / toggle to show only tasks that have no due date or are due soon; tasks due later are tucked
-  away (still visible via a "Later (n)" link and in search).
-- *Open question:* "this calendar month" or "the next 30 days"? Overdue tasks always show.
+- Settings option: show only tasks with no due date or due in the next 30 days (overdue always show);
+  tasks due later are tucked away behind a "Later (n)" link.
+
+## 14. Quick dates while typing ☐
+
+Typing "Call bank tomorrow 5pm", "Fri", "next week" or "25 Dec" in the add box sets the due date and
+strips the words from the name (shown as a hint before you press +).
+
+## 15. Earlier reminders ☐
+
+Per task (with a default in Settings): remind at the due time and optionally 1 hour / 1 day / 1 week before.
+
+## 16. Priority star ☐
+
+Star a task to keep it at the top of its category/list regardless of colour.
+
+## 17. Snooze ☐
+
+Hide a task until a chosen date ("Snooze until…"); it reappears then. Snoozed tasks are listed behind a
+"Snoozed (n)" link.
+
+## 18. Home screen widget (Android) ☐
+
+*Options being decided with Jeff.*
+
+## 19. CSV import ☐
+
+Import tasks from a CSV in the same format as the export (adds them; doesn't replace the list).
