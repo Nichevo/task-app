@@ -227,3 +227,31 @@ accounts, costs or internet needed:
 - **Where it was added:** a task added from a category's widget, or under a heading in the grouped view, goes into that category.
 - The suggestion shows as a chip beside the date chip while you type; tap ✕ to drop it or tap it to choose another.
 - Settings → **Auto category:** Off, Suggest (default, shows the chip), or Apply automatically.
+
+## 26. More ways to add tasks ☐
+
+Jeff picked these five (2026-10-28):
+
+1. **Share to Task Blocks** (Android): appears in the share sheet of any app. Shared text becomes the title
+   (first line) and notes; a shared link goes into the notes. Opens a small add box with the date and category chips.
+2. **Paste a list** (both): pasting several lines into the add box offers "Add 6 tasks?", one per line,
+   each with its own quick date and category. Bullet marks and numbering are removed.
+3. **"Hey Google, add a task…"** (Android): voice entry through Google Assistant, so it works without opening the app.
+4. **Photo of a list** (Android): take or pick a photo of a handwritten list or whiteboard. On-device text
+   recognition reads it (nothing uploaded), then shows the lines with ticks to choose which become tasks.
+5. **Dropbox inbox** (both): any line written to /inbox.txt in the app's Dropbox folder becomes a task on the
+   next sync, then the file is cleared. Works with email-to-Dropbox, IFTTT, Zapier and similar services.
+
+Not wanted: missed calls, Windows shortcut key. Notification suggestions: being discussed.
+
+## 27. Overdue notifications ☐
+
+Today the phone gives one reminder at the due time (and an optional earlier one). New option,
+Settings → **Overdue reminders**:
+
+- **Off** (as now).
+- **Daily summary** at a time you choose (e.g. 8am): "3 tasks overdue: Pay council tax, …". Tap to open the list.
+- **Keep nudging**: a reminder for each overdue task every 1, 3 or 6 hours (your choice) until it's done or snoozed.
+- **Quiet hours** (e.g. 10pm–7am) when no overdue reminders are sent.
+- All task reminders gain **Done** and **Snooze** buttons (1 hour, this evening, tomorrow) so you can deal with
+  them from the notification without opening the app.
