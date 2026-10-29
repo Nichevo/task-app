@@ -22,6 +22,10 @@ class CompactWidget : AppWidgetProvider() {
 
   override fun onDeleted(context: Context, ids: IntArray) = WidgetData.forget(context, ids)
 
+  /** Redraws straight away when the launcher resizes the widget (e.g. folding the phone). */
+  override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, newOptions: android.os.Bundle) =
+      onUpdate(context, manager, intArrayOf(id))
+
   companion object {
     fun updateAll(c: Context) {
       val m = AppWidgetManager.getInstance(c)
