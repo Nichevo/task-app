@@ -25,6 +25,14 @@ void main() {
       // Due Mon 26 Oct, done on time -> Thu 29 Oct.
       expect(r.nextDue(due: DateTime(2026, 10, 26, 8), completedAt: DateTime(2026, 10, 26, 9)),
           DateTime(2026, 10, 29, 8));
+      // Every 2 weeks on Mon and Thu: Thu 29 Oct done -> skips a week -> Mon 9 Nov; Sun 1 Nov done
+      // (week of Mon 26 Oct, nothing chosen left) -> Mon 9 Nov too.
+      const f = Repeat(unit: RepeatUnit.week, every: 2, weekdays: {DateTime.monday, DateTime.thursday});
+      expect(f.nextDue(due: DateTime(2026, 10, 29, 8), completedAt: DateTime(2026, 10, 29, 9)),
+          DateTime(2026, 11, 9, 8));
+      expect(f.nextDue(due: DateTime(2026, 11, 1, 8), completedAt: DateTime(2026, 11, 1, 9)),
+          DateTime(2026, 11, 9, 8));
+      expect(f.describe(), 'Every 2 weeks on Mon, Thu');
       const m = Repeat(unit: RepeatUnit.month);
       expect(m.nextDue(due: DateTime(2026, 1, 31), completedAt: DateTime(2026, 1, 31, 1)), DateTime(2026, 2, 28));
     });

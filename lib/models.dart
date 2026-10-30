@@ -271,11 +271,17 @@ class Repeat {
       case RepeatUnit.day:
         return DateTime(d.year, d.month, d.day + every, d.hour, d.minute);
       case RepeatUnit.week:
-        if (every == 1 && weekdays.isNotEmpty) {
-          for (var i = 1; i <= 7; i++) {
-            final c = DateTime(d.year, d.month, d.day + i, d.hour, d.minute);
-            if (weekdays.contains(c.weekday)) return c;
-          }
+        if (weekdays.isEmpty) return DateTime(d.year, d.month, d.day + 7 * every, d.hour, d.minute);
+        // A later chosen day in the same (Monday-first) week, else the first chosen day of the
+        // week [every] weeks on.
+        for (var i = 1; i <= 7 - d.weekday; i++) {
+          final c = DateTime(d.year, d.month, d.day + i, d.hour, d.minute);
+          if (weekdays.contains(c.weekday)) return c;
+        }
+        final monday = d.day - (d.weekday - 1) + 7 * every;
+        for (var i = 0; i < 7; i++) {
+          final c = DateTime(d.year, d.month, monday + i, d.hour, d.minute);
+          if (weekdays.contains(c.weekday)) return c;
         }
         return DateTime(d.year, d.month, d.day + 7 * every, d.hour, d.minute);
       case RepeatUnit.month:
@@ -297,11 +303,12 @@ class Repeat {
     final n = every;
     final base = switch (unit) {
       RepeatUnit.day => n == 1 ? 'Every day' : 'Every $n days',
-      RepeatUnit.week => n == 1
-          ? (weekdays.isEmpty
-              ? 'Every week'
-              : 'Every ${(weekdays.toList()..sort()).map((d) => _dayNames[d - 1]).join(', ')}')
-          : 'Every $n weeks',
+      RepeatUnit.week => switch ((n, weekdays.isEmpty)) {
+          (1, true) => 'Every week',
+          (1, false) => 'Every $_dayList',
+          (_, true) => 'Every $n weeks',
+          (_, false) => 'Every $n weeks on $_dayList',
+        },
       RepeatUnit.month => n == 1 ? 'Every month' : 'Every $n months',
       RepeatUnit.year => n == 1 ? 'Every year' : 'Every $n years',
     };
@@ -309,6 +316,8 @@ class Repeat {
   }
 
   static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  String get _dayList => (weekdays.toList()..sort()).map((d) => _dayNames[d - 1]).join(', ');
 
   Map<String, dynamic> toJson() => {
         'unit': unit.name,
