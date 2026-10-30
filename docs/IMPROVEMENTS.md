@@ -355,7 +355,7 @@ checklist, keeps the same task, and records the skip for item 36. Snooze is unch
   over a week late). Done records gain the signed amount and a series id; older records only count in the
   split.
 
-## 37. Weekday choice for every-N-weeks repeats ◐ (PR #5)
+## 37. Weekday choice for every-N-weeks repeats ☑ (PR #5, merged 2026-10-30)
 
 **Feedback (2026-10-30):** "If I select repeat as every 2 weeks it doesn't give a choice of the day of the week."
 
@@ -372,3 +372,14 @@ Two charts on the Statistics page for the chosen period: **Added per day/week** 
 (paired bars) with a line for how many were open at the end of each day/week. A category chip row filters
 both (All, or one category). The daily tally records added counts per category so the charts survive archive
 clean-up; history before this update comes from the created dates of tasks still in the list or archive.
+
+## 39. Mac build ◐ (PR #6)
+
+**Feedback (2026-10-30):** "Can I run the app on Mac?"
+
+A macOS target and a third CI job that attaches **TaskBlocks-macos** (a zipped app) to every build. The Mac
+gets everything Windows has: list, two-pane layout, categories, statistics, calendar view, checklists,
+CSV, Dropbox sync, pasted lists. Phone-only features stay phone-only: widgets, reminders, calendar event
+suggestions, photo text, share-to-app, voice, and the place reminders of item 33. The app is not signed with
+an Apple developer certificate, so the first launch needs System Settings → Privacy & Security → "Open
+Anyway" (or `xattr -cr "Task Blocks.app"` in Terminal).

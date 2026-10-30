@@ -52,3 +52,19 @@ jobs:
         with:
           name: TaskBlocks-windows
           path: build/windows/x64/runner/Release/
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter build macos --release --build-number=${{ github.run_number }}
+      # Zipped with ditto so the app bundle's permissions and symlinks survive the download.
+      - run: ditto -c -k --keepParent "build/macos/Build/Products/Release/Task Blocks.app" TaskBlocks-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TaskBlocks-macos
+          path: TaskBlocks-macos.zip
