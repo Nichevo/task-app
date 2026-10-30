@@ -45,7 +45,7 @@ class _RepeatDialogState extends State<RepeatDialog> {
               onChanged: (v) => setState(() => unit = v ?? RepeatUnit.week),
             ),
           ]),
-          if (unit == RepeatUnit.week && every == 1) ...[
+          if (unit == RepeatUnit.week) ...[
             const SizedBox(height: 8),
             const Text('On (optional):'),
             Wrap(spacing: 4, children: [
@@ -86,7 +86,7 @@ class _RepeatDialogState extends State<RepeatDialog> {
             Repeat(
               unit: unit,
               every: every,
-              weekdays: unit == RepeatUnit.week && every == 1 ? weekdays : const {},
+              weekdays: unit == RepeatUnit.week ? weekdays : const {},
               fromCompletion: fromCompletion,
             ),
           ),

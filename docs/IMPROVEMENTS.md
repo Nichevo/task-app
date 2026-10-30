@@ -298,7 +298,7 @@ CSV import, a repeat of an earlier task, or a checklist step made into a task. S
 The daily tally that survives archive clean-up records the source too, and it syncs through Dropbox.
 Tasks from before this update show as "Unknown".
 
-## 31. Reminder and category text squashed in the right-hand pane ◐ (PR #4)
+## 31. Reminder and category text squashed in the right-hand pane ☑ (PR #4, merged 2026-10-29)
 
 **Feedback:** on the unfolded screen the task pane shows the reminder text vertically, one letter per line.
 
@@ -306,7 +306,7 @@ The "Remind me" and "Category" drop-downs sat at the right edge of their rows; i
 they were squeezed until the text wrapped letter by letter. They now sit under the row's title and take the
 full width, with long names cut with "…" instead of wrapping.
 
-## 32. Widget blank for a while after folding ◐ (PR #4)
+## 32. Widget blank for a while after folding ☑ (PR #4, merged 2026-10-29)
 
 **Feedback:** after folding the phone the widget disappears, then comes back after a while.
 
@@ -314,3 +314,61 @@ When the launcher resizes a widget (folding changes the grid) it asks the app to
 nothing on that request, so the list stayed empty until the next scheduled refresh (up to 15 minutes).
 Each widget now redraws itself straight away when its size changes. If this still leaves a gap of a few
 seconds, that is the phone restarting the app's widget service and can't be avoided.
+
+## 33. Place-based reminders ☐
+
+**Feedback (2026-10-29):** "GPS based notification: arrived home on the day of the task, push a notification."
+
+Android geofencing (phone only). **Places** in Settings, saved from the current location with a name and
+radius (default 150 m); coordinates stay on the phone, only the name travels with a task. A task gets an
+optional "Remind me when I arrive at / leave …"; with a due date it fires on arrival that day and while
+overdue, without one on the next arrival. A general opt-in: "When I arrive at a place, show that day's
+tasks" as one notification. Needs location "Allow all the time" and the app set to unrestricted battery on
+Samsung (one-time setup card). Accuracy about 100 to 200 m, alerts can be a few minutes late.
+
+## 34. Label an email to make a task ☐
+
+**Feedback (2026-10-29):** "Could Google emails on my phone turn into tasks?"
+
+Today: select text in Gmail, Share, Task Blocks. To build: Task Blocks signs in to Google once (OAuth, like
+Dropbox); on each sync it picks up emails carrying a chosen label (default "Task") or star, makes a task from
+the subject with sender and date in the notes and a link that opens the email in Gmail, then swaps the label
+to "Tasked". Phone and Windows. Jeff creates a Google Cloud OAuth client (steps to be written); Google shows a
+one-time "unverified app" screen. Source "Email" in statistics (item 30).
+
+## 35. Skip a repeating task ☐
+
+**Feedback (2026-10-30):** one tap to move a repeating task to its next date without marking it complete.
+
+A "Skip" button in the expanded block, on the task page and on the reminder notification of a repeating
+task. Moves the due date to the next occurrence (from today for "after done" repeats), unticks the
+checklist, keeps the same task, and records the skip for item 36. Snooze is unchanged.
+
+## 36. Repeats and timing in Statistics ☐
+
+**Feedback (2026-10-30):** how often repeating tasks get done or not, and how early or late tasks are done.
+
+- **Repeating tasks**: one row per series with done, skipped and missed counts (missed = a whole cycle passed
+  without a tick) and the share done, for the chosen period.
+- **Early or late**: for tasks with a due date, the median amount before or after the due date, the split
+  early / same day / late, and buckets (over a week early, 1 to 7 days early, same day, 1 to 7 days late,
+  over a week late). Done records gain the signed amount and a series id; older records only count in the
+  split.
+
+## 37. Weekday choice for every-N-weeks repeats ◐ (PR #5)
+
+**Feedback (2026-10-30):** "If I select repeat as every 2 weeks it doesn't give a choice of the day of the week."
+
+The day chips were only offered for "every 1 week". They now show for any number of weeks: the next date is a
+later chosen day in the same week, else the first chosen day of the week N weeks on. Shown as "Every 2 weeks
+on Mon, Thu".
+
+## 38. Added-by-date and added-vs-done charts ☐
+
+**Feedback (2026-10-30):** a graph of tasks added by date, and added vs done with a line for total
+outstanding, with the option to show by category.
+
+Two charts on the Statistics page for the chosen period: **Added per day/week** (bars), and **Added vs done**
+(paired bars) with a line for how many were open at the end of each day/week. A category chip row filters
+both (All, or one category). The daily tally records added counts per category so the charts survive archive
+clean-up; history before this update comes from the created dates of tasks still in the list or archive.
