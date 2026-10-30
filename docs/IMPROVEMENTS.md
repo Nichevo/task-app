@@ -373,7 +373,7 @@ Two charts on the Statistics page for the chosen period: **Added per day/week** 
 both (All, or one category). The daily tally records added counts per category so the charts survive archive
 clean-up; history before this update comes from the created dates of tasks still in the list or archive.
 
-## 39. Mac build ◐ (PR #6)
+## 39. Mac build ☑ (PR #6, merged 2026-10-30; text fix PR #7)
 
 **Feedback (2026-10-30):** "Can I run the app on Mac?"
 
@@ -383,3 +383,7 @@ CSV, Dropbox sync, pasted lists. Phone-only features stay phone-only: widgets, r
 suggestions, photo text, share-to-app, voice, and the place reminders of item 33. The app is not signed with
 an Apple developer certificate, so the first launch needs System Settings → Privacy & Security → "Open
 Anyway" (or `xattr -cr "Task Blocks.app"` in Terminal).
+
+**Follow-up (2026-10-31, PR #7):** text inside an expanded block came out garbled on the Mac (letters replaced
+by broken pixels). That is Flutter's Impeller renderer on macOS mishandling glyphs inside an animated,
+clipped region; the Mac app now draws with Skia (`FLTEnableImpeller` off), as the Windows build does.

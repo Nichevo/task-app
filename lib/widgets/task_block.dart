@@ -202,7 +202,7 @@ class TaskBlock extends StatelessWidget {
           SizedBox(width: 72, child: Text(label, style: const TextStyle(fontSize: 13))),
           Expanded(
               child: Text(value,
-                  style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w500))),
+                  style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w600))),
         ]),
       );
 }
