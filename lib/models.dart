@@ -21,6 +21,8 @@ class Task {
     this.source,
     this.addedWhere,
     this.doneWhere,
+    this.estimate,
+    this.seriesId,
     DateTime? updatedAt,
   })  : steps = steps ?? [],
         updatedAt = updatedAt ?? createdAt;
@@ -68,6 +70,15 @@ class Task {
   GeoPoint? addedWhere;
   GeoPoint? doneWhere;
 
+  /// About how long it takes, in minutes; null if not given.
+  int? estimate;
+
+  /// The first task of a repeating series; every repeat carries it so the series can be
+  /// counted together. Null on the first one (its own id is the series).
+  String? seriesId;
+
+  String get series => seriesId ?? id;
+
   int get stepsDone => steps.where((s) => s.done).length;
 
   /// Last time anything about this task changed; the newer copy wins when syncing.
@@ -95,6 +106,8 @@ class Task {
       ..starred = starred
       ..repeat = r
       ..remindBefore = remindBefore
+      ..estimate = estimate
+      ..seriesId = series
       ..source = TaskSource.repeat;
     // Each repeat starts with the checklist unticked.
     next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
@@ -129,6 +142,8 @@ class Task {
         if (source != null) 'source': source,
         if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
+        if (estimate != null) 'estimate': estimate,
+        if (seriesId != null) 'series': seriesId,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -152,6 +167,8 @@ class Task {
         source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
         addedWhere: GeoPoint.tryParse(j['addedWhere']),
         doneWhere: GeoPoint.tryParse(j['doneWhere']),
+        estimate: (j['estimate'] as num?)?.toInt(),
+        seriesId: j['series'] as String?,
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -307,6 +324,42 @@ class DoneRecord {
         categoryId: j['cat'] as String?,
       );
 }
+
+/// A repeating task moved on to its next date without being done ("Skip").
+class SkipRecord {
+  const SkipRecord({required this.taskId, required this.series, required this.at, this.due});
+
+  final String taskId;
+
+  /// [Task.series] of the repeating task.
+  final String series;
+
+  /// When Skip was pressed.
+  final DateTime at;
+
+  /// The due date that was skipped, if it had one.
+  final DateTime? due;
+
+  /// One record per skipped due date, so the same skip synced from two devices counts once.
+  String get key => '$taskId@${(due ?? at).toUtc().toIso8601String()}';
+
+  Map<String, dynamic> toJson() => {
+        'task': taskId,
+        'series': series,
+        'at': at.toUtc().toIso8601String(),
+        if (due != null) 'due': due!.toUtc().toIso8601String(),
+      };
+
+  factory SkipRecord.fromJson(Map<String, dynamic> j) => SkipRecord(
+        taskId: j['task'] as String? ?? '',
+        series: j['series'] as String? ?? j['task'] as String? ?? '',
+        at: DateTime.parse(j['at'] as String).toLocal(),
+        due: DateTime.tryParse(j['due'] as String? ?? '')?.toLocal(),
+      );
+}
+
+/// How the main list is ordered (Settings, List).
+enum ListSort { manual, due, age, newest, categoryDue }
 
 /// What happens to the category of a task added without one.
 enum AutoCategory { off, suggest, apply }
@@ -470,6 +523,10 @@ class AppData {
     this.nudgeHours = 3,
     this.quietStart = 22 * 60,
     this.quietEnd = 7 * 60,
+    this.sort = ListSort.due,
+    this.starredTop = true,
+    this.showQuickFilters = true,
+    Map<String, SkipRecord>? skips,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -481,6 +538,7 @@ class AppData {
         collapsed = collapsed ?? {},
         templates = templates ?? [],
         done = done ?? {},
+        skips = skips ?? {},
         eventCalendars = eventCalendars ?? {},
         dismissedEvents = dismissedEvents ?? {},
         updatedAt = updatedAt ?? _epoch,
@@ -513,8 +571,22 @@ class AppData {
   /// TaskCategory ids (or '' for "No category") whose headings are collapsed.
   final Set<String> collapsed;
 
-  /// Only show tasks with no due date or due within the next 30 days.
+  /// Only show tasks with no due date or due within the next 30 days. Replaced by the
+  /// "Next 30 days" quick filter in 1.4; still read so a device that had it on starts there.
   bool focusNext30;
+
+  /// How the main list is ordered. A fresh install sorts by due date; older data keeps the
+  /// hand-made order it had.
+  ListSort sort;
+
+  /// Starred tasks go first, whatever the sort.
+  bool starredTop;
+
+  /// Show the row of quick filter chips (All, Today, Next 7 days, ...) above the list.
+  bool showQuickFilters;
+
+  /// Repeating tasks moved on without being done, by [SkipRecord.key], for the statistics.
+  final Map<String, SkipRecord> skips;
 
   /// Default extra reminder before the due time, in minutes (0 = only at the due time).
   int defaultRemindBefore;
@@ -571,6 +643,10 @@ class AppData {
         'groupByCategory': groupByCategory,
         'collapsed': collapsed.toList(),
         'focusNext30': focusNext30,
+        'sort': sort.name,
+        'starredTop': starredTop,
+        'showQuickFilters': showQuickFilters,
+        if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
         'done': done.map((k, v) => MapEntry(k, v.toJson())),
@@ -618,6 +694,14 @@ class AppData {
         groupByCategory: j['groupByCategory'] as bool? ?? false,
         collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
         focusNext30: j['focusNext30'] as bool? ?? false,
+        // Saved before sorting existed: keep the hand-made order.
+        sort: _enum(ListSort.values, j['sort'], ListSort.manual),
+        starredTop: j['starredTop'] as bool? ?? true,
+        showQuickFilters: j['showQuickFilters'] as bool? ?? true,
+        skips: {
+          for (final e in (j['skips'] as Map? ?? {}).entries)
+            e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
+        },
         defaultRemindBefore: (j['defaultRemindBefore'] as num?)?.toInt() ?? 0,
         templates: [for (final t in j['templates'] as List? ?? []) ChecklistTemplate.fromJson(t)],
         done: {
@@ -691,6 +775,8 @@ AppData mergeData(AppData a, AppData b) {
     if (mine == null || r.at.isAfter(mine.at)) done[id] = r;
   });
 
+  final skips = <String, SkipRecord>{...a.skips, ...b.skips};
+
   return AppData(
     active: active,
     archived: archived,
@@ -701,6 +787,10 @@ AppData mergeData(AppData a, AppData b) {
     groupByCategory: settingsFrom.groupByCategory,
     collapsed: settingsFrom.collapsed,
     focusNext30: settingsFrom.focusNext30,
+    sort: settingsFrom.sort,
+    starredTop: settingsFrom.starredTop,
+    showQuickFilters: settingsFrom.showQuickFilters,
+    skips: skips,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: settingsFrom.templates,
     done: done,

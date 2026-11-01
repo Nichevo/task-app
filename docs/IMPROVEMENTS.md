@@ -326,7 +326,7 @@ overdue, without one on the next arrival. A general opt-in: "When I arrive at a 
 tasks" as one notification. Needs location "Allow all the time" and the app set to unrestricted battery on
 Samsung (one-time setup card). Accuracy about 100 to 200 m, alerts can be a few minutes late.
 
-## 34. Label an email to make a task ☐
+## 34. Label an email to make a task ☐ (moved to phase 5, 2026-11-01)
 
 **Feedback (2026-10-29):** "Could Google emails on my phone turn into tasks?"
 
@@ -336,13 +336,16 @@ the subject with sender and date in the notes and a link that opens the email in
 to "Tasked". Phone and Windows. Jeff creates a Google Cloud OAuth client (steps to be written); Google shows a
 one-time "unverified app" screen. Source "Email" in statistics (item 30).
 
-## 35. Skip a repeating task ☐
+## 35. Skip a repeating task ◐ (round 4 PR 1)
 
 **Feedback (2026-10-30):** one tap to move a repeating task to its next date without marking it complete.
 
 A "Skip" button in the expanded block, on the task page and on the reminder notification of a repeating
 task. Moves the due date to the next occurrence (from today for "after done" repeats), unticks the
 checklist, keeps the same task, and records the skip for item 36. Snooze is unchanged.
+
+Built: the Android reminder of a repeating task shows Done, Skip, 1 hour (Android shows three buttons); on the
+iPad, Done, Skip, 1 hour, Tomorrow. Skips sync and each task in a repeating series now carries the series id.
 
 ## 36. Repeats and timing in Statistics ☐
 
@@ -397,7 +400,7 @@ calendar, otherwise manual — which will allow me to later have other pushes to
 other tool could push to the app. A setting so the calendar look-ahead can be more than 7 days. Collect GPS
 when we create or complete a task for later geofencing. And an iPad version."
 
-## 47. Where each task came from ◐ (PR pending)
+## 47. Where each task came from ☑ (PR #8, merged 2026-11-01)
 
 Every new task records its source: typed in the app, home screen widget, voice (widget microphone or "Hey
 Google"), shared from another app, pasted list, photo of a list, Dropbox inbox, calendar, CSV import, a repeat
@@ -412,12 +415,12 @@ Recommended: a Dropbox `inbox/` folder that takes one small JSON file per task (
 source, the tool's own id to avoid duplicates), then an Android "add task" intent for Tasker-style apps, and a
 small web endpoint only if a tool can only call webhooks. Open questions for Jeff are at the end of the doc.
 
-## 49. Calendar look-ahead setting ◐ (PR pending)
+## 49. Calendar look-ahead setting ☑ (PR #8, merged 2026-11-01)
 
 Settings → Calendar events → **Look ahead**: 1 week, 2 weeks (the old fixed value and the default), 1, 2, 3 or
 6 months, or 1 year. Used by Upcoming events and the suggestion line at the top of the list. Syncs.
 
-## 50. Record location when adding and ticking off ◐ (PR pending)
+## 50. Record location when adding and ticking off ☑ (PR #8, merged 2026-11-01)
 
 Settings → Location → **Record where tasks are added and done** (off until switched on; turning it on asks for
 location access, "while using the app" only). Each task keeps the place and accuracy when it was added and
@@ -425,9 +428,70 @@ when it was ticked off; the task page shows a pin that opens it in Maps. Phone a
 widget or notification while the app was closed get no location (the app would only know where you are
 later). Synced with the tasks, ready for place-based reminders (item 33).
 
-## 51. iPad version ◐ (PR pending; details in docs/IPAD.md)
+## 51. iPad version ☑ (PR #8, merged 2026-11-01; details in docs/IPAD.md)
 
 An iOS target that runs on iPad (and iPhone) with the two-pane layout, reminders with Done/snooze buttons, and
 location recording. CI attaches an unsigned **TaskBlocks-ios** build; installing it needs Jeff's Apple ID
 (free, re-sent every 7 days) or a paid developer account (a year, TestFlight). Widgets, calendar suggestions,
 photo text, share and voice stay Android-only for now.
+
+---
+
+# Round 4, everyday list (planned 2026-10-30, built in round 4 PR 1)
+
+Full round 4 plan: four PRs. PR 1 = items 35, 40, 41, 42, 43, 45. PR 2 = 30, 36, 38, 44. PR 3 = 33, 46.
+PR 4 = 52 Kanban board. Item 34 moved to a later phase 5 (2026-11-01). Version 1.4.0.
+
+## 40. About and What's new ◐ (round 4 PR 1)
+
+Settings → **About Task Blocks**: version and build number, a changelog for every version (1.0 to 1.4), and a
+link to the GitHub project. After an update (not a fresh install) a one-time **What's new** pop-up lists that
+version's changes. The changelog lives in `lib/changelog.dart`; add the new version there with each bump.
+
+## 41. Search the main list ◐ (round 4 PR 1)
+
+A magnifying glass in the top bar opens a search box. Every word typed must appear in a task's name, notes or
+checklist (any case). It looks through every open task, snoozed ones too, whatever quick filter is picked.
+
+## 42. Sorting and quick filters ◐ (round 4 PR 1)
+
+**Feedback (2026-10-31):** "A few more sorting options in settings. Sorting by due date with stars at the top
+by default. Maybe a quick button at the top to just show due next 2 weeks etc."
+
+- Settings → List → **Sort by**: hand-made order (drag), due date (no date last), colour age (reddest first),
+  newest first, or category then due date. **Starred at the top** works with any sort. A fresh install sorts
+  by due date with starred at the top; existing lists keep hand-made order until changed. Drag handles show in
+  hand-made order only. Group by category still works and sorts inside each group. Synced.
+- **Quick filter chips** above the list: All, Today, Next 7 days, Next 2 weeks, Next 30 days, Overdue,
+  Starred, No date. Date chips show tasks due by the end of that day, overdue ones included, and leave out
+  tasks with no date. Each device remembers its chip. A line under the list says how many tasks the chip
+  hides, with a Show all button. Settings switch to hide the row. The old "only show the next 30 days"
+  setting is replaced: a device that had it on starts on the Next 30 days chip.
+- Widgets keep their own filters.
+
+## 43. Tappable links in notes ◐ (round 4 PR 1)
+
+Web links (http, https, www.), email addresses and phone numbers in notes are underlined in an expanded block
+and open the browser, mail or phone app when tapped. On the task page they show as chips under the notes box.
+Dates like 2026-11-01 are not taken for phone numbers.
+
+## 44. Weekly review notification ☐ (round 4 PR 2)
+
+Off by default; pick the day and time (default Sunday 6 pm). Last week's added and done counts, what is
+overdue and what is due in the coming week. Tapping it opens the list on Next 7 days.
+
+## 45. Time estimates ◐ (round 4 PR 1)
+
+Task page → **Time needed**: 15 min, 30 min, 1 h, 2 h, 4 h, 8 h, or Other (e.g. 45, 1.5h, 1h30). Shown on the
+block ("1h30") and in its details; a line above the list gives the total for the tasks shown. Copied to the
+next repeat. CSV gains an "Estimate (min)" column, read back on import.
+
+## 46. Backups and restore ☐ (round 4 PR 3)
+
+A daily backup of all tasks, the archive and settings, kept for 7 days. Settings → Backups lists them by
+date and restores one after asking. Save a backup file or open one by hand, e.g. for a new device.
+
+## 52. Kanban board ☐ (round 4 PR 4)
+
+Plan agreed 2026-11-01 (stages Backlog, Up next, In progress, Blocked, Done). Written up in full in the
+build PR.

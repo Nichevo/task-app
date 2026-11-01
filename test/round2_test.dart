@@ -5,6 +5,7 @@ import 'package:task_blocks/csv_import.dart';
 import 'package:task_blocks/main.dart';
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/store.dart';
+import 'package:task_blocks/task_list.dart';
 
 void main() {
   group('repeats', () {
@@ -125,21 +126,23 @@ void main() {
     expect(find.text('Mow lawn'), findsOneWidget);
   });
 
-  testWidgets('30-day focus hides later tasks behind a link; snoozed tasks hide too', (tester) async {
+  testWidgets('Next 30 days chip hides later tasks behind a link; snoozed tasks hide too', (tester) async {
     final s = AppStore()
       ..addTask('Soon')
       ..addTask('Far off')
       ..addTask('Sleeping');
+    s.data.active[0].dueAt = DateTime.now().add(const Duration(days: 3));
     s.data.active[1].dueAt = DateTime.now().add(const Duration(days: 60));
     s.data.active[2].snoozedUntil = DateTime.now().add(const Duration(days: 2));
-    s.data.focusNext30 = true;
+    s.quickFilter = QuickFilter.month;
     await tester.pumpWidget(TaskApp(store: s));
     expect(find.text('Soon'), findsOneWidget);
     expect(find.text('Far off'), findsNothing);
     expect(find.text('Sleeping'), findsNothing);
-    await tester.tap(find.text('Due later (1)'));
+    await tester.tap(find.textContaining('1 more not in "Next 30 days"'));
     await tester.pump();
     expect(find.text('Far off'), findsOneWidget);
+    expect(s.quickFilter, QuickFilter.all);
   });
 
   testWidgets('typing a date shows it and sets the due date', (tester) async {

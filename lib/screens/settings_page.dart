@@ -6,6 +6,8 @@ import '../location.dart';
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
+import '../task_list.dart';
+import 'about_page.dart';
 import '../widgets/task_colors.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
@@ -229,13 +231,34 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const Divider(height: 40),
             _heading('List'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Sort by'),
+              subtitle: Text(data.sort == ListSort.manual
+                  ? 'Drag the handle on a task to move it.'
+                  : 'Drag handles show in hand-made order only.'),
+              trailing: DropdownButton<ListSort>(
+                value: data.sort,
+                items: [
+                  for (final e in sortLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: (v) => _set(() => data.sort = v ?? ListSort.due),
+              ),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Only show tasks due in the next 30 days'),
-              subtitle: const Text('Plus tasks with no due date and anything overdue. '
-                  'Tasks due later are under "Due later" at the bottom of the list.'),
-              value: data.focusNext30,
-              onChanged: (v) => _set(() => data.focusNext30 = v),
+              title: const Text('Starred at the top'),
+              subtitle: const Text('Starred tasks come first, in the order above.'),
+              value: data.starredTop,
+              onChanged: (v) => _set(() => data.starredTop = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Quick filters above the list'),
+              subtitle: const Text('All, Today, Next 7 days, Next 2 weeks, Next 30 days, Overdue, Starred, No date. '
+                  'Each device remembers its own choice.'),
+              value: data.showQuickFilters,
+              onChanged: (v) => _set(() => data.showQuickFilters = v),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -566,6 +589,15 @@ class _SettingsPageState extends State<SettingsPage> {
               'Inbox: any line written to Apps/<your app name>/inbox.txt becomes a task on the next sync '
               '(handy with email-to-Dropbox, IFTTT or Zapier). Dates and #categories in the line are read too.',
               style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+            ),
+            const Divider(height: 40),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.info_outline),
+              title: const Text('About Task Blocks'),
+              subtitle: const Text('Version, what\'s new in each version, and the project on GitHub'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutPage())),
             ),
           ]),
         );

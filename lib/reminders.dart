@@ -14,7 +14,7 @@ class PendingAction {
 
   final String taskId;
 
-  /// 'done' or 'snooze'.
+  /// 'done', 'skip' or 'snooze'.
   final String action;
   final DateTime at;
   final DateTime? snoozeUntil;
@@ -48,6 +48,7 @@ Future<void> _recordAction(NotificationResponse r) async {
   final now = DateTime.now();
   final action = switch (r.actionId) {
     'done' => PendingAction(taskId: taskId, action: 'done', at: now),
+    'skip' => PendingAction(taskId: taskId, action: 'skip', at: now),
     'snooze1' => PendingAction(taskId: taskId, action: 'snooze', at: now, snoozeUntil: now.add(const Duration(hours: 1))),
     'snoozeEve' => PendingAction(
         taskId: taskId,
@@ -89,6 +90,13 @@ class Reminders {
       DarwinNotificationAction.plain('done', 'Done'),
       DarwinNotificationAction.plain('snooze1', '1 hour'),
       DarwinNotificationAction.plain('snoozeEve', 'This evening'),
+      DarwinNotificationAction.plain('snoozeTmrw', 'Tomorrow'),
+    ]),
+    // Repeating tasks: Skip moves it to the next date without ticking it off.
+    DarwinNotificationCategory('dueRepeat', actions: [
+      DarwinNotificationAction.plain('done', 'Done'),
+      DarwinNotificationAction.plain('skip', 'Skip'),
+      DarwinNotificationAction.plain('snooze1', '1 hour'),
       DarwinNotificationAction.plain('snoozeTmrw', 'Tomorrow'),
     ]),
   ]);
@@ -211,6 +219,41 @@ class Reminders {
       ? 'in ${minutes ~/ 1440} day${minutes >= 2880 ? 's' : ''}'
       : 'in a week';
 
+  static const _due = NotificationDetails(
+    iOS: DarwinNotificationDetails(categoryIdentifier: 'due'),
+    android: AndroidNotificationDetails(
+      'due',
+      'Due tasks',
+      channelDescription: 'Reminders when a task is due',
+      importance: Importance.high,
+      priority: Priority.high,
+      actions: [
+        AndroidNotificationAction('done', 'Done'),
+        AndroidNotificationAction('snooze1', '1 hour'),
+        AndroidNotificationAction('snoozeEve', 'This evening'),
+        AndroidNotificationAction('snoozeTmrw', 'Tomorrow'),
+      ],
+    ),
+  );
+
+  /// Android shows at most three buttons, so a repeating task trades "This evening" and
+  /// "Tomorrow" for Skip.
+  static const _dueRepeat = NotificationDetails(
+    iOS: DarwinNotificationDetails(categoryIdentifier: 'dueRepeat'),
+    android: AndroidNotificationDetails(
+      'due',
+      'Due tasks',
+      channelDescription: 'Reminders when a task is due',
+      importance: Importance.high,
+      priority: Priority.high,
+      actions: [
+        AndroidNotificationAction('done', 'Done'),
+        AndroidNotificationAction('skip', 'Skip'),
+        AndroidNotificationAction('snooze1', '1 hour'),
+      ],
+    ),
+  );
+
   Future<bool> _at(int id, DateTime when, String title, String body, DateTime now, Task t) async {
     if (!when.isAfter(now)) return false;
     await _plugin.zonedSchedule(
@@ -220,22 +263,7 @@ class Reminders {
       payload: jsonEncode({'task': t.id, 'dir': dir}),
       // A UTC time is the same moment wherever the phone is.
       scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-      notificationDetails: const NotificationDetails(
-        iOS: DarwinNotificationDetails(categoryIdentifier: 'due'),
-        android: AndroidNotificationDetails(
-          'due',
-          'Due tasks',
-          channelDescription: 'Reminders when a task is due',
-          importance: Importance.high,
-          priority: Priority.high,
-          actions: [
-            AndroidNotificationAction('done', 'Done'),
-            AndroidNotificationAction('snooze1', '1 hour'),
-            AndroidNotificationAction('snoozeEve', 'This evening'),
-            AndroidNotificationAction('snoozeTmrw', 'Tomorrow'),
-          ],
-        ),
-      ),
+      notificationDetails: t.repeat == null ? _due : _dueRepeat,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
     return true;

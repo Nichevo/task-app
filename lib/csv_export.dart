@@ -4,7 +4,7 @@ import 'models.dart';
 
 final csvDateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source'];
+const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)'];
 
 String _cell(String s) =>
     RegExp(r'[",\r\n]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
@@ -26,6 +26,7 @@ String buildCsv(AppData data) {
         t.repeat?.describe() ?? '',
         t.steps.map((s) => '${s.done ? '[x]' : '[ ]'} ${s.title}').join('; '),
         t.source == null ? '' : TaskSource.label(t.source),
+        t.estimate?.toString() ?? '',
       ];
   final rows = <List<String>>[
     csvHeader,

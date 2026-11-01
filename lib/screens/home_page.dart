@@ -10,12 +10,15 @@ import '../csv_export.dart';
 import '../csv_import.dart';
 import '../input_parse.dart';
 import '../models.dart';
+import '../changelog.dart';
 import '../native.dart';
 import '../photo_import.dart';
 import '../store.dart';
+import '../task_list.dart';
 import '../widgets/add_dialogs.dart';
 import '../widgets/task_block.dart';
 import '../widgets/task_colors.dart';
+import 'about_page.dart';
 import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
@@ -57,9 +60,13 @@ class HomePageState extends State<HomePage> {
   /// The task open for editing: beside the list on wide screens, in place of it on narrow ones.
   String? _selectedId;
 
-  /// Whether tasks due after 30 days / snoozed tasks are shown despite the filters.
-  bool _showLater = false;
+  /// Whether snoozed tasks are shown anyway.
   bool _showSnoozed = false;
+
+  /// The search box in the top bar, while open.
+  bool _searching = false;
+  final _search = TextEditingController();
+  final _searchFocus = FocusNode();
 
   /// Upcoming calendar events worth offering, when the app checks on its own.
   int _eventCount = 0;
@@ -84,6 +91,8 @@ class HomePageState extends State<HomePage> {
   void dispose() {
     _tick.cancel();
     _lifecycle.dispose();
+    _search.dispose();
+    _searchFocus.dispose();
     store.removeListener(_checkEvents);
     super.dispose();
   }
@@ -111,6 +120,16 @@ class HomePageState extends State<HomePage> {
     store.eventPromptAt = DateTime.now();
     store.saveDeviceSettings();
     setState(() => _eventCount = 0);
+  }
+
+  /// After an update (not a fresh install), shows once what changed in this version.
+  Future<void> maybeShowWhatsNew() async {
+    final current = releases.first.version;
+    if (store.seenVersion == current) return;
+    final show = store.hadData;
+    store.seenVersion = current;
+    await store.saveDeviceSettings();
+    if (show && mounted) await showWhatsNew(context, releases.first);
   }
 
   /// Opens a task (e.g. from the home screen widget).
@@ -150,6 +169,11 @@ class HomePageState extends State<HomePage> {
         () => store.uncomplete(t, index, spawned));
   }
 
+  void _skip(Task t) {
+    final undo = store.skip(t);
+    _snack('Skipped "${t.title}". Next due ${dateTimeFmt.format(t.dueAt!)}', undo);
+  }
+
   void _delete(Task t) {
     final index = data.active.indexOf(t);
     store.delete(t);
@@ -170,15 +194,28 @@ class HomePageState extends State<HomePage> {
 
   void _select(String? id) => setState(() => _selectedId = id);
 
-  bool _dueSoon(Task t, DateTime now) =>
-      t.dueAt == null || !t.dueAt!.isAfter(now.add(const Duration(days: 30)));
+  String get _query => _searching ? _search.text.trim() : '';
 
-  /// The open tasks the filters let through, starred first.
+  /// The chip in use; All when the chip row is switched off.
+  QuickFilter get _filter => data.showQuickFilters ? store.quickFilter : QuickFilter.all;
+
+  /// Drag to reorder only makes sense in hand-made order with nothing hidden by a search.
+  bool get _canDrag => data.sort == ListSort.manual && _query.isEmpty;
+
+  /// The open tasks to show, in the chosen order. A search looks through every open task
+  /// (snoozed ones too), whatever chip is picked.
   List<Task> _visibleTasks(DateTime now) {
-    final shown = data.active.where((t) =>
-        (_showSnoozed || !t.isSnoozed(now)) && (!data.focusNext30 || _showLater || _dueSoon(t, now)));
-    return [...shown.where((t) => t.starred), ...shown.where((t) => !t.starred)];
+    final q = _query;
+    final shown = q.isNotEmpty
+        ? data.active.where((t) => matchesSearch(t, q))
+        : data.active.where((t) => (_showSnoozed || !t.isSnoozed(now)) && passesFilter(t, _filter, now));
+    return sortTasks(shown.toList(), data, now);
   }
+
+  void _closeSearch() => setState(() {
+        _searching = false;
+        _search.clear();
+      });
 
   List<_Row> _rows(DateTime now) {
     final tasks = _visibleTasks(now);
@@ -259,14 +296,40 @@ class HomePageState extends State<HomePage> {
   Widget _listScaffold(BuildContext context, bool wide) {
     final now = DateTime.now();
     final rows = _rows(now);
-    final snoozedCount = data.active.where((t) => t.isSnoozed(now)).length;
-    final laterCount = data.focusNext30
-        ? data.active.where((t) => !t.isSnoozed(now) && !_dueSoon(t, now)).length
-        : 0;
+    final searching = _query.isNotEmpty;
+    final snoozedCount = searching ? 0 : data.active.where((t) => t.isSnoozed(now)).length;
+    final hiddenCount = searching || _filter == QuickFilter.all
+        ? 0
+        : data.active.where((t) => !t.isSnoozed(now) && !passesFilter(t, _filter, now)).length;
+    final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
+    final estimate = describeEstimates(shownTasks);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tasks'),
+        leading: _searching
+            ? IconButton(tooltip: 'Close search', icon: const Icon(Icons.arrow_back), onPressed: _closeSearch)
+            : null,
+        title: _searching
+            ? TextField(
+                controller: _search,
+                focusNode: _searchFocus,
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'Search tasks, notes and steps', border: InputBorder.none),
+                onChanged: (_) => setState(() {}),
+              )
+            : const Text('Tasks'),
         actions: [
+          if (_searching)
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.clear),
+              onPressed: () => setState(_search.clear),
+            )
+          else
+            IconButton(
+              tooltip: 'Search',
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _searching = true),
+            ),
           IconButton(
             tooltip: 'Calendar',
             icon: const Icon(Icons.calendar_month_outlined),
@@ -334,15 +397,25 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
+        if (data.showQuickFilters && !_searching) _filterChips(),
+        if (estimate != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('${shownTasks.length} task${shownTasks.length == 1 ? '' : 's'} shown, about $estimate',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+            ),
+          ),
         Expanded(
-          child: rows.isEmpty && laterCount == 0 && snoozedCount == 0
-              ? const Center(child: Text('No tasks. Type one below.'))
+          child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0
+              ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
               : ReorderableListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   buildDefaultDragHandles: false,
                   itemCount: rows.length,
                   onReorderItem: (o, n) => _onReorder(rows, o, n),
-                  footer: _footer(laterCount, snoozedCount),
+                  footer: _footer(hiddenCount, snoozedCount),
                   itemBuilder: (context, i) => switch (rows[i]) {
                     _Header h => _header(h),
                     _TaskRow r => _taskRow(r.task, i, now),
@@ -377,13 +450,38 @@ class HomePageState extends State<HomePage> {
         ),
       );
 
+  /// All / Today / Next 7 days / ... above the list.
+  Widget _filterChips() => SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          children: [
+            for (final f in QuickFilter.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(f.label),
+                  selected: store.quickFilter == f,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => store.setQuickFilter(f),
+                ),
+              ),
+          ],
+        ),
+      );
+
   Widget _taskRow(Task t, int i, DateTime now) {
     final waitingFor = data.isLocked(t) ? data.task(t.afterTaskId)?.title : null;
-    return ReorderableDelayedDragStartListener(
-      key: ValueKey(t.id),
-      index: i,
-      // Swipe right to tick off, left to delete (both can be undone).
-      child: Dismissible(
+    final drag = _canDrag;
+    final block = _block(t, i, now, waitingFor, drag);
+    return drag
+        ? ReorderableDelayedDragStartListener(key: ValueKey(t.id), index: i, child: block)
+        : KeyedSubtree(key: ValueKey(t.id), child: block);
+  }
+
+  Widget _block(Task t, int i, DateTime now, String? waitingFor, bool drag) {
+    return Dismissible(
         key: ValueKey('swipe-${t.id}'),
         direction: waitingFor == null ? DismissDirection.horizontal : DismissDirection.endToStart,
         background: const _SwipeBackground(
@@ -404,15 +502,17 @@ class HomePageState extends State<HomePage> {
           onOpen: () => _select(t.id),
           onCheck: () => _complete(t),
           onStep: (s) => _toggleStep(t, s),
-          trailing: ReorderableDragStartListener(
-            index: i,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Icon(Icons.drag_handle, color: Color(0x99000000)),
-            ),
-          ),
+          onSkip: () => _skip(t),
+          trailing: drag
+              ? ReorderableDragStartListener(
+                  index: i,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Icon(Icons.drag_handle, color: Color(0x99000000)),
+                  ),
+                )
+              : null,
         ),
-      ),
     );
   }
 
@@ -427,16 +527,16 @@ class HomePageState extends State<HomePage> {
     }
   }
 
-  Widget? _footer(int laterCount, int snoozedCount) {
-    if (laterCount == 0 && snoozedCount == 0) return null;
+  Widget? _footer(int hiddenCount, int snoozedCount) {
+    if (hiddenCount == 0 && snoozedCount == 0) return null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Wrap(spacing: 8, children: [
-        if (laterCount > 0)
+        if (hiddenCount > 0)
           TextButton.icon(
-            onPressed: () => setState(() => _showLater = !_showLater),
-            icon: Icon(_showLater ? Icons.visibility_off : Icons.event_note),
-            label: Text(_showLater ? 'Hide tasks due later' : 'Due later ($laterCount)'),
+            onPressed: () => store.setQuickFilter(QuickFilter.all),
+            icon: const Icon(Icons.filter_alt_off_outlined),
+            label: Text('$hiddenCount more not in "${_filter.label}". Show all'),
           ),
         if (snoozedCount > 0)
           TextButton.icon(
