@@ -72,8 +72,8 @@ void notificationActionInBackground(NotificationResponse r) {
   _recordAction(r);
 }
 
-/// Phone notifications when a task falls due, and for overdue tasks. Android only: the
-/// Windows app may not be running at the time, and a synced phone reminds you anyway.
+/// Phone and iPad notifications when a task falls due, and for overdue tasks. Not on
+/// desktops: the app may not be running at the time, and a synced phone reminds you anyway.
 class Reminders {
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
@@ -81,13 +81,23 @@ class Reminders {
   /// Called when a button on a notification is pressed while the app is open.
   VoidCallback? onAction;
 
-  static bool get supported => !kIsWeb && Platform.isAndroid;
+  static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  /// The Done / snooze buttons on an iPhone or iPad notification (long-press to see them).
+  static final _darwin = DarwinInitializationSettings(notificationCategories: [
+    DarwinNotificationCategory('due', actions: [
+      DarwinNotificationAction.plain('done', 'Done'),
+      DarwinNotificationAction.plain('snooze1', '1 hour'),
+      DarwinNotificationAction.plain('snoozeEve', 'This evening'),
+      DarwinNotificationAction.plain('snoozeTmrw', 'Tomorrow'),
+    ]),
+  ]);
 
   Future<void> init() async {
     if (!supported) return;
     tzdata.initializeTimeZones();
     await _plugin.initialize(
-      settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      settings: InitializationSettings(android: const AndroidInitializationSettings('@mipmap/ic_launcher'), iOS: _darwin),
       onDidReceiveNotificationResponse: (r) async {
         await _recordAction(r);
         onAction?.call();
@@ -126,7 +136,8 @@ class Reminders {
     final now = DateTime.now();
     try {
       await _plugin.cancelAllPendingNotifications();
-      var budget = 200; // Android allows ~500 alarms per app; stay well inside it.
+      // Android allows ~500 alarms per app; stay well inside it. iOS keeps the soonest 64.
+      var budget = 200;
       for (final t in data.active) {
         final due = t.dueAt;
         if (due == null) continue;
@@ -166,6 +177,7 @@ class Reminders {
       body: overdue.length > 4 ? '$names…' : names,
       scheduledDate: tz.TZDateTime.from(at.toUtc(), tz.UTC),
       notificationDetails: const NotificationDetails(
+        iOS: DarwinNotificationDetails(),
         android: AndroidNotificationDetails(
           'overdue',
           'Overdue tasks',
@@ -209,6 +221,7 @@ class Reminders {
       // A UTC time is the same moment wherever the phone is.
       scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
       notificationDetails: const NotificationDetails(
+        iOS: DarwinNotificationDetails(categoryIdentifier: 'due'),
         android: AndroidNotificationDetails(
           'due',
           'Due tasks',

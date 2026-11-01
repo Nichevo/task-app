@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../dropbox.dart';
+import '../location.dart';
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -59,6 +60,9 @@ Future<List<String>?> askLines(BuildContext context, String title, {List<String>
 
 /// Choices for how long closed tasks stay in the archive, in days (0 = forever).
 const archiveKeepOptions = {0: 'Never', 30: '1 month', 90: '3 months', 180: '6 months', 365: '1 year'};
+
+/// Choices for how far ahead to look in the calendar, in days.
+const eventDaysOptions = {7: '1 week', 14: '2 weeks', 30: '1 month', 60: '2 months', 90: '3 months', 180: '6 months', 365: '1 year'};
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.store});
@@ -424,6 +428,19 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: (v) => _set(() => data.eventSuggest = v ?? EventSuggest.off),
                 ),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Look ahead'),
+                subtitle: const Text('How far into the calendar to look for events to make tasks from.'),
+                trailing: DropdownButton<int>(
+                  value: data.eventDays,
+                  items: [
+                    for (final e in {...eventDaysOptions, data.eventDays: '${data.eventDays} days'}.entries)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: (v) => _set(() => data.eventDays = v ?? 14),
+                ),
+              ),
               if (_calendars == null)
                 TextButton.icon(
                   onPressed: _loadCalendars,
@@ -477,6 +494,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 enabled: false,
                 title: Text('Where suggestions go'),
                 subtitle: Text('The same list as calendar event suggestions'),
+              ),
+            ],
+            if (LocationRecorder.supported) ...[
+              const Divider(height: 40),
+              _heading('Location'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Record where tasks are added and done'),
+                subtitle: const Text('Saves the location with each task when you add it and when you tick it off, '
+                    'ready for place-based reminders later. Shown on the task page; synced with your tasks.'),
+                value: store.recordLocation,
+                onChanged: (v) async {
+                  final ok = await store.setRecordLocation(v);
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Location access was not allowed. You can allow it in the phone\'s settings.')));
+                  }
+                },
               ),
             ],
             const Divider(height: 40),

@@ -8,12 +8,13 @@ import 'package:path_provider/path_provider.dart';
 import 'dropbox.dart';
 import 'home_widgets.dart';
 import 'input_parse.dart';
+import 'location.dart';
 import 'models.dart';
 import 'reminders.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
 class AppStore extends ChangeNotifier {
-  AppStore({this.reminders, this.widgets});
+  AppStore({this.reminders, this.widgets, this.location});
 
   AppData data = AppData();
 
@@ -22,6 +23,12 @@ class AppStore extends ChangeNotifier {
 
   /// Android home screen widgets; null in tests.
   final HomeWidgets? widgets;
+
+  /// Location fixes for tasks; null in tests.
+  final LocationRecorder? location;
+
+  /// Save where tasks are added and ticked off (device-only: each phone allows location itself).
+  bool recordLocation = false;
 
   /// Device-only settings (not synced): Dropbox app key and sign-in.
   String dropboxAppKey = '';
@@ -56,6 +63,7 @@ class AppStore extends ChangeNotifier {
         syncStatus = 'Connected';
       }
       eventPromptAt = DateTime.tryParse(s['eventPromptAt'] as String? ?? '');
+      recordLocation = s['recordLocation'] as bool? ?? false;
     }
     if (_cleanArchive()) await _writeData();
     notifyListeners();
@@ -119,6 +127,7 @@ class AppStore extends ChangeNotifier {
       'dropboxAppKey': dropboxAppKey,
       'dropboxRefreshToken': dropbox?.refreshToken,
       'eventPromptAt': eventPromptAt?.toIso8601String(),
+      'recordLocation': recordLocation,
     }));
   }
 
@@ -225,7 +234,7 @@ class AppStore extends ChangeNotifier {
     if (lines.isEmpty) return false;
     for (final line in lines) {
       final p = parseInput(line, data, DateTime.now());
-      data.active.add(Task.create(p.title)
+      data.active.add(Task.create(p.title, source: TaskSource.inbox)
         ..dueAt = p.due
         ..categoryId = p.categoryId);
     }
@@ -260,30 +269,62 @@ class AppStore extends ChangeNotifier {
 
   // --- Task actions ---
 
-  Task addTask(String title, {DateTime? due, String? categoryId, String notes = '', String? eventId}) {
-    final t = Task.create(title.trim())
+  /// [source] says how it got here (a [TaskSource] name).
+  Task addTask(String title,
+      {DateTime? due, String? categoryId, String notes = '', String? eventId, String source = TaskSource.typed}) {
+    final t = Task.create(title.trim(), source: source)
       ..dueAt = due
       ..categoryId = categoryId
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
     changed(order: true);
+    _locate([t]);
     return t;
   }
 
   /// Adds one task per line, reading dates and categories out of each line.
-  List<Task> addMany(Iterable<String> lines) {
+  List<Task> addMany(Iterable<String> lines, {String source = TaskSource.paste}) {
     final added = <Task>[];
     for (final line in lines) {
       final p = parseInput(line, data, DateTime.now());
       if (p.title.isEmpty) continue;
-      added.add(Task.create(p.title)
+      added.add(Task.create(p.title, source: source)
         ..dueAt = p.due
         ..categoryId = p.categoryId);
     }
     data.active.addAll(added);
     changed(order: true);
+    _locate(added);
     return added;
+  }
+
+  /// Turns location recording on or off; turning it on asks for access. False if refused.
+  Future<bool> setRecordLocation(bool on) async {
+    if (on && !(await location?.requestAccess() ?? false)) return false;
+    recordLocation = on;
+    notifyListeners();
+    await saveDeviceSettings();
+    return true;
+  }
+
+  /// Saves the current location on [tasks] as where they were added, or ([done]) ticked off.
+  /// Runs in the background; the task is saved again once the fix arrives.
+  Future<void> _locate(List<Task> tasks, {bool done = false}) async {
+    final loc = location;
+    if (!recordLocation || loc == null || tasks.isEmpty) return;
+    final point = await loc.current();
+    if (point == null) return;
+    for (final t in tasks) {
+      // Skip if it was deleted, or reopened, in the meantime.
+      if (data.task(t.id) == null || done != (t.closedAt != null)) continue;
+      if (done) {
+        t.doneWhere = point;
+      } else {
+        t.addedWhere = point;
+      }
+      changed(task: t);
+    }
   }
 
   /// [newIndex] is the position after the item has been removed.
@@ -334,6 +375,9 @@ class AppStore extends ChangeNotifier {
       data.active.insert(index.clamp(0, data.active.length), next);
     }
     changed(task: t, order: true);
+    // Only when ticked off just now: a tick made earlier on a widget or notification and picked
+    // up later would get the wrong place.
+    if (at == null || DateTime.now().difference(at).inMinutes < 2) _locate([t], done: true);
     return next;
   }
 
@@ -357,6 +401,7 @@ class AppStore extends ChangeNotifier {
   void restore(Task t, [int? index]) {
     data.archived.remove(t);
     t.closedAt = null;
+    t.doneWhere = null;
     data.done.remove(t.id);
     data.active.insert((index ?? data.active.length).clamp(0, data.active.length), t);
     changed(task: t, order: true);
@@ -422,7 +467,7 @@ class AppStore extends ChangeNotifier {
   /// Turns a step into a full task of its own, placed just after [t] in the list. The step
   /// stays, linked to the new task, and ticks itself when that task is ticked off.
   Task stepToTask(Task t, TaskStep s) {
-    final linked = Task.create(s.title)..categoryId = t.categoryId;
+    final linked = Task.create(s.title, source: TaskSource.step)..categoryId = t.categoryId;
     final at = data.active.indexOf(t);
     data.active.insert(at < 0 ? data.active.length : at + 1, linked);
     s.taskId = linked.id;

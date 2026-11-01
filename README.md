@@ -1,6 +1,6 @@
 # Task Blocks
 
-A very simple personal task list for Android, Windows and Mac (one Flutter codebase).
+A very simple personal task list for Android, Windows, Mac and iPad (one Flutter codebase).
 
 <p>
   <img src="docs/screenshots/list.png" width="240" alt="Task list with blocks fading from green to red">
@@ -55,6 +55,7 @@ Every push to `main` builds both apps on GitHub Actions. Open the **Actions** ta
 - **TaskBlocks-android**: unzip and open `app-release.apk` on the phone (allow "install unknown apps").
 - **TaskBlocks-windows**: unzip anywhere and run `task_blocks.exe`. Keep the files in that folder together.
 - **TaskBlocks-macos**: unzip, drag `Task Blocks.app` to Applications. It is not signed with an Apple certificate, so the first launch needs System Settings → Privacy & Security → "Open Anyway" (or `xattr -cr "Task Blocks.app"` in Terminal). Phone-only features (widgets, reminders, calendar, photo, share, voice) are not available on the Mac.
+- **TaskBlocks-ios**: an unsigned `.ipa` for iPad (and iPhone). Installing it needs your Apple ID; see [docs/IPAD.md](docs/IPAD.md).
 
 ## Signing key (one-time)
 
@@ -82,4 +83,5 @@ flutter test
 flutter build apk --release     # Android
 flutter build windows --release # Windows (on a Windows PC)
 flutter build macos --release   # Mac (on a Mac with Xcode)
+flutter build ios --no-codesign  # iPad (on a Mac with Xcode; sign it in Xcode to install)
 ```

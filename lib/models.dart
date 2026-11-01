@@ -18,6 +18,9 @@ class Task {
     this.remindBefore,
     List<TaskStep>? steps,
     this.eventId,
+    this.source,
+    this.addedWhere,
+    this.doneWhere,
     DateTime? updatedAt,
   })  : steps = steps ?? [],
         updatedAt = updatedAt ?? createdAt;
@@ -56,6 +59,15 @@ class Task {
   /// The calendar event this task was made from, so it isn't offered twice.
   String? eventId;
 
+  /// How the task got into the app: one of the [TaskSource] names, or another name sent by an
+  /// outside tool. Null for tasks made before sources were recorded ("Unknown").
+  String? source;
+
+  /// Where the phone was when the task was added and when it was ticked off (if location
+  /// recording is on in Settings). Kept for place-based reminders later.
+  GeoPoint? addedWhere;
+  GeoPoint? doneWhere;
+
   int get stepsDone => steps.where((s) => s.done).length;
 
   /// Last time anything about this task changed; the newer copy wins when syncing.
@@ -82,17 +94,19 @@ class Task {
       ..categoryId = categoryId
       ..starred = starred
       ..repeat = r
-      ..remindBefore = remindBefore;
+      ..remindBefore = remindBefore
+      ..source = TaskSource.repeat;
     // Each repeat starts with the checklist unticked.
     next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
     next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
     return next;
   }
 
-  factory Task.create(String title) => Task(
+  factory Task.create(String title, {String source = TaskSource.typed}) => Task(
         id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}',
         title: title,
         createdAt: DateTime.now(),
+        source: source,
       );
 
   Map<String, dynamic> toJson() => {
@@ -112,6 +126,9 @@ class Task {
         if (remindBefore != null) 'remindBefore': remindBefore,
         if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
         if (eventId != null) 'eventId': eventId,
+        if (source != null) 'source': source,
+        if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
+        if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -131,9 +148,82 @@ class Task {
         remindBefore: (j['remindBefore'] as num?)?.toInt(),
         steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
         eventId: j['eventId'] as String?,
+        // Older calendar tasks are known to be from the calendar even without a source.
+        source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
+        addedWhere: GeoPoint.tryParse(j['addedWhere']),
+        doneWhere: GeoPoint.tryParse(j['doneWhere']),
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+}
+
+/// The ways a task can get into the app. Stored as plain names so new ones (another app pushing
+/// tasks in, email, ...) can be added later without changing older copies of the app; a name the
+/// app doesn't know is shown as it is.
+abstract final class TaskSource {
+  static const typed = 'typed';
+  static const widget = 'widget';
+  static const voice = 'voice';
+  static const share = 'share';
+  static const paste = 'paste';
+  static const photo = 'photo';
+  static const inbox = 'inbox';
+  static const calendar = 'calendar';
+  static const csv = 'csv';
+  static const repeat = 'repeat';
+  static const step = 'step';
+
+  static const labels = {
+    typed: 'Typed in the app',
+    widget: 'Home screen widget',
+    voice: 'Voice',
+    share: 'Shared from another app',
+    paste: 'Pasted list',
+    photo: 'Photo of a list',
+    inbox: 'Dropbox inbox',
+    calendar: 'Calendar',
+    csv: 'CSV import',
+    repeat: 'Repeat of an earlier task',
+    step: 'Checklist step',
+  };
+
+  /// A name for showing; [source] null is a task from before sources were recorded.
+  static String label(String? source) {
+    if (source == null || source.isEmpty) return 'Unknown';
+    return labels[source] ?? source[0].toUpperCase() + source.substring(1);
+  }
+}
+
+/// A location fix: latitude and longitude in degrees, accuracy in metres, and when it was taken.
+class GeoPoint {
+  const GeoPoint({required this.lat, required this.lng, this.accuracy, required this.at});
+
+  final double lat;
+  final double lng;
+  final double? accuracy;
+  final DateTime at;
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+        if (accuracy != null) 'acc': accuracy!.roundToDouble(),
+        'at': at.toUtc().toIso8601String(),
+      };
+
+  static GeoPoint? tryParse(Object? j) {
+    if (j is! Map) return null;
+    final lat = j['lat'], lng = j['lng'];
+    if (lat is! num || lng is! num) return null;
+    return GeoPoint(
+      lat: lat.toDouble(),
+      lng: lng.toDouble(),
+      accuracy: (j['acc'] as num?)?.toDouble(),
+      at: DateTime.tryParse(j['at'] as String? ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  @override
+  String toString() => '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
 }
 
 /// One line of a task's checklist. [taskId] is set when it was made into a full task.
@@ -374,6 +464,7 @@ class AppData {
     this.eventSuggest = EventSuggest.off,
     Set<String>? eventCalendars,
     Set<String>? dismissedEvents,
+    this.eventDays = 14,
     this.overdueMode = OverdueMode.off,
     this.overdueAt = 8 * 60,
     this.nudgeHours = 3,
@@ -444,6 +535,9 @@ class AppData {
   /// Calendar events the user chose not to make tasks from.
   final Set<String> dismissedEvents;
 
+  /// How many days ahead to look in the calendar for events to make tasks from.
+  int eventDays;
+
   OverdueMode overdueMode;
 
   /// Minutes after midnight for the daily overdue summary.
@@ -484,6 +578,7 @@ class AppData {
         'eventSuggest': eventSuggest.name,
         'eventCalendars': eventCalendars.toList(),
         'dismissedEvents': dismissedEvents.toList(),
+        'eventDays': eventDays,
         'overdueMode': overdueMode.name,
         'overdueAt': overdueAt,
         'nudgeHours': nudgeHours,
@@ -533,6 +628,7 @@ class AppData {
         eventSuggest: _enum(EventSuggest.values, j['eventSuggest'], EventSuggest.off),
         eventCalendars: {for (final c in j['eventCalendars'] as List? ?? []) c as String},
         dismissedEvents: {for (final c in j['dismissedEvents'] as List? ?? []) c as String},
+        eventDays: (j['eventDays'] as num?)?.toInt() ?? 14,
         overdueMode: _enum(OverdueMode.values, j['overdueMode'], OverdueMode.off),
         overdueAt: (j['overdueAt'] as num?)?.toInt() ?? 8 * 60,
         nudgeHours: (j['nudgeHours'] as num?)?.toInt() ?? 3,
@@ -612,6 +708,7 @@ AppData mergeData(AppData a, AppData b) {
     eventSuggest: settingsFrom.eventSuggest,
     eventCalendars: settingsFrom.eventCalendars,
     dismissedEvents: {...a.dismissedEvents, ...b.dismissedEvents},
+    eventDays: settingsFrom.eventDays,
     overdueMode: settingsFrom.overdueMode,
     overdueAt: settingsFrom.overdueAt,
     nudgeHours: settingsFrom.nudgeHours,

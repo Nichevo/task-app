@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'input_parse.dart';
+import 'models.dart';
 import 'native.dart';
 import 'store.dart';
 import 'widgets/add_dialogs.dart';
@@ -38,7 +39,7 @@ Future<void> importPhoto(BuildContext context, AppStore store) async {
       messenger.showSnackBar(const SnackBar(content: Text('No writing found in that photo.')));
       return;
     }
-    await showAddManyDialog(context, store, lines, title: 'Found ${lines.length} line${lines.length == 1 ? '' : 's'}');
+    await showAddManyDialog(context, store, lines, title: 'Found ${lines.length} line${lines.length == 1 ? '' : 's'}', source: TaskSource.photo);
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Could not read the photo: $e')));
   }

@@ -5,9 +5,12 @@ import 'package:flutter/services.dart';
 
 /// Text handed to the app by another app (Android's Share sheet, or "note to self").
 class SharedText {
-  const SharedText(this.text, {this.subject});
+  const SharedText(this.text, {this.subject, this.voice = false});
   final String text;
   final String? subject;
+
+  /// Spoken to Google Assistant ("note to self") rather than shared from an app.
+  final bool voice;
 }
 
 /// A calendar on the phone.
@@ -51,7 +54,7 @@ class Native {
       final m = await _channel.invokeMapMethod<String, dynamic>('takeShared');
       final text = m?['text'] as String?;
       if (text == null || text.trim().isEmpty) return null;
-      return SharedText(text, subject: m?['subject'] as String?);
+      return SharedText(text, subject: m?['subject'] as String?, voice: m?['voice'] == true);
     } catch (e) {
       debugPrint('takeShared: $e');
       return null;
