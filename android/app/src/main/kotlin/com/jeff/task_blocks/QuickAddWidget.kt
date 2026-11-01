@@ -45,7 +45,7 @@ class QuickAddWidget : AppWidgetProvider() {
       val name = snap.categoryName(cat)
       views.setTextViewText(R.id.quick_label, name ?: "")
       views.setViewVisibility(R.id.quick_label, if (name == null) View.GONE else View.VISIBLE)
-      val catQuery = if (cat == null) "" else "?cat=" + Uri.encode(cat)
+      val catQuery = "?src=widget" + if (cat == null) "" else "&cat=" + Uri.encode(cat)
       views.setOnClickPendingIntent(
           R.id.quick_add,
           HomeWidgetLaunchIntent.getActivity(c, MainActivity::class.java, Uri.parse("taskblocks://add$catQuery")),
@@ -82,7 +82,7 @@ class VoiceAddActivity : Activity() {
     val text = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
     if (resultCode == RESULT_OK && !text.isNullOrBlank()) {
       val cat = intent.getStringExtra("cat")
-      val uri = "taskblocks://add?text=" + Uri.encode(text) + if (cat == null) "" else "&cat=" + Uri.encode(cat)
+      val uri = "taskblocks://add?src=voice&text=" + Uri.encode(text) + if (cat == null) "" else "&cat=" + Uri.encode(cat)
       startActivity(
           Intent(this, MainActivity::class.java).apply {
             action = HomeWidgetLaunchIntent.HOME_WIDGET_LAUNCH_ACTION

@@ -66,6 +66,15 @@ DateTime? _parseDate(String s) {
   return DateTime.tryParse(s);
 }
 
+/// A Source cell from an exported file back to its name; anything else counts as a CSV import.
+String _source(String cell) {
+  if (cell.isEmpty) return TaskSource.csv;
+  for (final e in TaskSource.labels.entries) {
+    if (e.value.toLowerCase() == cell.toLowerCase() || e.key == cell.toLowerCase()) return e.key;
+  }
+  return cell.toLowerCase();
+}
+
 /// Adds the tasks in [text] (same columns as the export; only "Task" is required) to [data].
 /// Categories are matched by name and created if missing. Tasks already in the app (same name
 /// and created time) are skipped. Returns how many were added.
@@ -76,7 +85,7 @@ int importCsvText(AppData data, String text) {
   int col(String name) => header.indexOf(name);
   final iTask = col('task'), iNotes = col('notes'), iCat = col('category'), iCreated = col('created');
   final iDue = col('due'), iClosed = col('closed'), iStatus = col('status'), iStar = col('starred');
-  final iSteps = col('steps');
+  final iSteps = col('steps'), iSource = col('source');
   if (iTask < 0) throw const FormatException('The file needs a "Task" column.');
   String cell(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
 
@@ -99,7 +108,7 @@ int importCsvText(AppData data, String text) {
     }
     final closed = _parseDate(cell(r, iClosed)) ??
         (cell(r, iStatus).toLowerCase() == 'closed' ? DateTime.now() : null);
-    final t = Task.create(title)
+    final t = Task.create(title, source: _source(cell(r, iSource)))
       ..notes = cell(r, iNotes)
       ..dueAt = _parseDate(cell(r, iDue))
       ..closedAt = closed

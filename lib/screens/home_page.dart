@@ -118,9 +118,9 @@ class HomePageState extends State<HomePage> {
 
   /// Puts the cursor in the add box (e.g. from the quick-add widget), with [text] filled in
   /// and [categoryId] already chosen.
-  void focusAdd({String? text, String? categoryId}) {
+  void focusAdd({String? text, String? categoryId, String? source}) {
     _select(null);
-    _addBar.currentState?.focus(text: text, categoryId: categoryId);
+    _addBar.currentState?.focus(text: text, categoryId: categoryId, source: source);
   }
 
   void openCalendar(DateTime? day) => _open(context, CalendarPage(store: store, initialDay: day));
@@ -129,9 +129,10 @@ class HomePageState extends State<HomePage> {
 
   /// Text shared from another app: one task, or several when it is a list.
   Future<void> addShared(SharedText shared) async {
+    final source = shared.voice ? TaskSource.voice : TaskSource.share;
     final lines = splitLines(shared.text);
     if (lines.length > 1 && !lines.every((l) => l.startsWith('http'))) {
-      await showAddManyDialog(context, store, lines);
+      await showAddManyDialog(context, store, lines, source: source);
       return;
     }
     final subject = shared.subject?.trim() ?? '';
@@ -139,7 +140,7 @@ class HomePageState extends State<HomePage> {
     final isLink = first.startsWith('http');
     final title = subject.isNotEmpty ? subject : (isLink ? 'Look at link' : first);
     final notes = subject.isNotEmpty || isLink ? shared.text.trim() : '';
-    await showAddTaskDialog(context, store, title: title, notes: notes);
+    await showAddTaskDialog(context, store, title: title, notes: notes, source: source);
   }
 
   void _complete(Task t) {
@@ -470,6 +471,9 @@ class _AddBarState extends State<_AddBar> {
   String? _forcedCategory;
   bool _handlingPaste = false;
 
+  /// How the text in the box got there, when not typed (the quick-add widget, voice).
+  String? _source;
+
   AppData get data => widget.store.data;
 
   @override
@@ -486,7 +490,11 @@ class _AddBarState extends State<_AddBar> {
   }
 
   void _onChanged() {
-    if (_input.text.isEmpty) _ignoreDate = _ignoreCategory = false;
+    if (_input.text.isEmpty) {
+      _ignoreDate = _ignoreCategory = false;
+      // Cleared by hand: whatever is typed next is a new task, not the widget's.
+      if (_source != TaskSource.widget) _source = null;
+    }
     final lines = splitLines(_input.text);
     if (lines.length > 1 && !_handlingPaste) {
       // Several lines were pasted: offer them as separate tasks.
@@ -498,7 +506,8 @@ class _AddBarState extends State<_AddBar> {
     setState(() {});
   }
 
-  void focus({String? text, String? categoryId}) {
+  void focus({String? text, String? categoryId, String? source}) {
+    _source = source;
     if (text != null && text.isNotEmpty) _input.text = text;
     if (categoryId != null) _forcedCategory = categoryId;
     _ignoreCategory = false;
@@ -513,7 +522,9 @@ class _AddBarState extends State<_AddBar> {
     if (text.isEmpty) return;
     final p = _parsed;
     final category = _forcedCategory ?? (_ignoreCategory ? null : p.categoryId);
-    widget.store.addTask(_ignoreDate ? text : p.title, due: _ignoreDate ? null : p.due, categoryId: category);
+    widget.store.addTask(_ignoreDate ? text : p.title,
+        due: _ignoreDate ? null : p.due, categoryId: category, source: _source ?? TaskSource.typed);
+    _source = null;
     _input.clear();
     _ignoreDate = _ignoreCategory = false;
     _forcedCategory = null;

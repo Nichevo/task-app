@@ -3,6 +3,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Upcoming events (only read, only on the phone). -->
     <uses-permission android:name="android.permission.READ_CALENDAR"/>
+    <!-- Where a task was added / ticked off (opt-in in Settings), for place reminders later. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="Task Blocks"
         android:name="${applicationName}"

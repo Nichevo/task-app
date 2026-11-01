@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'home_widgets.dart';
+import 'location.dart';
 import 'native.dart';
 import 'reminders.dart';
 import 'screens/home_page.dart';
@@ -12,7 +13,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final reminders = Reminders();
   final widgets = HomeWidgets();
-  final store = AppStore(reminders: reminders, widgets: widgets);
+  final store = AppStore(reminders: reminders, widgets: widgets, location: LocationRecorder());
   reminders.onAction = store.applyPending;
   // Don't hold up loading the tasks behind the notification-permission prompt.
   Future.wait([reminders.init(), store.load()]).then((_) {
@@ -83,7 +84,7 @@ class _TaskAppState extends State<TaskApp> {
     _onHome((home) {
       switch (uri.host) {
         case 'add':
-          home.focusAdd(text: q['text'], categoryId: q['cat']);
+          home.focusAdd(text: q['text'], categoryId: q['cat'], source: q['src']);
         case 'open':
           if (q['id'] != null) home.openTask(q['id']!);
         case 'day':

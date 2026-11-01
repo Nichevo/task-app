@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
 import '../store.dart';
@@ -344,7 +345,9 @@ class _TaskPageState extends State<TaskPage> {
         ListTile(
           leading: const Icon(Icons.schedule),
           title: const Text('Created'),
-          subtitle: Text(dateTimeFmt.format(task.createdAt)),
+          subtitle: Text('${dateTimeFmt.format(task.createdAt)}\nFrom: ${TaskSource.label(task.source)}'),
+          isThreeLine: true,
+          trailing: _mapButton(task.addedWhere),
         ),
         ListTile(
           leading: const Icon(Icons.event),
@@ -447,8 +450,21 @@ class _TaskPageState extends State<TaskPage> {
             leading: const Icon(Icons.check_circle_outline),
             title: const Text('Closed'),
             subtitle: Text(dateTimeFmt.format(task.closedAt!)),
+            trailing: _mapButton(task.doneWhere),
           ),
       ]),
     );
   }
+
+  /// Opens a recorded location in the maps app.
+  Widget? _mapButton(GeoPoint? where) => where == null
+      ? null
+      : IconButton(
+          tooltip: 'Recorded at $where${where.accuracy == null ? '' : ' (±${where.accuracy!.round()} m)'}. Open in maps',
+          icon: const Icon(Icons.place_outlined),
+          onPressed: () => launchUrl(
+            Uri.parse('https://www.google.com/maps/search/?api=1&query=${where.lat},${where.lng}'),
+            mode: LaunchMode.externalApplication,
+          ),
+        );
 }

@@ -17,7 +17,7 @@ import java.io.File
  * directly: text shared from other apps, the phone's calendars and reading text from a photo.
  */
 class MainActivity : FlutterActivity() {
-  private var shared: Map<String, String?>? = null
+  private var shared: Map<String, Any?>? = null
   private var permissionResult: MethodChannel.Result? = null
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -76,7 +76,7 @@ class MainActivity : FlutterActivity() {
     val isNote = intent.action == "com.google.android.gms.actions.CREATE_NOTE"
     if (!isShare && !isNote) return
     val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
-    shared = mapOf("text" to text, "subject" to intent.getStringExtra(Intent.EXTRA_SUBJECT))
+    shared = mapOf("text" to text, "subject" to intent.getStringExtra(Intent.EXTRA_SUBJECT), "voice" to isNote)
     // Don't hand the same text over again if the activity is recreated.
     intent.action = Intent.ACTION_MAIN
     intent.removeExtra(Intent.EXTRA_TEXT)

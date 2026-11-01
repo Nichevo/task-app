@@ -387,3 +387,47 @@ Anyway" (or `xattr -cr "Task Blocks.app"` in Terminal).
 **Follow-up (2026-10-31, PR #7):** text inside an expanded block came out garbled on the Mac (letters replaced
 by broken pixels). That is Flutter's Impeller renderer on macOS mishandling glyphs inside an animated,
 clipped region; the Mac app now draws with Skia (`FLTEnableImpeller` off), as the Windows build does.
+
+---
+
+# Sources, location and iPad (2026-11-01)
+
+**Feedback (2026-11-01):** "Add a task source for each task added — if we pull from the calendar it could say
+calendar, otherwise manual — which will allow me to later have other pushes to the app. Also plan how some
+other tool could push to the app. A setting so the calendar look-ahead can be more than 7 days. Collect GPS
+when we create or complete a task for later geofencing. And an iPad version."
+
+## 47. Where each task came from ◐ (PR pending)
+
+Every new task records its source: typed in the app, home screen widget, voice (widget microphone or "Hey
+Google"), shared from another app, pasted list, photo of a list, Dropbox inbox, calendar, CSV import, a repeat
+of an earlier task, or a checklist step. Shown on the task page under Created, and as a Source column in the
+CSV export (read back on import). It is a plain name, so outside tools can push tasks with their own source
+later (see item 48). Older tasks made from a calendar event count as Calendar; other older tasks are Unknown.
+Item 30 (By source in Statistics) builds on this.
+
+## 48. Plan: other tools pushing tasks in ◐ (design in docs/PUSH_TASKS.md)
+
+Recommended: a Dropbox `inbox/` folder that takes one small JSON file per task (title, due, notes, category,
+source, the tool's own id to avoid duplicates), then an Android "add task" intent for Tasker-style apps, and a
+small web endpoint only if a tool can only call webhooks. Open questions for Jeff are at the end of the doc.
+
+## 49. Calendar look-ahead setting ◐ (PR pending)
+
+Settings → Calendar events → **Look ahead**: 1 week, 2 weeks (the old fixed value and the default), 1, 2, 3 or
+6 months, or 1 year. Used by Upcoming events and the suggestion line at the top of the list. Syncs.
+
+## 50. Record location when adding and ticking off ◐ (PR pending)
+
+Settings → Location → **Record where tasks are added and done** (off until switched on; turning it on asks for
+location access, "while using the app" only). Each task keeps the place and accuracy when it was added and
+when it was ticked off; the task page shows a pin that opens it in Maps. Phone and iPad only. Ticks made on a
+widget or notification while the app was closed get no location (the app would only know where you are
+later). Synced with the tasks, ready for place-based reminders (item 33).
+
+## 51. iPad version ◐ (PR pending; details in docs/IPAD.md)
+
+An iOS target that runs on iPad (and iPhone) with the two-pane layout, reminders with Done/snooze buttons, and
+location recording. CI attaches an unsigned **TaskBlocks-ios** build; installing it needs Jeff's Apple ID
+(free, re-sent every 7 days) or a paid developer account (a year, TestFlight). Widgets, calendar suggestions,
+photo text, share and voice stay Android-only for now.

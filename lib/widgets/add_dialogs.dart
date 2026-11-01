@@ -9,11 +9,12 @@ final _dayFmt = DateFormat('EEE d MMM, HH:mm');
 
 /// Offers one task per line (from a pasted list, a photo or shared text), each with the
 /// date and category read out of it, and adds the ticked ones.
-Future<void> showAddManyDialog(BuildContext context, AppStore store, List<String> lines, {String? title}) async {
+Future<void> showAddManyDialog(BuildContext context, AppStore store, List<String> lines,
+    {String? title, String source = TaskSource.paste}) async {
   if (lines.isEmpty) return;
   final added = await showDialog<List<Task>>(
     context: context,
-    builder: (_) => _AddManyDialog(store: store, lines: lines, title: title),
+    builder: (_) => _AddManyDialog(store: store, lines: lines, title: title, source: source),
   );
   if (added != null && added.isNotEmpty && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -23,11 +24,12 @@ Future<void> showAddManyDialog(BuildContext context, AppStore store, List<String
 }
 
 class _AddManyDialog extends StatefulWidget {
-  const _AddManyDialog({required this.store, required this.lines, this.title});
+  const _AddManyDialog({required this.store, required this.lines, this.title, required this.source});
 
   final AppStore store;
   final List<String> lines;
   final String? title;
+  final String source;
 
   @override
   State<_AddManyDialog> createState() => _AddManyDialogState();
@@ -72,7 +74,7 @@ class _AddManyDialogState extends State<_AddManyDialog> {
               ? null
               : () {
                   final lines = [for (final (i, l) in widget.lines.indexed) if (_picked[i]) l];
-                  Navigator.pop(context, widget.store.addMany(lines));
+                  Navigator.pop(context, widget.store.addMany(lines, source: widget.source));
                 },
           child: Text('Add $n'),
         ),
@@ -82,7 +84,8 @@ class _AddManyDialogState extends State<_AddManyDialog> {
 }
 
 /// Adds one task with a name and notes already filled in (e.g. text shared from another app).
-Future<Task?> showAddTaskDialog(BuildContext context, AppStore store, {required String title, String notes = ''}) {
+Future<Task?> showAddTaskDialog(BuildContext context, AppStore store,
+    {required String title, String notes = '', String source = TaskSource.typed}) {
   final name = TextEditingController(text: title);
   final notesField = TextEditingController(text: notes);
   return showDialog<Task>(
@@ -113,7 +116,8 @@ Future<Task?> showAddTaskDialog(BuildContext context, AppStore store, {required 
           onPressed: () {
             if (name.text.trim().isEmpty) return;
             final p = parseInput(name.text, store.data, DateTime.now());
-            Navigator.pop(c, store.addTask(p.title, due: p.due, categoryId: p.categoryId, notes: notesField.text.trim()));
+            Navigator.pop(c, store.addTask(p.title,
+                due: p.due, categoryId: p.categoryId, notes: notesField.text.trim(), source: source));
           },
           child: const Text('Add'),
         ),

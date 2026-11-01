@@ -5,10 +5,10 @@ import '../models.dart';
 import '../native.dart';
 import '../store.dart';
 
-/// Events in the next 14 days from the chosen calendars that aren't tasks yet and weren't dismissed.
+/// Events in the next [AppData.eventDays] days from the chosen calendars that aren't tasks yet and weren't dismissed.
 Future<List<CalendarEvent>> upcomingEvents(AppData data) async {
   final now = DateTime.now();
-  final events = await Native.events(now, now.add(const Duration(days: 14)), data.eventCalendars);
+  final events = await Native.events(now, now.add(Duration(days: data.eventDays)), data.eventCalendars);
   return [
     for (final e in events)
       if (!data.dismissedEvents.contains(e.id) && data.taskForEvent(e.id) == null) e,
@@ -49,7 +49,7 @@ class _EventsPageState extends State<EventsPage> {
     }
     try {
       final now = DateTime.now();
-      final all = await Native.events(now, now.add(const Duration(days: 14)), store.data.eventCalendars);
+      final all = await Native.events(now, now.add(Duration(days: store.data.eventDays)), store.data.eventCalendars);
       if (mounted) setState(() => _events = all);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -73,7 +73,7 @@ class _EventsPageState extends State<EventsPage> {
         ? DateTime(e.start.year, e.start.month, e.start.day, 9)
         : e.start.subtract(when);
     final title = when == Duration.zero ? e.title : 'Prepare for ${e.title}';
-    store.addTask(title, due: due, eventId: e.id, notes: e.location == null ? '' : 'At ${e.location}');
+    store.addTask(title, due: due, eventId: e.id, source: TaskSource.calendar, notes: e.location == null ? '' : 'At ${e.location}');
     setState(() {});
   }
 
@@ -106,7 +106,7 @@ class _EventsPageState extends State<EventsPage> {
     } else if (_events == null) {
       body = const Center(child: CircularProgressIndicator());
     } else if (_events!.isEmpty) {
-      body = const Center(child: Text('No events in the next 14 days.'));
+      body = Center(child: Text('No events in the next ${data.eventDays} days.'));
     } else {
       body = ListView(children: [
         for (final e in _events!)
