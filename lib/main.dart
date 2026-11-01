@@ -8,6 +8,7 @@ import 'native.dart';
 import 'reminders.dart';
 import 'screens/home_page.dart';
 import 'store.dart';
+import 'task_list.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,10 +16,13 @@ void main() {
   final widgets = HomeWidgets();
   final store = AppStore(reminders: reminders, widgets: widgets, location: LocationRecorder());
   reminders.onAction = store.applyPending;
+  // Tapping the weekly review opens the list on the coming week.
+  reminders.onOpenReview = () => store.setQuickFilter(QuickFilter.week);
   // Don't hold up loading the tasks behind the notification-permission prompt.
   final ready = Future.wait([reminders.init(), store.load()]).then((_) {
     reminders.dir = store.dirPath;
     reminders.schedule(store.data);
+    if (reminders.startedFromReview) store.setQuickFilter(QuickFilter.week);
   });
   runApp(TaskApp(store: store, widgets: widgets, ready: ready));
 }

@@ -287,7 +287,7 @@ Jeff asked for a final review before round 3 was built. Done in the same PR:
 Jeff's feedback on round 3 (2026-10-28). Items 31 and 32 are bugs; items from 30 on are the feature list,
 to be agreed before building.
 
-## 30. Where tasks came from, in Statistics ☐
+## 30. Where tasks came from, in Statistics ◐ (round 4 PR 2)
 
 **Feedback:** "Would be good to show where a task was created from in statistics."
 
@@ -297,6 +297,10 @@ CSV import, a repeat of an earlier task, or a checklist step made into a task. S
 **By source** section: added and done per source for the chosen period, and the share that got done.
 The daily tally that survives archive clean-up records the source too, and it syncs through Dropbox.
 Tasks from before this update show as "Unknown".
+
+Built: a **By source** table (added in the period, the share of those now done, and ticked off in the period).
+No separate tally was needed: completion records now keep the source, and tasks deleted by the archive
+clean-up are counted from those records.
 
 ## 31. Reminder and category text squashed in the right-hand pane ☑ (PR #4, merged 2026-10-29)
 
@@ -336,7 +340,7 @@ the subject with sender and date in the notes and a link that opens the email in
 to "Tasked". Phone and Windows. Jeff creates a Google Cloud OAuth client (steps to be written); Google shows a
 one-time "unverified app" screen. Source "Email" in statistics (item 30).
 
-## 35. Skip a repeating task ◐ (round 4 PR 1)
+## 35. Skip a repeating task ☑ (PR #9, merged 2026-11-01)
 
 **Feedback (2026-10-30):** one tap to move a repeating task to its next date without marking it complete.
 
@@ -347,7 +351,7 @@ checklist, keeps the same task, and records the skip for item 36. Snooze is unch
 Built: the Android reminder of a repeating task shows Done, Skip, 1 hour (Android shows three buttons); on the
 iPad, Done, Skip, 1 hour, Tomorrow. Skips sync and each task in a repeating series now carries the series id.
 
-## 36. Repeats and timing in Statistics ☐
+## 36. Repeats and timing in Statistics ◐ (round 4 PR 2)
 
 **Feedback (2026-10-30):** how often repeating tasks get done or not, and how early or late tasks are done.
 
@@ -358,6 +362,11 @@ iPad, Done, Skip, 1 hour, Tomorrow. Skips sync and each task in a repeating seri
   over a week late). Done records gain the signed amount and a series id; older records only count in the
   split.
 
+Built: completion records keep the series, the signed minutes after the due time, and how many whole cycles
+went by unticked (fixed schedules only: a tick or skip after a later repeat date counts the dates passed as
+missed; an open overdue repeat counts its passed dates too). Shown as a **Repeating tasks** table and an
+**Early or late** section with the typical lateness, the split and the five buckets by calendar day.
+
 ## 37. Weekday choice for every-N-weeks repeats ☑ (PR #5, merged 2026-10-30)
 
 **Feedback (2026-10-30):** "If I select repeat as every 2 weeks it doesn't give a choice of the day of the week."
@@ -366,7 +375,7 @@ The day chips were only offered for "every 1 week". They now show for any number
 later chosen day in the same week, else the first chosen day of the week N weeks on. Shown as "Every 2 weeks
 on Mon, Thu".
 
-## 38. Added-by-date and added-vs-done charts ☐
+## 38. Added-by-date and added-vs-done charts ◐ (round 4 PR 2)
 
 **Feedback (2026-10-30):** a graph of tasks added by date, and added vs done with a line for total
 outstanding, with the option to show by category.
@@ -375,6 +384,9 @@ Two charts on the Statistics page for the chosen period: **Added per day/week** 
 (paired bars) with a line for how many were open at the end of each day/week. A category chip row filters
 both (All, or one category). The daily tally records added counts per category so the charts survive archive
 clean-up; history before this update comes from the created dates of tasks still in the list or archive.
+
+Built: one bar per day for periods up to a month, per week up to a year, per month beyond; the open line has
+its own scale, labelled at its peak. Category chips: All, each category, No category.
 
 ## 39. Mac build ☑ (PR #6, merged 2026-10-30; text fix PR #7)
 
@@ -442,18 +454,18 @@ photo text, share and voice stay Android-only for now.
 Full round 4 plan: four PRs. PR 1 = items 35, 40, 41, 42, 43, 45. PR 2 = 30, 36, 38, 44. PR 3 = 33, 46.
 PR 4 = 52 Kanban board. Item 34 moved to a later phase 5 (2026-11-01). Version 1.4.0.
 
-## 40. About and What's new ◐ (round 4 PR 1)
+## 40. About and What's new ☑ (PR #9, merged 2026-11-01)
 
 Settings → **About Task Blocks**: version and build number, a changelog for every version (1.0 to 1.4), and a
 link to the GitHub project. After an update (not a fresh install) a one-time **What's new** pop-up lists that
 version's changes. The changelog lives in `lib/changelog.dart`; add the new version there with each bump.
 
-## 41. Search the main list ◐ (round 4 PR 1)
+## 41. Search the main list ☑ (PR #9, merged 2026-11-01)
 
 A magnifying glass in the top bar opens a search box. Every word typed must appear in a task's name, notes or
 checklist (any case). It looks through every open task, snoozed ones too, whatever quick filter is picked.
 
-## 42. Sorting and quick filters ◐ (round 4 PR 1)
+## 42. Sorting and quick filters ☑ (PR #9, merged 2026-11-01)
 
 **Feedback (2026-10-31):** "A few more sorting options in settings. Sorting by due date with stars at the top
 by default. Maybe a quick button at the top to just show due next 2 weeks etc."
@@ -469,18 +481,21 @@ by default. Maybe a quick button at the top to just show due next 2 weeks etc."
   setting is replaced: a device that had it on starts on the Next 30 days chip.
 - Widgets keep their own filters.
 
-## 43. Tappable links in notes ◐ (round 4 PR 1)
+## 43. Tappable links in notes ☑ (PR #9, merged 2026-11-01)
 
 Web links (http, https, www.), email addresses and phone numbers in notes are underlined in an expanded block
 and open the browser, mail or phone app when tapped. On the task page they show as chips under the notes box.
 Dates like 2026-11-01 are not taken for phone numbers.
 
-## 44. Weekly review notification ☐ (round 4 PR 2)
+## 44. Weekly review notification ◐ (round 4 PR 2)
 
 Off by default; pick the day and time (default Sunday 6 pm). Last week's added and done counts, what is
 overdue and what is due in the coming week. Tapping it opens the list on Next 7 days.
 
-## 45. Time estimates ◐ (round 4 PR 1)
+Built: Settings → Reminders → **Weekly review** (synced), phone and iPad. The numbers are worked out when the
+reminder is scheduled, which happens whenever the app changes anything, so they are as of the last use.
+
+## 45. Time estimates ☑ (PR #9, merged 2026-11-01)
 
 Task page → **Time needed**: 15 min, 30 min, 1 h, 2 h, 4 h, 8 h, or Other (e.g. 45, 1.5h, 1h30). Shown on the
 block ("1h30") and in its details; a line above the list gives the total for the tasks shown. Copied to the

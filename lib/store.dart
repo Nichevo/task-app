@@ -413,7 +413,7 @@ class AppStore extends ChangeNotifier {
     final now = at ?? DateTime.now();
     final oldDue = t.dueAt, oldSnooze = t.snoozedUntil;
     final oldSteps = {for (final st in t.steps) st.id: st.done};
-    final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue);
+    final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue, missed: missedCycles(t, now));
     data.skips[record.key] = record;
     t.dueAt = t.repeat!.nextDue(due: oldDue, completedAt: now);
     t.snoozedUntil = null;

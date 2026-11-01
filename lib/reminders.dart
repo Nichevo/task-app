@@ -7,6 +7,7 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'models.dart';
+import 'stats.dart';
 
 /// A Done or Snooze press on a notification, waiting for the app to apply it.
 class PendingAction {
@@ -82,6 +83,21 @@ class Reminders {
   /// Called when a button on a notification is pressed while the app is open.
   VoidCallback? onAction;
 
+  /// Called when the weekly review notification is tapped while the app is running.
+  VoidCallback? onOpenReview;
+
+  /// The app was started by tapping the weekly review notification.
+  bool startedFromReview = false;
+
+  static bool _isReview(String? payload) {
+    if (payload == null || payload.isEmpty) return false;
+    try {
+      return (jsonDecode(payload) as Map)['review'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   /// The Done / snooze buttons on an iPhone or iPad notification (long-press to see them).
@@ -107,11 +123,18 @@ class Reminders {
     await _plugin.initialize(
       settings: InitializationSettings(android: const AndroidInitializationSettings('@mipmap/ic_launcher'), iOS: _darwin),
       onDidReceiveNotificationResponse: (r) async {
+        if (r.actionId == null && _isReview(r.payload)) {
+          onOpenReview?.call();
+          return;
+        }
         await _recordAction(r);
         onAction?.call();
       },
       onDidReceiveBackgroundNotificationResponse: notificationActionInBackground,
     );
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    startedFromReview =
+        (launch?.didNotificationLaunchApp ?? false) && _isReview(launch?.notificationResponse?.payload);
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
@@ -167,6 +190,7 @@ class Reminders {
         if (budget <= 0) break;
       }
       if (data.overdueMode == OverdueMode.daily) await _dailySummary(data, now);
+      if (data.weeklyReview) await _weeklyReview(data, now);
     } catch (e) {
       debugPrint('Could not schedule reminders: $e');
     }
@@ -196,6 +220,54 @@ class Reminders {
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
+    );
+  }
+
+  /// Next time the weekly review is due: the chosen weekday and time, after [now].
+  static DateTime nextReview(AppData data, DateTime now) {
+    var at = DateTime(now.year, now.month, now.day, data.weeklyAt ~/ 60, data.weeklyAt % 60);
+    at = DateTime(at.year, at.month, at.day + (data.weeklyDay - at.weekday) % 7, at.hour, at.minute);
+    if (!at.isAfter(now)) at = DateTime(at.year, at.month, at.day + 7, at.hour, at.minute);
+    return at;
+  }
+
+  /// The words of the weekly review, worked out from the tasks as they are when scheduling
+  /// (it is re-scheduled whenever anything changes, so it is up to date as of the last use).
+  static (String, String) reviewText(AppData data, DateTime at) {
+    final r = Stats(data, at).weekReview(at);
+    String n(int c, String one) => '$c $one${c == 1 ? '' : 's'}';
+    return (
+      'Weekly review: ${r.done} done, ${r.added} added',
+      [
+        'Last 7 days: ${n(r.added, 'task')} added, ${r.done} ticked off.',
+        if (r.overdue > 0) '${n(r.overdue, 'task')} overdue.',
+        r.dueNext == 0 ? 'Nothing due in the coming week.' : '${n(r.dueNext, 'task')} due in the coming week.',
+      ].join(' '),
+    );
+  }
+
+  /// One notification a week (day and time from Settings) with last week's numbers.
+  Future<void> _weeklyReview(AppData data, DateTime now) async {
+    final at = nextReview(data, now);
+    final (title, body) = reviewText(data, at);
+    await _plugin.zonedSchedule(
+      id: 2,
+      title: title,
+      body: body,
+      payload: jsonEncode({'review': true}),
+      scheduledDate: tz.TZDateTime.from(at.toUtc(), tz.UTC),
+      notificationDetails: NotificationDetails(
+        iOS: const DarwinNotificationDetails(),
+        android: AndroidNotificationDetails(
+          'review',
+          'Weekly review',
+          channelDescription: 'Last week\'s numbers and what is coming up',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          styleInformation: BigTextStyleInformation(body),
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   }
 
