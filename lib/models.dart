@@ -23,6 +23,8 @@ class Task {
     this.doneWhere,
     this.estimate,
     this.seriesId,
+    this.place,
+    this.placeLeave = false,
     DateTime? updatedAt,
   })  : steps = steps ?? [],
         updatedAt = updatedAt ?? createdAt;
@@ -79,6 +81,13 @@ class Task {
 
   String get series => seriesId ?? id;
 
+  /// Name of a saved place (Settings, Places) to be reminded at; places themselves stay on the
+  /// phone, so only the name travels with the task.
+  String? place;
+
+  /// Remind when leaving [place] instead of arriving.
+  bool placeLeave;
+
   int get stepsDone => steps.where((s) => s.done).length;
 
   /// Last time anything about this task changed; the newer copy wins when syncing.
@@ -107,6 +116,8 @@ class Task {
       ..repeat = r
       ..remindBefore = remindBefore
       ..estimate = estimate
+      ..place = place
+      ..placeLeave = placeLeave
       ..seriesId = series
       ..source = TaskSource.repeat;
     // Each repeat starts with the checklist unticked.
@@ -144,6 +155,8 @@ class Task {
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
         if (estimate != null) 'estimate': estimate,
         if (seriesId != null) 'series': seriesId,
+        if (place != null) 'place': place,
+        if (placeLeave) 'placeLeave': true,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -169,6 +182,8 @@ class Task {
         doneWhere: GeoPoint.tryParse(j['doneWhere']),
         estimate: (j['estimate'] as num?)?.toInt(),
         seriesId: j['series'] as String?,
+        place: j['place'] as String?,
+        placeLeave: j['placeLeave'] as bool? ?? false,
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;

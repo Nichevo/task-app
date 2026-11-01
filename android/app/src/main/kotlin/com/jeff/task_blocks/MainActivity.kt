@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -59,6 +61,20 @@ class MainActivity : FlutterActivity() {
               })
         }
         "recognizeText" -> recognizeText(call.argument<String>("path")!!, result)
+        "setPlaces" ->
+            result.success(
+                PlaceStore.save(
+                    this, call.argument<String>("places")!!, call.argument<Boolean>("summary") ?: false, call.argument<String>("dir")!!))
+        "batteryUnrestricted" ->
+            result.success(getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName))
+        "askBatteryUnrestricted" -> {
+          try {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+          } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+          }
+          result.success(null)
+        }
         else -> result.notImplemented()
       }
     }

@@ -287,7 +287,7 @@ Jeff asked for a final review before round 3 was built. Done in the same PR:
 Jeff's feedback on round 3 (2026-10-28). Items 31 and 32 are bugs; items from 30 on are the feature list,
 to be agreed before building.
 
-## 30. Where tasks came from, in Statistics ◐ (round 4 PR 2)
+## 30. Where tasks came from, in Statistics ☑ (PR #10, merged 2026-11-01)
 
 **Feedback:** "Would be good to show where a task was created from in statistics."
 
@@ -319,7 +319,7 @@ nothing on that request, so the list stayed empty until the next scheduled refre
 Each widget now redraws itself straight away when its size changes. If this still leaves a gap of a few
 seconds, that is the phone restarting the app's widget service and can't be avoided.
 
-## 33. Place-based reminders ☐
+## 33. Place-based reminders ◐ (round 4 PR 3)
 
 **Feedback (2026-10-29):** "GPS based notification: arrived home on the day of the task, push a notification."
 
@@ -329,6 +329,14 @@ optional "Remind me when I arrive at / leave …"; with a due date it fires on a
 overdue, without one on the next arrival. A general opt-in: "When I arrive at a place, show that day's
 tasks" as one notification. Needs location "Allow all the time" and the app set to unrestricted battery on
 Samsung (one-time setup card). Accuracy about 100 to 200 m, alerts can be a few minutes late.
+
+Built: Settings → **Places** (Android): "Save where I am" with a name; tap a place to rename it, change the
+radius (100 m to 1 km) or delete it. Renaming a place moves its tasks to the new name. The task page has
+**Place reminder**: "When I arrive at …" or "When I leave …". The setup card shows until location is "Allow all
+the time" and the battery is unrestricted. Android's geofencing watches the places (re-registered after a
+reboot or update); on a crossing, `PlaceReceiver.kt` reads the saved `tasks.json` and notifies, at most once a
+day per task (once in all for tasks without a date), skipping snoozed tasks. The opt-in summary lists what is
+due today or overdue, once per place per day.
 
 ## 34. Label an email to make a task ☐ (moved to phase 5, 2026-11-01)
 
@@ -351,7 +359,7 @@ checklist, keeps the same task, and records the skip for item 36. Snooze is unch
 Built: the Android reminder of a repeating task shows Done, Skip, 1 hour (Android shows three buttons); on the
 iPad, Done, Skip, 1 hour, Tomorrow. Skips sync and each task in a repeating series now carries the series id.
 
-## 36. Repeats and timing in Statistics ◐ (round 4 PR 2)
+## 36. Repeats and timing in Statistics ☑ (PR #10, merged 2026-11-01)
 
 **Feedback (2026-10-30):** how often repeating tasks get done or not, and how early or late tasks are done.
 
@@ -375,7 +383,7 @@ The day chips were only offered for "every 1 week". They now show for any number
 later chosen day in the same week, else the first chosen day of the week N weeks on. Shown as "Every 2 weeks
 on Mon, Thu".
 
-## 38. Added-by-date and added-vs-done charts ◐ (round 4 PR 2)
+## 38. Added-by-date and added-vs-done charts ☑ (PR #10, merged 2026-11-01)
 
 **Feedback (2026-10-30):** a graph of tasks added by date, and added vs done with a line for total
 outstanding, with the option to show by category.
@@ -487,7 +495,7 @@ Web links (http, https, www.), email addresses and phone numbers in notes are un
 and open the browser, mail or phone app when tapped. On the task page they show as chips under the notes box.
 Dates like 2026-11-01 are not taken for phone numbers.
 
-## 44. Weekly review notification ◐ (round 4 PR 2)
+## 44. Weekly review notification ☑ (PR #10, merged 2026-11-01)
 
 Off by default; pick the day and time (default Sunday 6 pm). Last week's added and done counts, what is
 overdue and what is due in the coming week. Tapping it opens the list on Next 7 days.
@@ -501,10 +509,15 @@ Task page → **Time needed**: 15 min, 30 min, 1 h, 2 h, 4 h, 8 h, or Other (e.g
 block ("1h30") and in its details; a line above the list gives the total for the tasks shown. Copied to the
 next repeat. CSV gains an "Estimate (min)" column, read back on import.
 
-## 46. Backups and restore ☐ (round 4 PR 3)
+## 46. Backups and restore ◐ (round 4 PR 3)
 
 A daily backup of all tasks, the archive and settings, kept for 7 days. Settings → Backups lists them by
 date and restores one after asking. Save a backup file or open one by hand, e.g. for a new device.
+
+Built: Settings → **Backups**, all platforms. One file a day in the app's own folder (`backups/`), older than 7
+days deleted. Restoring keeps the current data as a "before a restore" backup first, then replaces everything;
+restored tasks count as just edited and tasks not in the backup count as deleted, so the restore wins on every
+synced device. "Save a backup file" and "Open a backup file" use the same format.
 
 ## 52. Kanban board ☐ (round 4 PR 4)
 

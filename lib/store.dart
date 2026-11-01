@@ -10,6 +10,7 @@ import 'home_widgets.dart';
 import 'input_parse.dart';
 import 'location.dart';
 import 'models.dart';
+import 'places.dart';
 import 'reminders.dart';
 import 'task_list.dart';
 
@@ -49,6 +50,12 @@ class AppStore extends ChangeNotifier {
   /// until the first load, which counts as seen.
   String? seenVersion;
 
+  /// Saved places for place reminders (device-only: coordinates stay on this phone).
+  final places = <Place>[];
+
+  /// On arriving at a saved place, show one notification with that day's tasks (device-only).
+  bool arrivalSummary = false;
+
   /// Set by [load] when there was saved data from before, so an update (not a fresh install)
   /// shows "What's new".
   bool hadData = false;
@@ -84,12 +91,16 @@ class AppStore extends ChangeNotifier {
         filterSaved = true;
       }
       seenVersion = s['seenVersion'] as String?;
+      places.addAll([for (final p in s['places'] as List? ?? []) ?Place.tryParse(p)]);
+      arrivalSummary = s['arrivalSummary'] as bool? ?? false;
     }
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
     if (_cleanArchive()) await _writeData();
     notifyListeners();
     await applyPending();
+    await backupIfDue();
+    unawaited(watchPlaces());
     unawaited(reminders?.schedule(data));
     unawaited(widgets?.push(data));
     unawaited(sync());
@@ -154,6 +165,8 @@ class AppStore extends ChangeNotifier {
       'recordLocation': recordLocation,
       'quickFilter': quickFilter.name,
       if (seenVersion != null) 'seenVersion': seenVersion,
+      if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
+      if (arrivalSummary) 'arrivalSummary': true,
     }));
   }
 
@@ -183,6 +196,7 @@ class AppStore extends ChangeNotifier {
     if (!_dirty) return;
     _dirty = false;
     await _writeData();
+    unawaited(backupIfDue());
     unawaited(reminders?.schedule(data));
     unawaited(widgets?.push(data));
     if (dropbox?.isConnected ?? false) {
@@ -430,6 +444,120 @@ class AppStore extends ChangeNotifier {
       }
       changed(task: t);
     };
+  }
+
+  // --- Places (item 33) ---
+
+  /// Hands the saved places to Android to watch. False when Android refused (no "all the time"
+  /// location access yet).
+  Future<bool> watchPlaces() => PlaceReminders.watch(places, arrivalSummary: arrivalSummary, dir: dirPath);
+
+  /// Saves the current location as a place. Null when the location can't be had.
+  Future<Place?> addPlaceHere(String name, {int radius = 150}) async {
+    final loc = location;
+    if (loc == null || !await loc.requestAccess()) return null;
+    final here = await loc.current();
+    if (here == null) return null;
+    final p = Place.create(name, here.lat, here.lng, radius: radius);
+    places.add(p);
+    await _placesChanged();
+    return p;
+  }
+
+  /// Renames a place; tasks reminding at it follow the new name.
+  Future<void> updatePlace(Place p, {String? name, int? radius}) async {
+    if (name != null && name.trim().isNotEmpty && name.trim() != p.name) {
+      for (final t in data.active.where((t) => t.place == p.name)) {
+        t.place = name.trim();
+        changed(task: t);
+      }
+      p.name = name.trim();
+    }
+    if (radius != null) p.radius = radius;
+    await _placesChanged();
+  }
+
+  /// Removes a place from this phone. Tasks keep the name (another phone may have the place).
+  Future<void> deletePlace(Place p) async {
+    places.remove(p);
+    await _placesChanged();
+  }
+
+  Future<void> setArrivalSummary(bool on) async {
+    arrivalSummary = on;
+    await _placesChanged();
+  }
+
+  Future<void> _placesChanged() async {
+    notifyListeners();
+    await saveDeviceSettings();
+    await watchPlaces();
+  }
+
+  // --- Backups (item 46) ---
+
+  static const backupDays = 7;
+
+  Directory? get _backupDir => _dir == null ? null : Directory('${_dir!.path}/backups');
+
+  static String _day(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Saved backups, newest first.
+  Future<List<File>> backups() async {
+    final dir = _backupDir;
+    if (dir == null || !await dir.exists()) return [];
+    final files = await dir.list().where((f) => f is File && f.path.endsWith('.json')).cast<File>().toList();
+    files.sort((a, b) => b.path.compareTo(a.path));
+    return files;
+  }
+
+  /// Writes today's backup if there isn't one yet, and deletes those older than [backupDays].
+  Future<void> backupIfDue() async {
+    final dir = _backupDir;
+    if (dir == null) return;
+    try {
+      await dir.create(recursive: true);
+      final today = File('${dir.path}/tasks-${_day(DateTime.now())}.json');
+      if (!await today.exists()) await today.writeAsString(jsonEncode(data.toJson()), flush: true);
+      final cutoff = 'tasks-${_day(DateTime.now().subtract(const Duration(days: backupDays)))}';
+      for (final f in await backups()) {
+        final name = f.uri.pathSegments.last;
+        if (name.compareTo(cutoff) < 0) await f.delete();
+      }
+    } catch (e) {
+      debugPrint('backup: $e');
+    }
+  }
+
+  /// The whole of the current data as backup text (for "Save a backup file").
+  String backupText() => jsonEncode(data.toJson());
+
+  /// Replaces everything with a backup ([text] is a saved tasks.json). The current data is kept
+  /// as a backup first. So the restore wins over Dropbox, every restored task counts as just
+  /// edited and tasks not in the backup count as deleted. Throws if the text isn't a backup.
+  Future<void> restoreBackup(String text) async {
+    final restored = AppData.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    final dir = _backupDir;
+    if (dir != null) {
+      await dir.create(recursive: true);
+      final stamp = DateTime.now().toIso8601String().substring(11, 19).replaceAll(':', '');
+      await File('${dir.path}/tasks-${_day(DateTime.now())}-before-restore-$stamp.json').writeAsString(backupText());
+    }
+    final now = DateTime.now().toUtc();
+    final keep = {for (final t in restored.allTasks) t.id};
+    for (final t in data.allTasks) {
+      if (!keep.contains(t.id)) restored.deleted[t.id] = now;
+    }
+    for (final t in restored.allTasks) {
+      restored.deleted.remove(t.id);
+      t.updatedAt = now;
+    }
+    restored.updatedAt = restored.orderUpdatedAt = restored.settingsUpdatedAt = now;
+    data = restored;
+    _dirty = true;
+    notifyListeners();
+    await flush();
   }
 
   /// Picks a quick filter chip and remembers it on this device.
