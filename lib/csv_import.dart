@@ -85,7 +85,7 @@ int importCsvText(AppData data, String text) {
   int col(String name) => header.indexOf(name);
   final iTask = col('task'), iNotes = col('notes'), iCat = col('category'), iCreated = col('created');
   final iDue = col('due'), iClosed = col('closed'), iStatus = col('status'), iStar = col('starred');
-  final iSteps = col('steps'), iSource = col('source');
+  final iSteps = col('steps'), iSource = col('source'), iEst = col('estimate (min)');
   if (iTask < 0) throw const FormatException('The file needs a "Task" column.');
   String cell(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
 
@@ -113,7 +113,8 @@ int importCsvText(AppData data, String text) {
       ..dueAt = _parseDate(cell(r, iDue))
       ..closedAt = closed
       ..categoryId = cat?.id
-      ..starred = const {'yes', 'true', '1', 'y'}.contains(cell(r, iStar).toLowerCase());
+      ..starred = const {'yes', 'true', '1', 'y'}.contains(cell(r, iStar).toLowerCase())
+      ..estimate = int.tryParse(cell(r, iEst));
     for (final part in cell(r, iSteps).split(';')) {
       final m = RegExp(r'^\s*(?:\[([ xX])\])?\s*(.+?)\s*$').firstMatch(part);
       if (m == null || m.group(2)!.isEmpty) continue;

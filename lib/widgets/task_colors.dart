@@ -5,13 +5,19 @@ import '../models.dart';
 /// Green when new, through yellow and orange, to red after [hoursToRed].
 /// With [byDue], a task that has a due date is red by its due date instead.
 Color ageColor(Task t, double hoursToRed, {bool byDue = false, DateTime? now}) {
+  final progress = ageProgress(t, hoursToRed, byDue: byDue, now: now).clamp(0.0, 1.0);
+  return HSVColor.fromAHSV(1, 120 * (1 - progress), 0.6, 0.88).toColor();
+}
+
+/// How far along a task is from green (0) to red (1). Not capped, so among red tasks the one
+/// furthest past red sorts first.
+double ageProgress(Task t, double hoursToRed, {bool byDue = false, DateTime? now}) {
   now ??= DateTime.now();
   final start = t.colourStart(now);
   final age = now.difference(start).inMinutes / 60;
   final due = t.dueAt;
   final span = byDue && due != null ? due.difference(start).inMinutes / 60 : hoursToRed;
-  final progress = span <= 0 ? 1.0 : (age / span).clamp(0.0, 1.0);
-  return HSVColor.fromAHSV(1, 120 * (1 - progress), 0.6, 0.88).toColor();
+  return span <= 0 ? double.maxFinite : age / span;
 }
 
 /// Labels for the colour-speed slider, in hours.

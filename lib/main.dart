@@ -16,18 +16,21 @@ void main() {
   final store = AppStore(reminders: reminders, widgets: widgets, location: LocationRecorder());
   reminders.onAction = store.applyPending;
   // Don't hold up loading the tasks behind the notification-permission prompt.
-  Future.wait([reminders.init(), store.load()]).then((_) {
+  final ready = Future.wait([reminders.init(), store.load()]).then((_) {
     reminders.dir = store.dirPath;
     reminders.schedule(store.data);
   });
-  runApp(TaskApp(store: store, widgets: widgets));
+  runApp(TaskApp(store: store, widgets: widgets, ready: ready));
 }
 
 class TaskApp extends StatefulWidget {
-  const TaskApp({super.key, required this.store, this.widgets});
+  const TaskApp({super.key, required this.store, this.widgets, this.ready});
 
   final AppStore store;
   final HomeWidgets? widgets;
+
+  /// Completes once the saved tasks are loaded; then "What's new" may show.
+  final Future<void>? ready;
 
   @override
   State<TaskApp> createState() => _TaskAppState();
@@ -56,6 +59,7 @@ class _TaskAppState extends State<TaskApp> {
       onPause: widget.store.flush,
     );
     _takeShared();
+    widget.ready?.then((_) => _onHome((home) => home.maybeShowWhatsNew()));
   }
 
   @override

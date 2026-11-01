@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
 import '../store.dart';
+import '../task_list.dart';
+import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -220,6 +222,45 @@ class _TaskPageState extends State<TaskPage> {
     if (r != null) _update(() => task.repeat = r);
   }
 
+  /// Moves a repeating task to its next date without ticking it off.
+  void _skip() {
+    final undo = widget.store.skip(task);
+    setState(() {});
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('Skipped. Next due ${dateTimeFmt.format(task.dueAt!)}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            undo();
+            if (mounted) setState(() {});
+          },
+        ),
+      ));
+  }
+
+  Future<void> _pickEstimate() async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('About how long will it take?'),
+        children: [
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, -1), child: const Text('Not set')),
+          for (final m in estimateOptions)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, m), child: Text(describeMinutes(m))),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 0), child: const Text('Other…')),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked == -1) return _update(() => task.estimate = null);
+    if (picked > 0) return _update(() => task.estimate = picked);
+    final typed = await askText(context, 'Minutes (or e.g. 1.5h)', initial: task.estimate?.toString() ?? '');
+    final minutes = parseEstimate(typed ?? '');
+    if (minutes != null) _update(() => task.estimate = minutes);
+  }
+
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -282,9 +323,26 @@ class _TaskPageState extends State<TaskPage> {
           textCapitalization: TextCapitalization.sentences,
           onChanged: (v) {
             task.notes = v;
+            setState(() {});
             widget.store.changed(task: task);
           },
         ),
+        // Links in the notes, ready to tap (the box above is for editing).
+        if (findLinks(task.notes) case final links when links.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Wrap(spacing: 6, runSpacing: 4, children: [
+              for (final l in links)
+                ActionChip(
+                  avatar: Icon(
+                      switch (l.uri.scheme) { 'mailto' => Icons.mail_outline, 'tel' => Icons.call_outlined, _ => Icons.open_in_new },
+                      size: 16),
+                  label: Text(l.text, overflow: TextOverflow.ellipsis),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => openLink(l.uri),
+                ),
+            ]),
+          ),
         const SizedBox(height: 12),
         Row(children: [
           const Icon(Icons.checklist),
@@ -413,6 +471,26 @@ class _TaskPageState extends State<TaskPage> {
                   tooltip: 'Stop repeating',
                   icon: const Icon(Icons.clear),
                   onPressed: () => _update(() => task.repeat = null),
+                ),
+        ),
+        if (task.repeat != null && !archived)
+          ListTile(
+            leading: const Icon(Icons.skip_next),
+            title: const Text('Skip this time'),
+            subtitle: const Text('Move it to the next date without ticking it off'),
+            onTap: _skip,
+          ),
+        ListTile(
+          leading: const Icon(Icons.timer_outlined),
+          title: const Text('Time needed'),
+          subtitle: Text(task.estimate == null ? 'Not set' : 'About ${describeMinutes(task.estimate!)}'),
+          onTap: archived ? null : _pickEstimate,
+          trailing: task.estimate == null || archived
+              ? null
+              : IconButton(
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => _update(() => task.estimate = null),
                 ),
         ),
         if (!archived) ...[

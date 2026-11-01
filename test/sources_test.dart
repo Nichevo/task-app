@@ -61,7 +61,7 @@ void main() {
     test('CSV export writes the source and import reads it back', () {
       final d = AppData(active: [Task.create('Dentist', source: TaskSource.calendar)]);
       final csv = buildCsv(d);
-      expect(csv, contains(',Calendar\r\n'));
+      expect(csv, contains(',Calendar,\r\n'));
       final into = AppData();
       expect(importCsvText(into, csv), 1);
       expect(into.active.single.source, TaskSource.calendar);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models.dart';
+import '../task_list.dart';
+import 'link_text.dart';
 
 final dateTimeFmt = DateFormat('EEE d MMM yyyy, HH:mm');
 
@@ -30,6 +32,7 @@ class TaskBlock extends StatelessWidget {
     this.lockedBy,
     this.categoryName,
     this.onStep,
+    this.onSkip,
   });
 
   final Task task;
@@ -52,6 +55,9 @@ class TaskBlock extends StatelessWidget {
 
   /// Ticks a checklist step from the expanded block.
   final ValueChanged<TaskStep>? onStep;
+
+  /// Moves a repeating task to its next date without ticking it off.
+  final VoidCallback? onSkip;
 
   /// One-line notes preview on the thin block, only when there are notes.
   bool get preview => !expanded && task.notes.trim().isNotEmpty;
@@ -119,6 +125,15 @@ class TaskBlock extends StatelessWidget {
                                   child: Text('${task.stepsDone}/${task.steps.length}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
                                 ),
+                              if (task.estimate != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Tooltip(
+                                    message: 'About ${describeMinutes(task.estimate!)}',
+                                    child: Text(shortMinutes(task.estimate!),
+                                        style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
+                                  ),
+                                ),
                               if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
                               if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
                             ]),
@@ -158,10 +173,14 @@ class TaskBlock extends StatelessWidget {
         if (archived) _line('Closed', dateTimeFmt.format(task.closedAt!)),
         if (categoryName != null) _line('Category', categoryName!),
         if (task.repeat != null) _line('Repeats', task.repeat!.describe()),
+        if (task.estimate != null) _line('Takes', 'about ${describeMinutes(task.estimate!)}'),
         if (lockedBy != null) _line('After', lockedBy!),
         if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),
         if (task.notes.isNotEmpty)
-          Padding(padding: const EdgeInsets.only(top: 6), child: Text(task.notes)),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: LinkText(task.notes, linkColor: const Color(0xFF0D47A1)),
+          ),
         if (task.steps.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -185,12 +204,21 @@ class TaskBlock extends StatelessWidget {
           ),
         Align(
           alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            style: TextButton.styleFrom(foregroundColor: ink),
-            onPressed: onOpen,
-            icon: const Icon(Icons.edit, size: 18),
-            label: Text(archived ? 'Details' : 'Edit / set due date'),
-          ),
+          child: Wrap(children: [
+            if (onSkip != null && task.repeat != null && !archived)
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: ink),
+                onPressed: onSkip,
+                icon: const Icon(Icons.skip_next, size: 18),
+                label: const Text('Skip'),
+              ),
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: ink),
+              onPressed: onOpen,
+              icon: const Icon(Icons.edit, size: 18),
+              label: Text(archived ? 'Details' : 'Edit / set due date'),
+            ),
+          ]),
         ),
       ]),
     );

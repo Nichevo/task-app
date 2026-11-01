@@ -11,6 +11,7 @@ import 'input_parse.dart';
 import 'location.dart';
 import 'models.dart';
 import 'reminders.dart';
+import 'task_list.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
 class AppStore extends ChangeNotifier {
@@ -41,6 +42,17 @@ class AppStore extends ChangeNotifier {
   /// When the app last offered tasks from calendar events on its own (device-only).
   DateTime? eventPromptAt;
 
+  /// The quick filter chip chosen above the list (device-only).
+  QuickFilter quickFilter = QuickFilter.all;
+
+  /// The app version whose "What's new" was last shown (device-only). Null on a fresh install
+  /// until the first load, which counts as seen.
+  String? seenVersion;
+
+  /// Set by [load] when there was saved data from before, so an update (not a fresh install)
+  /// shows "What's new".
+  bool hadData = false;
+
   Directory? _dir;
   Timer? _uploadTimer;
   Timer? _flushTimer;
@@ -52,7 +64,9 @@ class AppStore extends ChangeNotifier {
     final dataFile = File('${_dir!.path}/tasks.json');
     if (await dataFile.exists()) {
       data = AppData.fromJson(jsonDecode(await dataFile.readAsString()));
+      hadData = true;
     }
+    var filterSaved = false;
     final settingsFile = File('${_dir!.path}/device_settings.json');
     if (await settingsFile.exists()) {
       final s = jsonDecode(await settingsFile.readAsString()) as Map<String, dynamic>;
@@ -64,7 +78,15 @@ class AppStore extends ChangeNotifier {
       }
       eventPromptAt = DateTime.tryParse(s['eventPromptAt'] as String? ?? '');
       recordLocation = s['recordLocation'] as bool? ?? false;
+      final f = QuickFilter.values.where((f) => f.name == s['quickFilter']).firstOrNull;
+      if (f != null) {
+        quickFilter = f;
+        filterSaved = true;
+      }
+      seenVersion = s['seenVersion'] as String?;
     }
+    // The old "only show the next 30 days" setting becomes the Next 30 days chip.
+    if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
     if (_cleanArchive()) await _writeData();
     notifyListeners();
     await applyPending();
@@ -98,6 +120,8 @@ class AppStore extends ChangeNotifier {
       if (t == null || t.closedAt != null) continue;
       if (a.action == 'done') {
         complete(t, at: a.at);
+      } else if (a.action == 'skip') {
+        if (t.repeat != null) skip(t, at: a.at);
       } else {
         snooze(t, a.snoozeUntil!);
       }
@@ -128,6 +152,8 @@ class AppStore extends ChangeNotifier {
       'dropboxRefreshToken': dropbox?.refreshToken,
       'eventPromptAt': eventPromptAt?.toIso8601String(),
       'recordLocation': recordLocation,
+      'quickFilter': quickFilter.name,
+      if (seenVersion != null) 'seenVersion': seenVersion,
     }));
   }
 
@@ -379,6 +405,38 @@ class AppStore extends ChangeNotifier {
     // up later would get the wrong place.
     if (at == null || DateTime.now().difference(at).inMinutes < 2) _locate([t], done: true);
     return next;
+  }
+
+  /// Moves a repeating task on to its next due date without ticking it off: same task, checklist
+  /// unticked, snooze cleared. The skip is recorded for the statistics. Returns how to undo it.
+  VoidCallback skip(Task t, {DateTime? at}) {
+    final now = at ?? DateTime.now();
+    final oldDue = t.dueAt, oldSnooze = t.snoozedUntil;
+    final oldSteps = {for (final st in t.steps) st.id: st.done};
+    final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue);
+    data.skips[record.key] = record;
+    t.dueAt = t.repeat!.nextDue(due: oldDue, completedAt: now);
+    t.snoozedUntil = null;
+    for (final st in t.steps) {
+      st.done = false;
+    }
+    changed(task: t);
+    return () {
+      data.skips.remove(record.key);
+      t.dueAt = oldDue;
+      t.snoozedUntil = oldSnooze;
+      for (final st in t.steps) {
+        st.done = oldSteps[st.id] ?? st.done;
+      }
+      changed(task: t);
+    };
+  }
+
+  /// Picks a quick filter chip and remembers it on this device.
+  void setQuickFilter(QuickFilter f) {
+    quickFilter = f;
+    notifyListeners();
+    saveDeviceSettings();
   }
 
   /// Undoes [complete].
