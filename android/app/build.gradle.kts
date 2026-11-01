@@ -60,4 +60,6 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     // On-device text recognition for "Photo of a list" (nothing is uploaded).
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // Geofencing for place reminders (the same library the location plugin already uses).
+    implementation("com.google.android.gms:play-services-location:21.2.0")
 }

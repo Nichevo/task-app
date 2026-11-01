@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
+import '../places.dart';
 import '../store.dart';
 import '../task_list.dart';
 import '../widgets/link_text.dart';
@@ -261,6 +262,33 @@ class _TaskPageState extends State<TaskPage> {
     if (minutes != null) _update(() => task.estimate = minutes);
   }
 
+  Future<void> _pickPlace() async {
+    final names = {for (final p in widget.store.places) p.name, ?task.place}.toList();
+    if (widget.store.places.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No places saved yet. Add them in Settings, Places (save where you are).')));
+      if (task.place == null) return;
+    }
+    final picked = await showDialog<(String?, bool)>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Remind me'),
+        children: [
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, (null, false)), child: const Text('No place reminder')),
+          for (final n in names) ...[
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, (n, false)), child: Text('When I arrive at $n')),
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, (n, true)), child: Text('When I leave $n')),
+          ],
+        ],
+      ),
+    );
+    if (picked == null) return;
+    _update(() {
+      task.place = picked.$1;
+      task.placeLeave = picked.$1 != null && picked.$2;
+    });
+  }
+
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -479,6 +507,26 @@ class _TaskPageState extends State<TaskPage> {
             title: const Text('Skip this time'),
             subtitle: const Text('Move it to the next date without ticking it off'),
             onTap: _skip,
+          ),
+        if (!archived && (PlaceReminders.supported || task.place != null))
+          ListTile(
+            leading: const Icon(Icons.place_outlined),
+            title: const Text('Place reminder'),
+            subtitle: Text(task.place == null
+                ? 'Remind me when I arrive at or leave a place'
+                : '${task.placeLeave ? 'When I leave' : 'When I arrive at'} ${task.place}'
+                    '${!PlaceReminders.supported || widget.store.places.any((p) => p.name == task.place) ? '' : ' (not saved on this phone)'}'),
+            onTap: PlaceReminders.supported ? _pickPlace : null,
+            trailing: task.place == null
+                ? null
+                : IconButton(
+                    tooltip: 'Remove place reminder',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => _update(() {
+                      task.place = null;
+                      task.placeLeave = false;
+                    }),
+                  ),
           ),
         ListTile(
           leading: const Icon(Icons.timer_outlined),

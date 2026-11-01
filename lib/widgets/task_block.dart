@@ -174,6 +174,7 @@ class TaskBlock extends StatelessWidget {
         if (categoryName != null) _line('Category', categoryName!),
         if (task.repeat != null) _line('Repeats', task.repeat!.describe()),
         if (task.estimate != null) _line('Takes', 'about ${describeMinutes(task.estimate!)}'),
+        if (task.place != null) _line('Place', '${task.placeLeave ? 'Leaving' : 'Arriving at'} ${task.place}'),
         if (lockedBy != null) _line('After', lockedBy!),
         if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),
         if (task.notes.isNotEmpty)

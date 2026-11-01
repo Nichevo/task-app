@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.4.2', 'November 2026', [
+    'Place reminders (Android): save places where you are, then have a task remind you when you arrive or leave.',
+    'Optional notification with the day\'s tasks when you arrive at a saved place.',
+    'Daily backups kept for a week (Settings, Backups), with restore, and backup files to save or open.',
+  ]),
   Release('1.4.1', 'November 2026', [
     'Statistics: where tasks came from, with the share of each source that got done.',
     'Statistics: repeating tasks with how often each was done, skipped or missed.',

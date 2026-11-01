@@ -7,7 +7,10 @@ import '../models.dart';
 import '../native.dart';
 import '../store.dart';
 import '../task_list.dart';
+import '../places.dart';
 import 'about_page.dart';
+import 'backups_page.dart';
+import 'places_page.dart';
 import '../widgets/task_colors.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
@@ -570,6 +573,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ],
+            if (PlaceReminders.supported)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.place_outlined),
+                title: const Text('Places'),
+                subtitle: Text(store.places.isEmpty
+                    ? 'Reminders when you arrive at or leave a place'
+                    : store.places.map((p) => p.name).join(', ')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlacesPage(store: store))),
+              ),
             const Divider(height: 40),
             _heading('Archive'),
             ListTile(
@@ -624,6 +638,14 @@ class _SettingsPageState extends State<SettingsPage> {
               style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
             ),
             const Divider(height: 40),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.history),
+              title: const Text('Backups'),
+              subtitle: const Text('A copy every day for the last week; restore one, or save and open backup files'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => BackupsPage(store: store))),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.info_outline),
