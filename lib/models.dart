@@ -292,7 +292,17 @@ class ChecklistTemplate {
 
 /// A note that a task was ticked off, kept for the statistics after the archive is cleaned up.
 class DoneRecord {
-  const DoneRecord({required this.at, required this.tookMinutes, this.onTime, this.categoryId});
+  const DoneRecord({
+    required this.at,
+    required this.tookMinutes,
+    this.onTime,
+    this.categoryId,
+    this.source,
+    this.title,
+    this.series,
+    this.lateMinutes,
+    this.missed = 0,
+  });
 
   final DateTime at;
 
@@ -303,11 +313,38 @@ class DoneRecord {
   final bool? onTime;
   final String? categoryId;
 
+  /// How the task got into the app ([Task.source]); null on records from before 1.4.
+  final String? source;
+
+  /// The task's name, so a repeating series can still be named after its tasks are cleaned up.
+  final String? title;
+
+  /// [Task.series] when the task repeats.
+  final String? series;
+
+  /// How long after the due time it was ticked off, in minutes; negative = early. Null without
+  /// a due date, and on records from before 1.4.
+  final int? lateMinutes;
+
+  /// Whole repeat cycles that went by without a tick before this one was done (fixed schedules).
+  final int missed;
+
+  /// When the task was added.
+  DateTime get createdAt => at.subtract(Duration(minutes: tookMinutes));
+
+  /// The due time, when it had one and the record is new enough to know it.
+  DateTime? get due => lateMinutes == null ? null : at.subtract(Duration(minutes: lateMinutes!));
+
   factory DoneRecord.of(Task t, DateTime at) => DoneRecord(
         at: at,
         tookMinutes: at.difference(t.createdAt).inMinutes,
         onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
         categoryId: t.categoryId,
+        source: t.source,
+        title: t.title,
+        series: t.repeat != null || t.seriesId != null ? t.series : null,
+        lateMinutes: t.dueAt == null ? null : at.difference(t.dueAt!).inMinutes,
+        missed: missedCycles(t, at),
       );
 
   Map<String, dynamic> toJson() => {
@@ -315,6 +352,11 @@ class DoneRecord {
         'took': tookMinutes,
         if (onTime != null) 'onTime': onTime,
         if (categoryId != null) 'cat': categoryId,
+        if (source != null) 'src': source,
+        if (title != null) 'title': title,
+        if (series != null) 'series': series,
+        if (lateMinutes != null) 'late': lateMinutes,
+        if (missed > 0) 'missed': missed,
       };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
@@ -322,12 +364,33 @@ class DoneRecord {
         tookMinutes: (j['took'] as num?)?.toInt() ?? 0,
         onTime: j['onTime'] as bool?,
         categoryId: j['cat'] as String?,
+        source: j['src'] as String?,
+        title: j['title'] as String?,
+        series: j['series'] as String?,
+        lateMinutes: (j['late'] as num?)?.toInt(),
+        missed: (j['missed'] as num?)?.toInt() ?? 0,
       );
+}
+
+/// How many whole cycles of a fixed-schedule repeating task went by, unticked, between its
+/// due date and [at] (not counting the one it is due for). 0 for other tasks.
+int missedCycles(Task t, DateTime at) {
+  final r = t.repeat, due = t.dueAt;
+  if (r == null || r.fromCompletion || due == null) return 0;
+  var n = 0;
+  var d = due;
+  while (n < 1000) {
+    final next = r.nextDue(due: d, completedAt: d);
+    if (next.isAfter(at)) break;
+    n++;
+    d = next;
+  }
+  return n;
 }
 
 /// A repeating task moved on to its next date without being done ("Skip").
 class SkipRecord {
-  const SkipRecord({required this.taskId, required this.series, required this.at, this.due});
+  const SkipRecord({required this.taskId, required this.series, required this.at, this.due, this.missed = 0});
 
   final String taskId;
 
@@ -340,6 +403,9 @@ class SkipRecord {
   /// The due date that was skipped, if it had one.
   final DateTime? due;
 
+  /// Whole cycles that had already gone by unticked when it was skipped (see [missedCycles]).
+  final int missed;
+
   /// One record per skipped due date, so the same skip synced from two devices counts once.
   String get key => '$taskId@${(due ?? at).toUtc().toIso8601String()}';
 
@@ -348,6 +414,7 @@ class SkipRecord {
         'series': series,
         'at': at.toUtc().toIso8601String(),
         if (due != null) 'due': due!.toUtc().toIso8601String(),
+        if (missed > 0) 'missed': missed,
       };
 
   factory SkipRecord.fromJson(Map<String, dynamic> j) => SkipRecord(
@@ -355,6 +422,7 @@ class SkipRecord {
         series: j['series'] as String? ?? j['task'] as String? ?? '',
         at: DateTime.parse(j['at'] as String).toLocal(),
         due: DateTime.tryParse(j['due'] as String? ?? '')?.toLocal(),
+        missed: (j['missed'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -523,6 +591,9 @@ class AppData {
     this.nudgeHours = 3,
     this.quietStart = 22 * 60,
     this.quietEnd = 7 * 60,
+    this.weeklyReview = false,
+    this.weeklyDay = DateTime.sunday,
+    this.weeklyAt = 18 * 60,
     this.sort = ListSort.due,
     this.starredTop = true,
     this.showQuickFilters = true,
@@ -574,6 +645,13 @@ class AppData {
   /// Only show tasks with no due date or due within the next 30 days. Replaced by the
   /// "Next 30 days" quick filter in 1.4; still read so a device that had it on starts there.
   bool focusNext30;
+
+  /// A notification once a week with last week's numbers and what's coming up.
+  bool weeklyReview;
+
+  /// Day of the week for it (DateTime.monday..sunday) and minutes after midnight.
+  int weeklyDay;
+  int weeklyAt;
 
   /// How the main list is ordered. A fresh install sorts by due date; older data keeps the
   /// hand-made order it had.
@@ -643,6 +721,9 @@ class AppData {
         'groupByCategory': groupByCategory,
         'collapsed': collapsed.toList(),
         'focusNext30': focusNext30,
+        'weeklyReview': weeklyReview,
+        'weeklyDay': weeklyDay,
+        'weeklyAt': weeklyAt,
         'sort': sort.name,
         'starredTop': starredTop,
         'showQuickFilters': showQuickFilters,
@@ -695,6 +776,9 @@ class AppData {
         collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
         focusNext30: j['focusNext30'] as bool? ?? false,
         // Saved before sorting existed: keep the hand-made order.
+        weeklyReview: j['weeklyReview'] as bool? ?? false,
+        weeklyDay: (j['weeklyDay'] as num?)?.toInt() ?? DateTime.sunday,
+        weeklyAt: (j['weeklyAt'] as num?)?.toInt() ?? 18 * 60,
         sort: _enum(ListSort.values, j['sort'], ListSort.manual),
         starredTop: j['starredTop'] as bool? ?? true,
         showQuickFilters: j['showQuickFilters'] as bool? ?? true,
@@ -787,6 +871,9 @@ AppData mergeData(AppData a, AppData b) {
     groupByCategory: settingsFrom.groupByCategory,
     collapsed: settingsFrom.collapsed,
     focusNext30: settingsFrom.focusNext30,
+    weeklyReview: settingsFrom.weeklyReview,
+    weeklyDay: settingsFrom.weeklyDay,
+    weeklyAt: settingsFrom.weeklyAt,
     sort: settingsFrom.sort,
     starredTop: settingsFrom.starredTop,
     showQuickFilters: settingsFrom.showQuickFilters,

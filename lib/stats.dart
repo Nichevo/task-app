@@ -128,4 +128,214 @@ class Stats {
 
   static String _key(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // --- Round 4: sources, repeats, timing, added charts ---
+
+  /// Every task added that the app still knows about: open and archived tasks, plus tasks the
+  /// archive clean-up deleted (from their completion records). Deleted-by-hand tasks are gone.
+  List<AddedItem> get added {
+    final out = <AddedItem>[];
+    final seen = <String>{};
+    for (final t in data.allTasks) {
+      seen.add(t.id);
+      out.add(AddedItem(t.id, t.createdAt, t.categoryId, t.source, t.closedAt));
+    }
+    data.done.forEach((id, r) {
+      if (!seen.contains(id)) out.add(AddedItem(id, r.createdAt, r.categoryId, r.source, r.at));
+    });
+    return out;
+  }
+
+  /// Per source, for tasks added since [from]: how many were added and how many of those are
+  /// done; plus how many tasks from that source were ticked off in the period. Most added first.
+  List<SourceRow> bySource(DateTime? from) {
+    final rows = <String?, SourceRow>{};
+    SourceRow row(String? src) => rows.putIfAbsent(src, () => SourceRow(src));
+    for (final a in added) {
+      if (from != null && a.createdAt.isBefore(from)) continue;
+      final r = row(a.source);
+      r.added++;
+      if (a.doneAt != null) r.addedDone++;
+    }
+    for (final e in data.done.entries) {
+      final r = e.value;
+      if (from != null && r.at.isBefore(from)) continue;
+      // Older records have no source; the task itself may still say.
+      row(r.source ?? data.task(e.key)?.source).done += 1;
+    }
+    return rows.values.toList()..sort((a, b) => b.added != a.added ? b.added.compareTo(a.added) : b.done.compareTo(a.done));
+  }
+
+  /// One row per repeating series with what happened to it since [from], busiest first.
+  List<SeriesRow> repeats(DateTime? from) {
+    final rows = <String, SeriesRow>{};
+    SeriesRow row(String id) => rows.putIfAbsent(id, () => SeriesRow(id));
+    bool inPeriod(DateTime d) => from == null || !d.isBefore(from);
+    for (final e in data.done.entries) {
+      final r = e.value;
+      final series = r.series ?? data.task(e.key)?.seriesId;
+      if (series == null || !inPeriod(r.at)) continue;
+      final sr = row(series);
+      sr.done++;
+      sr.missed += r.missed;
+      sr.name ??= r.title;
+    }
+    for (final k in data.skips.values) {
+      if (!inPeriod(k.at)) continue;
+      final sr = row(k.series);
+      sr.skipped++;
+      sr.missed += k.missed;
+    }
+    // Open repeating tasks: cycles already gone by unticked count as missed now.
+    for (final t in data.active.where((t) => t.repeat != null)) {
+      final r = row(t.series)..name = t.title;
+      r.missed += missedCycles(t, now);
+      r.open = true;
+    }
+    for (final r in rows.values) {
+      r.name ??= data.task(r.id)?.title ?? 'Repeating task';
+    }
+    return rows.values.where((r) => r.done + r.skipped + r.missed > 0).toList()
+      ..sort((a, b) => (b.done + b.skipped + b.missed).compareTo(a.done + a.skipped + a.missed));
+  }
+
+  /// How early or late tasks with a due date were ticked off since [from] (records from 1.4 on).
+  Timing timing(DateTime? from) {
+    final t = Timing();
+    final late = <int>[];
+    for (final r in doneSince(from)) {
+      final due = r.due;
+      if (due == null) continue;
+      late.add(r.lateMinutes!);
+      final days = dayOf(r.at).difference(dayOf(due)).inDays;
+      final b = days < -7
+          ? 0
+          : days < 0
+          ? 1
+          : days == 0
+          ? 2
+          : days <= 7
+          ? 3
+          : 4;
+      t.buckets[b]++;
+    }
+    late.sort();
+    if (late.isNotEmpty) t.medianLateMinutes = late[late.length ~/ 2];
+    return t;
+  }
+
+  /// Added, done and still-open counts per day (periods up to 31 days), week (up to a year) or
+  /// month, for the period since [from] (all time when null), oldest first. [categoryId] '' is
+  /// "no category"; null is every category.
+  List<Bucket> addedVsDone(DateTime? from, {String? categoryId}) {
+    final items = [
+      for (final a in added)
+        if (categoryId == null || (data.category(a.categoryId)?.id ?? '') == categoryId) a,
+    ];
+    var start = from ?? (items.isEmpty ? today : items.map((a) => a.createdAt).reduce((x, y) => x.isBefore(y) ? x : y));
+    final span = today.difference(dayOf(start)).inDays + 1;
+    final unit = span <= 31 ? BucketUnit.day : span <= 372 ? BucketUnit.week : BucketUnit.month;
+    start = switch (unit) {
+      BucketUnit.day => dayOf(start),
+      BucketUnit.week => weekOf(start),
+      BucketUnit.month => DateTime(start.year, start.month),
+    };
+    DateTime nextOf(DateTime d) => switch (unit) {
+          BucketUnit.day => DateTime(d.year, d.month, d.day + 1),
+          BucketUnit.week => DateTime(d.year, d.month, d.day + 7),
+          BucketUnit.month => DateTime(d.year, d.month + 1),
+        };
+    final out = <Bucket>[];
+    for (var d = start; !d.isAfter(today) && out.length < 400; d = nextOf(d)) {
+      final end = nextOf(d);
+      var a = 0, dn = 0, open = 0;
+      for (final i in items) {
+        if (!i.createdAt.isBefore(d) && i.createdAt.isBefore(end)) a++;
+        final done = i.doneAt;
+        if (done != null && !done.isBefore(d) && done.isBefore(end)) dn++;
+        if (i.createdAt.isBefore(end) && (done == null || !done.isBefore(end))) open++;
+      }
+      out.add(Bucket(d, unit, a, dn, open));
+    }
+    return out;
+  }
+
+  /// Numbers for the weekly review: the 7 days before [at] and the 7 days after.
+  ({int added, int done, int overdue, int dueNext}) weekReview(DateTime at) {
+    final from = at.subtract(const Duration(days: 7));
+    final next = at.add(const Duration(days: 7));
+    return (
+      added: added.where((a) => !a.createdAt.isBefore(from) && a.createdAt.isBefore(at)).length,
+      done: _done.where((r) => !r.at.isBefore(from) && r.at.isBefore(at)).length,
+      overdue: data.active.where((t) => t.dueAt != null && t.dueAt!.isBefore(at)).length,
+      dueNext: data.active.where((t) => t.dueAt != null && !t.dueAt!.isBefore(at) && t.dueAt!.isBefore(next)).length,
+    );
+  }
+}
+
+/// A task as far as the statistics need it.
+class AddedItem {
+  const AddedItem(this.id, this.createdAt, this.categoryId, this.source, this.doneAt);
+
+  final String id;
+  final DateTime createdAt;
+  final String? categoryId;
+  final String? source;
+  final DateTime? doneAt;
+}
+
+class SourceRow {
+  SourceRow(this.source);
+
+  final String? source;
+  int added = 0;
+
+  /// Of those added in the period, how many are done.
+  int addedDone = 0;
+
+  /// Ticked off in the period (whenever added).
+  int done = 0;
+
+  double? get share => added == 0 ? null : addedDone / added;
+}
+
+class SeriesRow {
+  SeriesRow(this.id);
+
+  final String id;
+  String? name;
+  int done = 0, skipped = 0, missed = 0;
+
+  /// Still has an open task.
+  bool open = false;
+
+  double get share => done / (done + skipped + missed);
+}
+
+class Timing {
+  /// Over a week early, 1–7 days early, same day, 1–7 days late, over a week late.
+  final buckets = List.filled(5, 0);
+
+  /// Median minutes after the due time (negative = before); null with nothing to count.
+  int? medianLateMinutes;
+
+  static const labels = ['Over a week early', '1–7 days early', 'Same day', '1–7 days late', 'Over a week late'];
+
+  int get total => buckets.fold(0, (a, b) => a + b);
+  int get early => buckets[0] + buckets[1];
+  int get sameDay => buckets[2];
+  int get late => buckets[3] + buckets[4];
+}
+
+enum BucketUnit { day, week, month }
+
+class Bucket {
+  const Bucket(this.start, this.unit, this.added, this.done, this.open);
+
+  final DateTime start;
+  final BucketUnit unit;
+  final int added, done;
+
+  /// Open at the end of it.
+  final int open;
 }

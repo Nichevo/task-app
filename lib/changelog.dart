@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.4.1', 'November 2026', [
+    'Statistics: where tasks came from, with the share of each source that got done.',
+    'Statistics: repeating tasks with how often each was done, skipped or missed.',
+    'Statistics: how early or late tasks get done against their due date.',
+    'Statistics: charts of tasks added, and added against done with a line for what is still open, by category.',
+    'Optional weekly review notification (Settings, Reminders).',
+  ]),
   Release('1.4.0', 'November 2026', [
     'Skip a repeating task: moves it to its next date without ticking it off (in the block, on the task, and on its reminder).',
     'Search: the magnifying glass at the top looks through task names, notes and checklists.',

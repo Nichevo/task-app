@@ -177,6 +177,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<TimeOfDay?> _pickTime(int minutes) =>
       showTimePicker(context: context, initialTime: TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60));
 
+  static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
   static String _time(int minutes) =>
       '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
@@ -353,6 +355,37 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ],
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Weekly review'),
+              subtitle: Text(data.weeklyReview
+                  ? 'Every ${_weekdays[data.weeklyDay - 1]} at ${_time(data.weeklyAt)}: last week\'s added and done, '
+                      'what is overdue and what is due next. Tap it to see the next 7 days.'
+                  : 'A note once a week with last week\'s numbers and what is coming up.'),
+              value: data.weeklyReview,
+              onChanged: (v) => _set(() => data.weeklyReview = v),
+            ),
+            if (data.weeklyReview)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Review day and time'),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  DropdownButton<int>(
+                    value: data.weeklyDay,
+                    items: [
+                      for (final (i, d) in _weekdays.indexed) DropdownMenuItem(value: i + 1, child: Text(d)),
+                    ],
+                    onChanged: (v) => _set(() => data.weeklyDay = v ?? DateTime.sunday),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final t = await _pickTime(data.weeklyAt);
+                      if (t != null) _set(() => data.weeklyAt = t.hour * 60 + t.minute);
+                    },
+                    child: Text(_time(data.weeklyAt)),
+                  ),
+                ]),
+              ),
             Text('Every reminder has Done and Snooze buttons.', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
             const Divider(height: 40),
             Row(children: [
