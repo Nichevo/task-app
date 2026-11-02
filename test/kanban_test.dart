@@ -168,9 +168,9 @@ void main() {
     s.moveToStage(t, st(s, 'doing'), how: MoveHow.dragged, note: 'started, see notes');
     expect(buildCsv(s.data).split('\r\n')[1], endsWith(',In progress'));
     final lines = buildMovesCsv(s.data)!.trim().split('\r\n');
-    expect(lines.first, 'Task,Moved from,Moved to,When,Minutes in previous stage,How,Where,Device,Note');
+    expect(lines.first, 'Task,Step,Moved from,Moved to,When,Minutes in previous stage,How,Where,Device,Note');
     expect(lines.length, 3);
-    expect(lines[2], contains('Fence,Backlog,In progress,'));
+    expect(lines[2], contains('Fence,,Backlog,In progress,'));
     expect(lines[2], endsWith(',Dragged,,${AppStore.deviceName},"started, see notes"'));
     expect(buildMovesCsv(AppData()), isNull);
   });

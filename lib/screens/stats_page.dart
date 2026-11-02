@@ -118,6 +118,26 @@ class _StatsPageState extends State<StatsPage> {
     if (k == null) return [];
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     String time(num? minutes) => minutes == null ? '–' : _describe(Duration(minutes: minutes.round()));
+    Widget table(List<StageRow> rows, String first) => Table(
+          columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1.3), 2: FlexColumnWidth(1.3), 3: FlexColumnWidth(0.8)},
+          children: [
+            TableRow(children: [
+              Text(first, style: hint),
+              Text('Average', style: hint),
+              Text('Typical', style: hint),
+              Text('Spells', style: hint, textAlign: TextAlign.right),
+            ]),
+            for (final r in rows)
+              TableRow(children: [
+                Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(r.stage.name)),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(time(r.average))),
+                Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(time(r.median))),
+                Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text('${r.count}', textAlign: TextAlign.right)),
+              ]),
+          ],
+        );
     return [
       _heading(context, 'Kanban board', 'Time spent in each stage, counted when a task moves on'),
       Table(
@@ -143,6 +163,14 @@ class _StatsPageState extends State<StatsPage> {
       const SizedBox(height: 8),
       Text('${k.movesPerWeek.toStringAsFixed(k.movesPerWeek < 10 ? 1 : 0)} moves a week · '
           '${k.backwards} task${k.backwards == 1 ? '' : 's'} moved backwards'),
+      if (k.steps != null) ...[
+        const SizedBox(height: 12),
+        Text('Checklist steps on the board', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 4),
+        table(k.steps!, 'Stage (steps)'),
+        const SizedBox(height: 4),
+        Text('${k.stepMovesPerWeek.toStringAsFixed(k.stepMovesPerWeek < 10 ? 1 : 0)} step moves a week'),
+      ],
       if (k.longest.isNotEmpty) ...[
         const SizedBox(height: 12),
         Text('Longest in their stage', style: Theme.of(context).textTheme.titleSmall),

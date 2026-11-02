@@ -247,6 +247,20 @@ class Stats {
       e.value.stageMinutes!.forEach((id, m) => spells[id]?.add(m));
     }
 
+    // Item 56: checklist steps on the board, counted apart from tasks.
+    final stepSpells = {for (final st in data.stages) st.id: <int>[]};
+    var stepMoves = 0;
+    for (final t in data.allTasks) {
+      for (final step in t.steps) {
+        for (final s in moveStints(step.moves)) {
+          if (s.end != null && inPeriod(s.end!)) stepSpells[s.stageId]?.add(s.end!.difference(s.start).inMinutes);
+        }
+        for (final m in step.moves) {
+          if (inPeriod(m.at) && m.fromId != null && m.toId != null) stepMoves++;
+        }
+      }
+    }
+
     final order = {for (final (i, st) in data.stages.indexed) st.id: i};
     var moves = 0, back = 0;
     DateTime? first;
@@ -272,6 +286,10 @@ class Stats {
     return KanbanStats(
       stages: [for (final st in data.stages) StageRow(st, spells[st.id]!..sort())],
       movesPerWeek: weeks < 1 ? moves.toDouble() : moves / weeks,
+      steps: stepSpells.values.every((l) => l.isEmpty)
+          ? null
+          : [for (final st in data.stages) StageRow(st, stepSpells[st.id]!..sort())],
+      stepMovesPerWeek: weeks < 1 ? stepMoves.toDouble() : stepMoves / weeks,
       backwards: back,
       longest: longest.take(5).toList(),
     );
@@ -326,7 +344,18 @@ class Stats {
 /// A task as far as the statistics need it.
 /// Item 52: the Kanban card on the Statistics page.
 class KanbanStats {
-  KanbanStats({required this.stages, required this.movesPerWeek, required this.backwards, required this.longest});
+  KanbanStats({
+    required this.stages,
+    required this.movesPerWeek,
+    required this.backwards,
+    required this.longest,
+    this.steps,
+    this.stepMovesPerWeek = 0,
+  });
+
+  /// Item 56: time checklist steps spent in each stage; null when no step has moved on yet.
+  final List<StageRow>? steps;
+  final double stepMovesPerWeek;
 
   /// One row per current stage, in board order.
   final List<StageRow> stages;
