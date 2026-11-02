@@ -33,6 +33,8 @@ class TaskBlock extends StatelessWidget {
     this.categoryName,
     this.onStep,
     this.onSkip,
+    this.stageName,
+    this.onBoard,
   });
 
   final Task task;
@@ -58,6 +60,12 @@ class TaskBlock extends StatelessWidget {
 
   /// Moves a repeating task to its next date without ticking it off.
   final VoidCallback? onSkip;
+
+  /// The Kanban stage it is in, shown as a small label; null when not on the board.
+  final String? stageName;
+
+  /// Puts it on the Kanban board (offered in the expanded block).
+  final VoidCallback? onBoard;
 
   /// One-line notes preview on the thin block, only when there are notes.
   bool get preview => !expanded && task.notes.trim().isNotEmpty;
@@ -134,6 +142,21 @@ class TaskBlock extends StatelessWidget {
                                         style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
                                   ),
                                 ),
+                              if (stageName != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Tooltip(
+                                    message: 'On the Kanban board',
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: const Color(0x88000000)),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: Text(stageName!, style: const TextStyle(fontSize: 11, color: ink)),
+                                    ),
+                                  ),
+                                ),
                               if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
                               if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
                             ]),
@@ -174,6 +197,7 @@ class TaskBlock extends StatelessWidget {
         if (categoryName != null) _line('Category', categoryName!),
         if (task.repeat != null) _line('Repeats', task.repeat!.describe()),
         if (task.estimate != null) _line('Takes', 'about ${describeMinutes(task.estimate!)}'),
+        if (stageName != null) _line('Board', stageName!),
         if (task.place != null) _line('Place', '${task.placeLeave ? 'Leaving' : 'Arriving at'} ${task.place}'),
         if (lockedBy != null) _line('After', lockedBy!),
         if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),
@@ -212,6 +236,13 @@ class TaskBlock extends StatelessWidget {
                 onPressed: onSkip,
                 icon: const Icon(Icons.skip_next, size: 18),
                 label: const Text('Skip'),
+              ),
+            if (onBoard != null && !archived)
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: ink),
+                onPressed: onBoard,
+                icon: const Icon(Icons.view_kanban_outlined, size: 18),
+                label: const Text('Add to board'),
               ),
             TextButton.icon(
               style: TextButton.styleFrom(foregroundColor: ink),

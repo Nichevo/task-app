@@ -367,6 +367,16 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Saves the current location on a board move, when location recording is on.
+  Future<void> _locateMove(Task t, StageMove m) async {
+    final loc = location;
+    if (!recordLocation || loc == null) return;
+    final point = await loc.current();
+    if (point == null || data.task(t.id) == null || !t.moves.contains(m)) return;
+    m.where = point;
+    changed(task: t);
+  }
+
   /// [newIndex] is the position after the item has been removed.
   void reorder(int oldIndex, int newIndex) {
     data.active.insert(newIndex, data.active.removeAt(oldIndex));
@@ -399,6 +409,9 @@ class AppStore extends ChangeNotifier {
     final index = data.active.indexOf(t);
     data.active.remove(t);
     final now = at ?? DateTime.now();
+    // A board task ticked off from anywhere ends in the last stage.
+    final last = data.stages.lastOrNull;
+    if (t.kanban && last != null && t.stageId != last.id) _move(t, last, MoveHow.done, at: now, locate: false);
     t.closedAt = now;
     data.archived.insert(0, t);
     data.done[t.id] = DoneRecord.of(t, now);
@@ -412,6 +425,8 @@ class AppStore extends ChangeNotifier {
     Task? next;
     if (t.repeat != null) {
       next = t.nextRepeat(now);
+      // The next one goes back on the board at the start.
+      if (t.kanban && data.stages.isNotEmpty) _move(next, data.stages.first, MoveHow.repeat, at: now, locate: false);
       data.active.insert(index.clamp(0, data.active.length), next);
     }
     changed(task: t, order: true);
@@ -560,6 +575,93 @@ class AppStore extends ChangeNotifier {
     await flush();
   }
 
+  // --- Kanban board (item 52) ---
+
+  /// Name of this kind of device, saved with each board move.
+  static String get deviceName {
+    if (kIsWeb) return 'Web';
+    if (Platform.isAndroid) return 'Android';
+    if (Platform.isIOS) return 'iPhone or iPad';
+    if (Platform.isMacOS) return 'Mac';
+    if (Platform.isWindows) return 'Windows';
+    return Platform.operatingSystem;
+  }
+
+  /// Records a move and puts the task in [to] (off the board when null). Every board change
+  /// goes through here.
+  StageMove _move(Task t, KanbanStage? to, String how, {DateTime? at, String? note, bool locate = true}) {
+    final from = t.kanban ? data.stage(t.stageId) : null;
+    final m = StageMove.create(from: from, to: to, at: at ?? DateTime.now(), how: how, device: deviceName, note: note);
+    t.moves.add(m);
+    t.kanban = to != null;
+    if (to != null) t.stageId = to.id;
+    if (locate) unawaited(_locateMove(t, m));
+    return m;
+  }
+
+  /// Moves [t] to [to] and saves. Returns true when it went into the last stage, so the screen
+  /// can apply the "tick it off too" rule. Nothing happens if it is already there.
+  bool moveToStage(Task t, KanbanStage to, {required String how, String? note}) {
+    if (t.kanban && t.stageId == to.id) return false;
+    _move(t, to, how, note: note);
+    changed(task: t);
+    return to.id == data.stages.lastOrNull?.id;
+  }
+
+  /// Puts [t] on the board (in the stage it was last in, else the first) or takes it off.
+  /// Its history is kept either way.
+  void setOnBoard(Task t, bool on, {KanbanStage? stage, String how = MoveHow.added}) {
+    if (on == t.kanban || data.stages.isEmpty) return;
+    if (on) {
+      _move(t, stage ?? data.stage(t.stageId) ?? data.stages.first, how);
+    } else {
+      _move(t, null, MoveHow.removed);
+    }
+    changed(task: t);
+  }
+
+  /// A new task straight into [stage] from the + on a board column.
+  Task addToStage(String title, KanbanStage stage) {
+    final p = parseInput(title, data, DateTime.now());
+    final t = addTask(p.title, due: p.due, categoryId: p.categoryId, source: TaskSource.kanban);
+    setOnBoard(t, true, stage: stage);
+    return t;
+  }
+
+  KanbanStage addStage(String name) {
+    final s = KanbanStage.create(name);
+    data.stages.add(s);
+    changed(settings: true);
+    return s;
+  }
+
+  void updateStage(KanbanStage s, {String? name, int? colour, bool clearColour = false, int? limit, bool clearLimit = false}) {
+    if (name != null && name.trim().isNotEmpty) s.name = name.trim();
+    if (colour != null || clearColour) s.colour = colour;
+    if (limit != null || clearLimit) s.limit = limit;
+    changed(settings: true);
+  }
+
+  void moveStage(int oldIndex, int newIndex) {
+    data.stages.insert(newIndex, data.stages.removeAt(oldIndex));
+    changed(settings: true);
+  }
+
+  /// Removes a stage. Open board tasks in it are moved to [moveTo] (a recorded move); tasks
+  /// taken off the board will go back to [moveTo] instead.
+  void deleteStage(KanbanStage s, KanbanStage moveTo) {
+    for (final t in data.active.where((t) => t.stageId == s.id).toList()) {
+      if (t.kanban) {
+        _move(t, moveTo, MoveHow.stageRemoved, locate: false);
+      } else {
+        t.stageId = moveTo.id;
+      }
+      changed(task: t);
+    }
+    data.stages.remove(s);
+    changed(settings: true);
+  }
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -586,6 +688,11 @@ class AppStore extends ChangeNotifier {
   /// Puts an archived task back at [index] in the active list (end if null).
   void restore(Task t, [int? index]) {
     data.archived.remove(t);
+    // Back to the stage it was in before it reached the last one.
+    if (t.kanban && t.moves.isNotEmpty && t.stageId == data.stages.lastOrNull?.id) {
+      final back = data.stage(t.moves.last.fromId) ?? data.stages.first;
+      if (back.id != t.stageId) _move(t, back, MoveHow.reopened, locate: false);
+    }
     t.closedAt = null;
     t.doneWhere = null;
     data.done.remove(t.id);

@@ -319,7 +319,7 @@ nothing on that request, so the list stayed empty until the next scheduled refre
 Each widget now redraws itself straight away when its size changes. If this still leaves a gap of a few
 seconds, that is the phone restarting the app's widget service and can't be avoided.
 
-## 33. Place-based reminders ◐ (round 4 PR 3)
+## 33. Place-based reminders ☑ (PR #11, merged 2026-11-01; needs a real-phone check)
 
 **Feedback (2026-10-29):** "GPS based notification: arrived home on the day of the task, push a notification."
 
@@ -509,7 +509,7 @@ Task page → **Time needed**: 15 min, 30 min, 1 h, 2 h, 4 h, 8 h, or Other (e.g
 block ("1h30") and in its details; a line above the list gives the total for the tasks shown. Copied to the
 next repeat. CSV gains an "Estimate (min)" column, read back on import.
 
-## 46. Backups and restore ◐ (round 4 PR 3)
+## 46. Backups and restore ☑ (PR #11, merged 2026-11-01)
 
 A daily backup of all tasks, the archive and settings, kept for 7 days. Settings → Backups lists them by
 date and restores one after asking. Save a backup file or open one by hand, e.g. for a new device.
@@ -519,7 +519,34 @@ days deleted. Restoring keeps the current data as a "before a restore" backup fi
 restored tasks count as just edited and tasks not in the backup count as deleted, so the restore wins on every
 synced device. "Save a backup file" and "Open a backup file" use the same format.
 
-## 52. Kanban board ☐ (round 4 PR 4)
+## 52. Kanban board ◐ (round 4 PR 4, version 1.5.0)
 
-Plan agreed 2026-11-01 (stages Backlog, Up next, In progress, Blocked, Done). Written up in full in the
-build PR.
+**Request (2026-11-01):** a Kanban option, with each move between stages recorded (from, to, when, where).
+Stages chosen: Backlog, Up next, In progress, Blocked, Done. Plan: Claude doc "Kanban board plan (item 52)".
+
+Built:
+- **Kanban board** in the main menu (and a board icon in the top bar once anything is on it). Wide screens
+  (unfolded Fold, tablet, desktop) show the columns side by side: drag a card (press and hold on a touch screen),
+  or on a touch screen swipe it right / left for the next / previous stage. Narrow screens show one column at a time with
+  tabs and counts; each card has an arrow to the next stage, since a sideways swipe there changes column.
+  Every card's ⋮ has Move to… (any stage, optional note), Open task, Tick off, Take off the board.
+- The + on a column adds a task straight into that stage (source "Kanban board").
+- Cards: name, star, category, due, checklist progress, estimate, "In progress for 3 days", and the same
+  green-to-red colour as the main list. The board has its own search, quick filters and a category chip.
+- Task page: **On the Kanban board** switch (off keeps the history; on again returns to the last stage),
+  a Stage picker, and **Board history** (newest first: from → to, when, time in the previous stage, how,
+  device, note, and a map button when a location was recorded).
+- Main list: board tasks show a small stage label; the expanded block has **Add to board**. Settings,
+  Kanban board can hide them from the main list instead. (The plan's swipe / long-press "Add to board" on
+  the main list was left out: swipes there already tick off and delete, and long press drags.)
+- Settings → **Kanban board**: rename, reorder, add and remove stages (removing one asks where its tasks
+  go, recorded as a move), a colour and an optional limit per stage (heading turns amber above it), and
+  what moving to the last stage does: ask, tick off, or keep open.
+- Ticking off a board task from anywhere records a move to the last stage; restoring it from the archive
+  records a move back. A repeating board task's next copy starts again in the first stage.
+- Data: `Task.kanban`, `stageId`, `moves` (`StageMove`: from/to id and name as at the time, at, how, where,
+  device, note); `AppData.stages`, `kanbanDone`, `kanbanHideFromList` (synced settings). Sync joins both
+  devices' moves by id and takes the stage from the latest move. `DoneRecord` keeps minutes per stage.
+- Statistics: Kanban card with average and typical time in each stage, moves a week, tasks moved
+  backwards, and the tasks longest in their stage. CSV: Stage column, and a second file kanban_moves.csv
+  (one row per move) when exporting.

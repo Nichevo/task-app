@@ -4,7 +4,7 @@ import 'models.dart';
 
 final csvDateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)'];
+const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)', 'Stage'];
 
 String _cell(String s) =>
     RegExp(r'[",\r\n]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
@@ -27,6 +27,7 @@ String buildCsv(AppData data) {
         t.steps.map((s) => '${s.done ? '[x]' : '[ ]'} ${s.title}').join('; '),
         t.source == null ? '' : TaskSource.label(t.source),
         t.estimate?.toString() ?? '',
+        t.kanban ? data.stage(t.stageId)?.name ?? '' : '',
       ];
   final rows = <List<String>>[
     csvHeader,
@@ -34,4 +35,36 @@ String buildCsv(AppData data) {
     for (final t in data.archived) row(t, 'Closed', ''),
   ];
   return '${rows.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
+}
+
+const movesHeader = ['Task', 'Moved from', 'Moved to', 'When', 'Minutes in previous stage', 'How', 'Where', 'Device', 'Note'];
+
+/// kanban_moves.csv: one row per board move of every task, oldest first. Null when nothing
+/// has been on the board.
+String? buildMovesCsv(AppData data) {
+  final rows = <(DateTime, List<String>)>[];
+  for (final t in data.allTasks) {
+    DateTime? previous;
+    for (final m in t.moves) {
+      rows.add((
+        m.at,
+        [
+          t.title,
+          m.fromName ?? '',
+          m.toName ?? '',
+          _date(m.at),
+          previous == null || m.fromId == null ? '' : '${m.at.difference(previous).inMinutes}',
+          MoveHow.label(m.how),
+          m.where?.toString() ?? '',
+          m.device ?? '',
+          m.note ?? '',
+        ]
+      ));
+      previous = m.at;
+    }
+  }
+  if (rows.isEmpty) return null;
+  rows.sort((a, b) => a.$1.compareTo(b.$1));
+  final lines = [movesHeader, for (final r in rows) r.$2];
+  return '${lines.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
 }

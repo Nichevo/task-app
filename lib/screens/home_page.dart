@@ -22,6 +22,7 @@ import 'about_page.dart';
 import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
+import 'kanban_page.dart';
 import 'settings_page.dart';
 import 'stats_page.dart';
 import 'task_page.dart';
@@ -146,6 +147,8 @@ class HomePageState extends State<HomePage> {
 
   void openStats() => _open(context, StatsPage(store: store));
 
+  void openBoard() => _open(context, KanbanPage(store: store));
+
   /// Text shared from another app: one task, or several when it is a list.
   Future<void> addShared(SharedText shared) async {
     final source = shared.voice ? TaskSource.voice : TaskSource.share;
@@ -208,7 +211,10 @@ class HomePageState extends State<HomePage> {
     final q = _query;
     final shown = q.isNotEmpty
         ? data.active.where((t) => matchesSearch(t, q))
-        : data.active.where((t) => (_showSnoozed || !t.isSnoozed(now)) && passesFilter(t, _filter, now));
+        : data.active.where((t) =>
+            (_showSnoozed || !t.isSnoozed(now)) &&
+            passesFilter(t, _filter, now) &&
+            !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
   }
 
@@ -300,7 +306,9 @@ class HomePageState extends State<HomePage> {
     final snoozedCount = searching ? 0 : data.active.where((t) => t.isSnoozed(now)).length;
     final hiddenCount = searching || _filter == QuickFilter.all
         ? 0
-        : data.active.where((t) => !t.isSnoozed(now) && !passesFilter(t, _filter, now)).length;
+        : data.active
+            .where((t) => !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
+            .length;
     final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
     final estimate = describeEstimates(shownTasks);
     return Scaffold(
@@ -330,6 +338,8 @@ class HomePageState extends State<HomePage> {
               icon: const Icon(Icons.search),
               onPressed: () => setState(() => _searching = true),
             ),
+          if (data.boardTasks.isNotEmpty)
+            IconButton(tooltip: 'Kanban board', icon: const Icon(Icons.view_kanban_outlined), onPressed: openBoard),
           IconButton(
             tooltip: 'Calendar',
             icon: const Icon(Icons.calendar_month_outlined),
@@ -352,6 +362,7 @@ class HomePageState extends State<HomePage> {
                   store.changed(settings: true);
                 }(),
               'stats' => openStats(),
+              'board' => openBoard(),
               'events' => _open(context, EventsPage(store: store)),
               'paste' => _pasteList(),
               'photo' => importPhoto(context, store),
@@ -366,6 +377,7 @@ class HomePageState extends State<HomePage> {
                   value: 'group',
                   child: Text(data.groupByCategory ? 'Show as one list' : 'Group by category')),
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
+              const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'paste', child: Text('Paste a list')),
@@ -503,6 +515,8 @@ class HomePageState extends State<HomePage> {
           onCheck: () => _complete(t),
           onStep: (s) => _toggleStep(t, s),
           onSkip: () => _skip(t),
+          stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
+          onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),
           trailing: drag
               ? ReorderableDragStartListener(
                   index: i,
@@ -514,6 +528,16 @@ class HomePageState extends State<HomePage> {
               : null,
         ),
     );
+  }
+
+  void _addToBoard(Task t) {
+    store.setOnBoard(t, true);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('Put "${t.title}" on the board in ${data.stage(t.stageId)?.name}'),
+        action: SnackBarAction(label: 'Open board', onPressed: openBoard),
+      ));
   }
 
   void _toggleStep(Task t, TaskStep s) {
@@ -754,7 +778,19 @@ Future<void> exportCsv(BuildContext context, AppStore store) async {
       bytes: bytes,
       mimeType: 'text/csv',
     );
-    if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Exported $name')));
+    if (saved == null) return;
+    messenger.showSnackBar(SnackBar(content: Text('Exported $name')));
+    // Board history goes in a second file, one row per move.
+    final moves = buildMovesCsv(store.data);
+    if (moves == null) return;
+    final movesName = 'kanban_moves_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+    final savedMoves = await FilePicker.saveFile(
+      dialogTitle: 'Export Kanban board moves',
+      fileName: movesName,
+      bytes: Uint8List.fromList(utf8.encode('\uFEFF$moves')),
+      mimeType: 'text/csv',
+    );
+    if (savedMoves != null) messenger.showSnackBar(SnackBar(content: Text('Exported $name and $movesName')));
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
   }
