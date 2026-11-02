@@ -10,6 +10,7 @@ import '../task_list.dart';
 import '../places.dart';
 import 'about_page.dart';
 import 'backups_page.dart';
+import 'kanban_page.dart';
 import 'places_page.dart';
 import '../widgets/task_colors.dart';
 
@@ -584,6 +585,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlacesPage(store: store))),
               ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.view_kanban_outlined),
+              title: const Text('Kanban board'),
+              subtitle: Text(data.stages.map((s) => s.name).join(', ')),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => KanbanSettingsPage(store: store))),
+            ),
             const Divider(height: 40),
             _heading('Archive'),
             ListTile(

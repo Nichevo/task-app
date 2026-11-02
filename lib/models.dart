@@ -25,8 +25,12 @@ class Task {
     this.seriesId,
     this.place,
     this.placeLeave = false,
+    this.kanban = false,
+    this.stageId,
+    List<StageMove>? moves,
     DateTime? updatedAt,
   })  : steps = steps ?? [],
+        moves = moves ?? [],
         updatedAt = updatedAt ?? createdAt;
 
   final String id;
@@ -87,6 +91,18 @@ class Task {
 
   /// Remind when leaving [place] instead of arriving.
   bool placeLeave;
+
+  /// On the Kanban board (item 52).
+  bool kanban;
+
+  /// The [KanbanStage] it is in. Kept when taken off the board, so it goes back there.
+  String? stageId;
+
+  /// Every move between stages, oldest first. Never rewritten; synced by joining both copies.
+  final List<StageMove> moves;
+
+  /// When it went into its current stage (null when not on the board or never moved).
+  DateTime? get stageSince => kanban && moves.isNotEmpty ? moves.last.at : null;
 
   int get stepsDone => steps.where((s) => s.done).length;
 
@@ -157,6 +173,9 @@ class Task {
         if (seriesId != null) 'series': seriesId,
         if (place != null) 'place': place,
         if (placeLeave) 'placeLeave': true,
+        if (kanban) 'kanban': true,
+        if (stageId != null) 'stage': stageId,
+        if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -184,6 +203,9 @@ class Task {
         seriesId: j['series'] as String?,
         place: j['place'] as String?,
         placeLeave: j['placeLeave'] as bool? ?? false,
+        kanban: j['kanban'] as bool? ?? false,
+        stageId: j['stage'] as String?,
+        moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -204,6 +226,7 @@ abstract final class TaskSource {
   static const csv = 'csv';
   static const repeat = 'repeat';
   static const step = 'step';
+  static const kanban = 'kanban';
 
   static const labels = {
     typed: 'Typed in the app',
@@ -217,6 +240,7 @@ abstract final class TaskSource {
     csv: 'CSV import',
     repeat: 'Repeat of an earlier task',
     step: 'Checklist step',
+    kanban: 'Kanban board',
   };
 
   /// A name for showing; [source] null is a task from before sources were recorded.
@@ -317,6 +341,7 @@ class DoneRecord {
     this.series,
     this.lateMinutes,
     this.missed = 0,
+    this.stageMinutes,
   });
 
   final DateTime at;
@@ -344,6 +369,10 @@ class DoneRecord {
   /// Whole repeat cycles that went by without a tick before this one was done (fixed schedules).
   final int missed;
 
+  /// Minutes spent in each Kanban stage (by stage id) for a board task, so the Kanban
+  /// statistics survive the archive clean-up. Null for other tasks.
+  final Map<String, int>? stageMinutes;
+
   /// When the task was added.
   DateTime get createdAt => at.subtract(Duration(minutes: tookMinutes));
 
@@ -360,6 +389,7 @@ class DoneRecord {
         series: t.repeat != null || t.seriesId != null ? t.series : null,
         lateMinutes: t.dueAt == null ? null : at.difference(t.dueAt!).inMinutes,
         missed: missedCycles(t, at),
+        stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
       );
 
   Map<String, dynamic> toJson() => {
@@ -372,6 +402,7 @@ class DoneRecord {
         if (series != null) 'series': series,
         if (lateMinutes != null) 'late': lateMinutes,
         if (missed > 0) 'missed': missed,
+        if (stageMinutes != null) 'stages': stageMinutes,
       };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
@@ -384,6 +415,9 @@ class DoneRecord {
         series: j['series'] as String?,
         lateMinutes: (j['late'] as num?)?.toInt(),
         missed: (j['missed'] as num?)?.toInt() ?? 0,
+        stageMinutes: j['stages'] is Map
+            ? {for (final e in (j['stages'] as Map).entries) e.key as String: (e.value as num).toInt()}
+            : null,
       );
 }
 
@@ -402,6 +436,188 @@ int missedCycles(Task t, DateTime at) {
   }
   return n;
 }
+
+/// A column of the Kanban board.
+class KanbanStage {
+  KanbanStage({required this.id, required this.name, this.colour, this.limit});
+
+  final String id;
+  String name;
+
+  /// ARGB colour for the column heading; null for none.
+  int? colour;
+
+  /// Most tasks it should hold; the heading turns amber above it. Null for no limit.
+  int? limit;
+
+  factory KanbanStage.create(String name) =>
+      KanbanStage(id: 'k${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim());
+
+  /// Fixed ids, so two devices set up separately share the same stages.
+  static List<KanbanStage> defaults() => [
+        KanbanStage(id: 'backlog', name: 'Backlog'),
+        KanbanStage(id: 'next', name: 'Up next'),
+        KanbanStage(id: 'doing', name: 'In progress'),
+        KanbanStage(id: 'blocked', name: 'Blocked'),
+        KanbanStage(id: 'done', name: 'Done'),
+      ];
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (colour != null) 'colour': colour,
+        if (limit != null) 'limit': limit,
+      };
+
+  factory KanbanStage.fromJson(Map<String, dynamic> j) => KanbanStage(
+        id: j['id'] as String,
+        name: j['name'] as String? ?? '',
+        colour: (j['colour'] as num?)?.toInt(),
+        limit: (j['limit'] as num?)?.toInt(),
+      );
+}
+
+/// How a task was moved between stages. Plain names, like [TaskSource].
+abstract final class MoveHow {
+  static const added = 'added';
+  static const dragged = 'dragged';
+  static const swiped = 'swiped';
+  static const menu = 'menu';
+  static const taskPage = 'task';
+  static const done = 'done';
+  static const reopened = 'reopened';
+  static const removed = 'removed';
+  static const stageRemoved = 'stageRemoved';
+  static const repeat = 'repeat';
+
+  static const labels = {
+    added: 'Put on the board',
+    dragged: 'Dragged',
+    swiped: 'Swiped',
+    menu: 'Move to…',
+    taskPage: 'On the task page',
+    done: 'Ticked off',
+    reopened: 'Reopened',
+    removed: 'Taken off the board',
+    stageRemoved: 'Stage removed',
+    repeat: 'Next repeat',
+  };
+
+  static String label(String how) => labels[how] ?? how;
+}
+
+/// One move of a task on the Kanban board. [toId] is null when it was taken off the board,
+/// [fromId] null when it was put on. Stage names are kept as they were at the time.
+class StageMove {
+  StageMove({
+    required this.id,
+    this.fromId,
+    this.fromName,
+    this.toId,
+    this.toName,
+    required this.at,
+    required this.how,
+    this.where,
+    this.device,
+    this.note,
+  });
+
+  final String id;
+  final String? fromId;
+  final String? fromName;
+  final String? toId;
+  final String? toName;
+  final DateTime at;
+
+  /// One of the [MoveHow] names.
+  final String how;
+
+  /// Where the phone was, when location recording is on. Filled in once the fix arrives.
+  GeoPoint? where;
+
+  /// Which device made the move (Android, Windows, Mac, ...).
+  final String? device;
+
+  /// Optional words from "Move to…" ("waiting on parts").
+  final String? note;
+
+  factory StageMove.create({
+    KanbanStage? from,
+    KanbanStage? to,
+    required DateTime at,
+    required String how,
+    String? device,
+    String? note,
+  }) =>
+      StageMove(
+        id: 'm${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
+        fromId: from?.id,
+        fromName: from?.name,
+        toId: to?.id,
+        toName: to?.name,
+        at: at,
+        how: how,
+        device: device,
+        note: note == null || note.trim().isEmpty ? null : note.trim(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (fromId != null) 'from': fromId,
+        if (fromName != null) 'fromName': fromName,
+        if (toId != null) 'to': toId,
+        if (toName != null) 'toName': toName,
+        'at': at.toUtc().toIso8601String(),
+        'how': how,
+        if (where != null) 'where': where!.toJson(),
+        if (device != null) 'device': device,
+        if (note != null) 'note': note,
+      };
+
+  factory StageMove.fromJson(Map<String, dynamic> j) => StageMove(
+        id: j['id'] as String,
+        fromId: j['from'] as String?,
+        fromName: j['fromName'] as String?,
+        toId: j['to'] as String?,
+        toName: j['toName'] as String?,
+        at: DateTime.parse(j['at'] as String).toLocal(),
+        how: j['how'] as String? ?? MoveHow.menu,
+        where: GeoPoint.tryParse(j['where']),
+        device: j['device'] as String?,
+        note: j['note'] as String?,
+      );
+}
+
+/// One spell of a task in a stage: from [start] to [end] (null = still there).
+typedef StageStint = ({String stageId, DateTime start, DateTime? end});
+
+/// The spells [t] spent in each stage, from its moves. Time off the board isn't counted.
+List<StageStint> stageStints(Task t) {
+  final out = <StageStint>[];
+  String? current;
+  DateTime? since;
+  for (final m in t.moves) {
+    if (current != null && since != null) out.add((stageId: current, start: since, end: m.at));
+    current = m.toId;
+    since = m.at;
+  }
+  if (current != null && since != null) out.add((stageId: current, start: since, end: null));
+  return out;
+}
+
+/// Minutes in each stage up to [until], by stage id.
+Map<String, int> minutesPerStage(Task t, DateTime until) {
+  final out = <String, int>{};
+  for (final s in stageStints(t)) {
+    final end = s.end ?? until;
+    if (end.isBefore(s.start)) continue;
+    out[s.stageId] = (out[s.stageId] ?? 0) + end.difference(s.start).inMinutes;
+  }
+  return out;
+}
+
+/// What happens when a task is moved into the last stage.
+enum KanbanDone { ask, always, never }
 
 /// A repeating task moved on to its next date without being done ("Skip").
 class SkipRecord {
@@ -612,6 +828,9 @@ class AppData {
     this.sort = ListSort.due,
     this.starredTop = true,
     this.showQuickFilters = true,
+    List<KanbanStage>? stages,
+    this.kanbanDone = KanbanDone.ask,
+    this.kanbanHideFromList = false,
     Map<String, SkipRecord>? skips,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
@@ -625,6 +844,7 @@ class AppData {
         templates = templates ?? [],
         done = done ?? {},
         skips = skips ?? {},
+        stages = stages ?? KanbanStage.defaults(),
         eventCalendars = eventCalendars ?? {},
         dismissedEvents = dismissedEvents ?? {},
         updatedAt = updatedAt ?? _epoch,
@@ -677,6 +897,20 @@ class AppData {
 
   /// Show the row of quick filter chips (All, Today, Next 7 days, ...) above the list.
   bool showQuickFilters;
+
+  /// Kanban board columns, in order. The last one is the "done" end.
+  final List<KanbanStage> stages;
+
+  /// Whether moving a task into the last stage ticks it off too.
+  KanbanDone kanbanDone;
+
+  /// Leave board tasks out of the main list.
+  bool kanbanHideFromList;
+
+  KanbanStage? stage(String? id) => stages.where((s) => s.id == id).firstOrNull;
+
+  /// Open tasks on the board.
+  Iterable<Task> get boardTasks => active.where((t) => t.kanban);
 
   /// Repeating tasks moved on without being done, by [SkipRecord.key], for the statistics.
   final Map<String, SkipRecord> skips;
@@ -742,6 +976,9 @@ class AppData {
         'sort': sort.name,
         'starredTop': starredTop,
         'showQuickFilters': showQuickFilters,
+        'stages': stages.map((s) => s.toJson()).toList(),
+        'kanbanDone': kanbanDone.name,
+        if (kanbanHideFromList) 'kanbanHideFromList': true,
         if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -797,6 +1034,11 @@ class AppData {
         sort: _enum(ListSort.values, j['sort'], ListSort.manual),
         starredTop: j['starredTop'] as bool? ?? true,
         showQuickFilters: j['showQuickFilters'] as bool? ?? true,
+        stages: j['stages'] is List
+            ? [for (final s in j['stages'] as List) KanbanStage.fromJson(s as Map<String, dynamic>)]
+            : null,
+        kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
+        kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
         skips: {
           for (final e in (j['skips'] as Map? ?? {}).entries)
             e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
@@ -843,10 +1085,26 @@ AppData mergeData(AppData a, AppData b) {
   });
 
   final tasks = <String, Task>{};
+  // Board moves from both copies, so a move made on either device is never lost.
+  final moves = <String, Map<String, StageMove>>{};
   for (final t in [...a.active, ...a.archived, ...b.active, ...b.archived]) {
     final seen = tasks[t.id];
     if (seen == null || t.updatedAt.isAfter(seen.updatedAt)) tasks[t.id] = t;
+    if (t.moves.isNotEmpty) moves.putIfAbsent(t.id, () => {}).addAll({for (final m in t.moves) m.id: m});
   }
+  moves.forEach((id, all) {
+    final t = tasks[id]!;
+    if (all.length == t.moves.length) return;
+    // A copy, so this device's data isn't changed before the merge is accepted.
+    final joined = Task.fromJson(t.toJson());
+    joined.moves
+      ..clear()
+      ..addAll(all.values.toList()..sort((x, y) => x.at.compareTo(y.at)));
+    final last = joined.moves.last;
+    joined.kanban = last.toId != null;
+    joined.stageId = last.toId ?? last.fromId ?? joined.stageId;
+    tasks[id] = joined;
+  });
   tasks.removeWhere((id, t) {
     final at = deleted[id];
     return at != null && !t.updatedAt.isAfter(at);
@@ -892,6 +1150,9 @@ AppData mergeData(AppData a, AppData b) {
     sort: settingsFrom.sort,
     starredTop: settingsFrom.starredTop,
     showQuickFilters: settingsFrom.showQuickFilters,
+    stages: settingsFrom.stages,
+    kanbanDone: settingsFrom.kanbanDone,
+    kanbanHideFromList: settingsFrom.kanbanHideFromList,
     skips: skips,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: settingsFrom.templates,

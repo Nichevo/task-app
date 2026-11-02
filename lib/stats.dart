@@ -227,6 +227,56 @@ class Stats {
   /// Added, done and still-open counts per day (periods up to 31 days), week (up to a year) or
   /// month, for the period since [from] (all time when null), oldest first. [categoryId] '' is
   /// "no category"; null is every category.
+  /// Kanban numbers for the period from [from]; null when nothing has ever been on the board.
+  KanbanStats? kanban(DateTime? from) {
+    bool inPeriod(DateTime d) => from == null || !d.isBefore(from);
+    final tasks = data.allTasks.where((t) => t.moves.isNotEmpty).toList();
+    final known = {for (final t in tasks) t.id};
+    final gone = data.done.entries.where((e) => !known.contains(e.key) && e.value.stageMinutes != null);
+    if (tasks.isEmpty && gone.isEmpty) return null;
+
+    final spells = {for (final st in data.stages) st.id: <int>[]};
+    for (final t in tasks) {
+      for (final s in stageStints(t)) {
+        if (s.end != null && inPeriod(s.end!)) spells[s.stageId]?.add(s.end!.difference(s.start).inMinutes);
+      }
+    }
+    // Tasks already cleaned out of the archive: their totals per stage.
+    for (final e in gone) {
+      if (!inPeriod(e.value.at)) continue;
+      e.value.stageMinutes!.forEach((id, m) => spells[id]?.add(m));
+    }
+
+    final order = {for (final (i, st) in data.stages.indexed) st.id: i};
+    var moves = 0, back = 0;
+    DateTime? first;
+    for (final t in tasks) {
+      var wentBack = false;
+      for (final m in t.moves) {
+        if (first == null || m.at.isBefore(first)) first = m.at;
+        if (!inPeriod(m.at) || m.fromId == null || m.toId == null) continue;
+        moves++;
+        final a = order[m.fromId], b = order[m.toId];
+        if (a != null && b != null && b < a && m.how != MoveHow.reopened) wentBack = true;
+      }
+      if (wentBack) back++;
+    }
+    final start = from ?? first ?? now;
+    final weeks = now.difference(start).inHours / (24 * 7);
+
+    final longest = [
+      for (final t in data.boardTasks)
+        if ((data.stage(t.stageId), t.stageSince) case (final st?, final since?)) (t, st, now.difference(since)),
+    ]..sort((x, y) => y.$3.compareTo(x.$3));
+
+    return KanbanStats(
+      stages: [for (final st in data.stages) StageRow(st, spells[st.id]!..sort())],
+      movesPerWeek: weeks < 1 ? moves.toDouble() : moves / weeks,
+      backwards: back,
+      longest: longest.take(5).toList(),
+    );
+  }
+
   List<Bucket> addedVsDone(DateTime? from, {String? categoryId}) {
     final items = [
       for (final a in added)
@@ -274,6 +324,34 @@ class Stats {
 }
 
 /// A task as far as the statistics need it.
+/// Item 52: the Kanban card on the Statistics page.
+class KanbanStats {
+  KanbanStats({required this.stages, required this.movesPerWeek, required this.backwards, required this.longest});
+
+  /// One row per current stage, in board order.
+  final List<StageRow> stages;
+  final double movesPerWeek;
+
+  /// Tasks moved back to an earlier stage at least once in the period.
+  final int backwards;
+
+  /// Open board tasks that have been in their stage longest, longest first.
+  final List<(Task, KanbanStage, Duration)> longest;
+}
+
+class StageRow {
+  StageRow(this.stage, this.minutes);
+
+  final KanbanStage stage;
+
+  /// Finished spells in this stage, in minutes, sorted.
+  final List<int> minutes;
+
+  int get count => minutes.length;
+  double? get average => minutes.isEmpty ? null : minutes.reduce((a, b) => a + b) / minutes.length;
+  int? get median => minutes.isEmpty ? null : minutes[minutes.length ~/ 2];
+}
+
 class AddedItem {
   const AddedItem(this.id, this.createdAt, this.categoryId, this.source, this.doneAt);
 

@@ -8,6 +8,7 @@ import '../task_list.dart';
 import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
+import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'settings_page.dart' show askText, askLines, remindOptions;
 
 /// Edit a task's name, notes and due date. Changes save as you go.
@@ -528,6 +529,7 @@ class _TaskPageState extends State<TaskPage> {
                     }),
                   ),
           ),
+        ..._board(context),
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
@@ -580,6 +582,75 @@ class _TaskPageState extends State<TaskPage> {
           ),
       ]),
     );
+  }
+
+  /// Item 52: the On the Kanban board switch, the stage, and the board history.
+  List<Widget> _board(BuildContext context) {
+    final stages = data.stages;
+    if (stages.isEmpty && task.moves.isEmpty) return [];
+    final current = data.stage(task.stageId) ?? stages.firstOrNull;
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    return [
+      if (!archived && stages.isNotEmpty)
+        SwitchListTile(
+          secondary: const Icon(Icons.view_kanban_outlined),
+          title: const Text('On the Kanban board'),
+          subtitle: Text(task.kanban
+              ? 'In ${current?.name}${task.stageSince == null ? '' : ' for ${describeSpell(DateTime.now().difference(task.stageSince!))}'}'
+              : task.moves.isEmpty
+                  ? 'Off'
+                  : 'Off. Goes back to ${current?.name}'),
+          value: task.kanban,
+          onChanged: (v) => setState(() => widget.store.setOnBoard(task, v)),
+        ),
+      if (task.kanban && !archived && current != null)
+        ListTile(
+          leading: const SizedBox(width: 24),
+          title: const Text('Stage'),
+          subtitle: DropdownButton<String>(
+            isExpanded: true,
+            value: current.id,
+            items: [for (final s in stages) DropdownMenuItem(value: s.id, child: Text(s.name))],
+            onChanged: (id) async {
+              final to = data.stage(id);
+              if (to == null) return;
+              await moveWithRule(context, widget.store, task, to, MoveHow.taskPage);
+              if (mounted) setState(() {});
+              if (task.closedAt != null && mounted) _close();
+            },
+          ),
+        ),
+      if (task.moves.isNotEmpty)
+        ExpansionTile(
+          leading: const Icon(Icons.history),
+          title: const Text('Board history'),
+          subtitle: Text('${task.moves.length} move${task.moves.length == 1 ? '' : 's'}'),
+          childrenPadding: const EdgeInsets.only(left: 56, right: 8, bottom: 8),
+          children: [
+            for (final (i, m) in task.moves.indexed.toList().reversed)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(switch ((m.fromName, m.toName)) {
+                  (null, final to?) => 'Onto the board: $to',
+                  (final from?, null) => 'Off the board (was in $from)',
+                  (final from, final to) => '${from ?? '?'} → ${to ?? '?'}',
+                }),
+                subtitle: Text(
+                  [
+                    dateTimeFmt.format(m.at),
+                    if (i > 0 && m.fromId != null) 'after ${describeSpell(m.at.difference(task.moves[i - 1].at))}',
+                    MoveHow.label(m.how),
+                    ?m.device,
+                    if (m.note != null) '"${m.note}"',
+                  ].join(' · '),
+                  style: hint,
+                ),
+                trailing: _mapButton(m.where),
+              ),
+          ],
+        ),
+    ];
   }
 
   /// Opens a recorded location in the maps app.

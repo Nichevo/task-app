@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.5.0', 'November 2026', [
+    'Kanban board (menu, Kanban board): Backlog, Up next, In progress, Blocked and Done columns. Put a task on it from the task page or "Add to board" on its block.',
+    'Move cards by dragging or swiping (side by side on wide screens), the arrow on each card, or Move to… with a short note.',
+    'Every move is kept on the task (Board history): from and to, when, how long it sat, how, which device, and where if location recording is on.',
+    'Moving to Done can tick the task off too (ask, always or never). Stages, colours and limits in Settings, Kanban board.',
+    'Statistics: time in each stage, moves a week, tasks moved backwards. CSV export adds a Stage column and kanban_moves.csv.',
+  ]),
   Release('1.4.2', 'November 2026', [
     'Place reminders (Android): save places where you are, then have a task remind you when you arrive or leave.',
     'Optional notification with the day\'s tasks when you arrive at a saved place.',

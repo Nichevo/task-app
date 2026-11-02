@@ -74,6 +74,7 @@ class _StatsPageState extends State<StatsPage> {
             ..._sources(context, s, from),
             ..._repeats(context, s, from),
             ..._timing(context, s, from),
+            ..._kanban(context, s, from),
             const SizedBox(height: 24),
             Text('By category', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
@@ -110,6 +111,51 @@ class _StatsPageState extends State<StatsPage> {
         BucketUnit.week => DateFormat('d MMM').format(b.start),
         BucketUnit.month => DateFormat('MMM yy').format(b.start),
       };
+
+  /// Item 52: time in each stage, moves per week, tasks that went backwards, longest waiting.
+  List<Widget> _kanban(BuildContext context, Stats s, DateTime? from) {
+    final k = s.kanban(from);
+    if (k == null) return [];
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    String time(num? minutes) => minutes == null ? '–' : _describe(Duration(minutes: minutes.round()));
+    return [
+      _heading(context, 'Kanban board', 'Time spent in each stage, counted when a task moves on'),
+      Table(
+        columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1.3), 2: FlexColumnWidth(1.3), 3: FlexColumnWidth(0.8)},
+        children: [
+          TableRow(children: [
+            Text('Stage', style: hint),
+            Text('Average', style: hint),
+            Text('Typical', style: hint),
+            Text('Spells', style: hint, textAlign: TextAlign.right),
+          ]),
+          for (final r in k.stages)
+            TableRow(children: [
+              Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(r.stage.name)),
+              Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(time(r.average))),
+              Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(time(r.median))),
+              Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text('${r.count}', textAlign: TextAlign.right)),
+            ]),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text('${k.movesPerWeek.toStringAsFixed(k.movesPerWeek < 10 ? 1 : 0)} moves a week · '
+          '${k.backwards} task${k.backwards == 1 ? '' : 's'} moved backwards'),
+      if (k.longest.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Text('Longest in their stage', style: Theme.of(context).textTheme.titleSmall),
+        for (final (t, st, d) in k.longest)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(t.title),
+            trailing: Text('${st.name} · ${_describe(d)}'),
+          ),
+      ],
+    ];
+  }
 
   /// Item 38: added per day/week, and added vs done with the open line, filtered by category.
   List<Widget> _addedCharts(BuildContext context, Stats s, DateTime? from) {
