@@ -202,8 +202,9 @@ class HomePageState extends State<HomePage> {
   /// The chip in use; All when the chip row is switched off.
   QuickFilter get _filter => data.showQuickFilters ? store.quickFilter : QuickFilter.all;
 
-  /// Drag to reorder only makes sense in hand-made order with nothing hidden by a search.
-  bool get _canDrag => data.sort == ListSort.manual && _query.isEmpty;
+  /// Drag to reorder works in any sort (a drop switches to hand-made order), but not while a
+  /// search hides most of the list.
+  bool get _canDrag => _query.isEmpty;
 
   /// The open tasks to show, in the chosen order. A search looks through every open task
   /// (snoozed ones too), whatever chip is picked.
@@ -248,7 +249,45 @@ class HomePageState extends State<HomePage> {
       final above = next.take(newIndex).whereType<_Header>().lastOrNull ?? next.whereType<_Header>().first;
       category = above.key.isEmpty ? null : above.key;
     }
+    final wasSort = data.sort;
+    final before = [...data.active];
+    final oldCategory = moved.task.categoryId;
+    // Dragging in a sorted list keeps the order on screen as the hand-made order, with the move.
+    if (wasSort != ListSort.manual) data.sort = ListSort.manual;
     store.reorderVisible([for (final r in next.whereType<_TaskRow>()) r.task], moved: moved.task, categoryId: category);
+    if (wasSort != ListSort.manual) {
+      store.changed(settings: true);
+      _snack('Now in hand-made order (was ${sortLabels[wasSort]!.toLowerCase()}). Change it in Settings, Sort by.', () {
+        final still = data.active.toSet();
+        final restored = [...before.where(still.contains), ...data.active.where((t) => !before.contains(t))];
+        data.active
+          ..clear()
+          ..addAll(restored);
+        data.sort = wasSort;
+        final recat = moved.task.categoryId != oldCategory;
+        if (recat) moved.task.categoryId = oldCategory;
+        store.changed(order: true, settings: true, task: recat ? moved.task : null);
+      });
+    } else if (_snapsBack(next, moved)) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(
+            content: Text('Starred tasks stay at the top. Turn off "Starred at the top" in Settings to move them freely.')));
+    }
+  }
+
+  /// Whether "Starred at the top" will put [moved] back above or below where it was dropped.
+  bool _snapsBack(List<_Row> next, _TaskRow moved) {
+    if (!data.starredTop) return false;
+    final at = next.indexOf(moved);
+    // A category header next to it counts as no neighbour: sorting stays inside each group.
+    Task? neighbour(int step) => switch (next.elementAtOrNull(at + step)) {
+          _TaskRow r => r.task,
+          _ => null,
+        };
+
+    final above = neighbour(-1), below = neighbour(1);
+    return moved.task.starred ? (above != null && !above.starred) : (below != null && below.starred);
   }
 
   Future<void> _pasteList() async {

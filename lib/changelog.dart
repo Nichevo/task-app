@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.6.1', 'November 2026', [
+    'Dragging tasks up and down works again whatever the list is sorted by. Dropping a task in a sorted list switches to hand-made order, keeping the order you saw (Undo puts the sort back).',
+    'A note explains when "Starred at the top" moves a dropped task back.',
+  ]),
   Release('1.6.0', 'November 2026', [
     'Kanban board: a task\'s checklist steps can be cards too (task page, "Steps on the board too"), each moving through the stages by itself.',
     'Steps start folded into a chip on their task\'s card; tap it, or "Show all steps" at the top, to unfold them. Steps in another column sit together under their task\'s name.',

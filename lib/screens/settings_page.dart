@@ -242,7 +242,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: const Text('Sort by'),
               subtitle: Text(data.sort == ListSort.manual
                   ? 'Drag the handle on a task to move it.'
-                  : 'Drag handles show in hand-made order only.'),
+                  : 'Dragging a task switches to hand-made order, keeping the order you see.'),
               trailing: DropdownButton<ListSort>(
                 value: data.sort,
                 items: [
