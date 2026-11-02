@@ -282,7 +282,7 @@ Jeff asked for a final review before round 3 was built. Done in the same PR:
 - **CI** now runs `flutter analyze` as well as the tests, and caches the Flutter SDK.
 - Removed template leftovers (unused cupertino_icons, TODO comments in Gradle); app version 1.3.0.
 
-# Round 4 ☐
+# Round 4 ☑
 
 Jeff's feedback on round 3 (2026-10-28). Items 31 and 32 are bugs; items from 30 on are the feature list,
 to be agreed before building.
@@ -519,7 +519,7 @@ days deleted. Restoring keeps the current data as a "before a restore" backup fi
 restored tasks count as just edited and tasks not in the backup count as deleted, so the restore wins on every
 synced device. "Save a backup file" and "Open a backup file" use the same format.
 
-## 52. Kanban board ◐ (round 4 PR 4, version 1.5.0)
+## 52. Kanban board ☑ (PR #12, merged 2026-11-02)
 
 **Request (2026-11-01):** a Kanban option, with each move between stages recorded (from, to, when, where).
 Stages chosen: Backlog, Up next, In progress, Blocked, Done. Plan: Claude doc "Kanban board plan (item 52)".
@@ -550,3 +550,42 @@ Built:
 - Statistics: Kanban card with average and typical time in each stage, moves a week, tasks moved
   backwards, and the tasks longest in their stage. CSV: Stage column, and a second file kanban_moves.csv
   (one row per move) when exporting.
+
+---
+
+# Round 5 (planned 2026-11-02)
+
+Plan: Claude doc "Task Blocks round 5 plan". New: 53 Google sign-in, 54 tasks from emails sent by allowed
+addresses (replaces 34), 55 starred emails page, 56 Kanban steps. Carried over: 48 (pushing tasks in), 28
+(notification suggestions), iPad extras. Jeff asked for 56 first (2026-11-02).
+
+## 56. Checklist steps on the Kanban board ◐ (round 5 PR 1, version 1.6.0)
+
+**Request (2026-11-02):** "have the sub tasks show on the kanban and be moved separately to the main tasks but
+maybe clearly in a stream so they are easily seen as linked to the task", without cluttering the board.
+
+Built:
+- Task page, under On the Kanban board: **Steps on the board too** (off by default). Turning it on puts each
+  checklist step on the board: ticked steps in the last stage, the rest where they were before or in the first.
+- Steps start **folded** into a chip on the task's card ("5 steps: 1 under way, 1 done"). Tap it to unfold that
+  task; the top bar's **Show all steps** unfolds every task (remembered on the device).
+- Step cards are smaller, tinted and edged in the task's colour, with "step 2 of 5" and how long they have
+  been in their stage. On a wide screen they sit under their task's card when in the same column; in other
+  columns a task's steps sit together at the top under "Task name · 2 steps here". On a narrow screen an
+  unfolded task shows all its steps under it, with each step's stage.
+- **Lanes** (wide screens, top bar): one row per task with steps on the board, the task and its steps across
+  the stages; the other tasks share a row at the bottom. Remembered on the device.
+- Steps move like tasks: drag, swipe on touch screens, the arrow on narrow screens, or tap, Move to… (with a
+  note). Moving into the last stage ticks a step and moving out unticks it; ticking one in the checklist moves
+  it to the last stage and unticking moves it back. When a step finishes the checklist the app offers to move
+  the task on.
+- Moving the task itself never moves its steps. Moving it to the last stage with steps still open asks: tick
+  them all, leave them, or cancel. Taking the task off the board takes its steps off too (recorded); putting it
+  back returns them to their stages.
+- Skip and the next repeat start the steps again in the first stage. Removing a stage moves its steps with its
+  tasks. A step made into its own task shows "Step of …" on that task's card.
+- Data: `Task.stepsOnBoard`; `TaskStep.stageId` and `moves` (same `StageMove` records as tasks). Sync joins
+  both devices' step moves by id, like task moves.
+- Task page: each board step shows its stage in the checklist, and **Steps' board history** lists every step
+  move. Statistics: a separate table of time in each stage for steps and step moves a week (task numbers are
+  unchanged). kanban_moves.csv gains a Step column with a row per step move.

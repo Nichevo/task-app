@@ -46,6 +46,10 @@ class AppStore extends ChangeNotifier {
   /// The quick filter chip chosen above the list (device-only).
   QuickFilter quickFilter = QuickFilter.all;
 
+  /// Kanban board on this device (item 56): every task's steps unfolded, and the lanes view.
+  bool boardShowSteps = false;
+  bool boardLanes = false;
+
   /// The app version whose "What's new" was last shown (device-only). Null on a fresh install
   /// until the first load, which counts as seen.
   String? seenVersion;
@@ -93,6 +97,8 @@ class AppStore extends ChangeNotifier {
       seenVersion = s['seenVersion'] as String?;
       places.addAll([for (final p in s['places'] as List? ?? []) ?Place.tryParse(p)]);
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
+      boardShowSteps = s['boardShowSteps'] as bool? ?? false;
+      boardLanes = s['boardLanes'] as bool? ?? false;
     }
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
@@ -123,6 +129,7 @@ class AppStore extends ChangeNotifier {
       final step = data.task(taskId)?.steps.where((s) => s.id == stepId).firstOrNull;
       if (step == null || step.done) continue;
       step.done = true;
+      _stepTicked(data.task(taskId)!, step);
       changed(task: data.task(taskId));
       any = true;
     }
@@ -167,6 +174,8 @@ class AppStore extends ChangeNotifier {
       if (seenVersion != null) 'seenVersion': seenVersion,
       if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
       if (arrivalSummary) 'arrivalSummary': true,
+      if (boardShowSteps) 'boardShowSteps': true,
+      if (boardLanes) 'boardLanes': true,
     }));
   }
 
@@ -368,11 +377,11 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Saves the current location on a board move, when location recording is on.
-  Future<void> _locateMove(Task t, StageMove m) async {
+  Future<void> _locateMove(Task t, StageMove m, [List<StageMove>? list]) async {
     final loc = location;
     if (!recordLocation || loc == null) return;
     final point = await loc.current();
-    if (point == null || data.task(t.id) == null || !t.moves.contains(m)) return;
+    if (point == null || data.task(t.id) == null || !(list ?? t.moves).contains(m)) return;
     m.where = point;
     changed(task: t);
   }
@@ -419,6 +428,7 @@ class AppStore extends ChangeNotifier {
     for (final other in data.active) {
       for (final s in other.steps.where((s) => s.taskId == t.id && !s.done)) {
         s.done = true;
+        _stepTicked(other, s);
         other.touch();
       }
     }
@@ -426,7 +436,10 @@ class AppStore extends ChangeNotifier {
     if (t.repeat != null) {
       next = t.nextRepeat(now);
       // The next one goes back on the board at the start.
-      if (t.kanban && data.stages.isNotEmpty) _move(next, data.stages.first, MoveHow.repeat, at: now, locate: false);
+      if (t.kanban && data.stages.isNotEmpty) {
+        _move(next, data.stages.first, MoveHow.repeat, at: now, locate: false);
+        if (next.stepsOnBoard) _stepsOn(next, MoveHow.repeat, at: now);
+      }
       data.active.insert(index.clamp(0, data.active.length), next);
     }
     changed(task: t, order: true);
@@ -442,12 +455,18 @@ class AppStore extends ChangeNotifier {
     final now = at ?? DateTime.now();
     final oldDue = t.dueAt, oldSnooze = t.snoozedUntil;
     final oldSteps = {for (final st in t.steps) st.id: st.done};
+    final oldMoves = {for (final st in t.steps) st.id: st.moves.length};
     final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue, missed: missedCycles(t, now));
     data.skips[record.key] = record;
     t.dueAt = t.repeat!.nextDue(due: oldDue, completedAt: now);
     t.snoozedUntil = null;
+    final first = data.stages.firstOrNull;
     for (final st in t.steps) {
       st.done = false;
+      // Steps on the board start again in the first stage, like a new repeat.
+      if (first != null && t.boardSteps.contains(st) && st.stageId != first.id) {
+        _moveStep(t, st, first, MoveHow.repeat, at: now, locate: false);
+      }
     }
     changed(task: t);
     return () {
@@ -456,6 +475,11 @@ class AppStore extends ChangeNotifier {
       t.snoozedUntil = oldSnooze;
       for (final st in t.steps) {
         st.done = oldSteps[st.id] ?? st.done;
+        final n = oldMoves[st.id];
+        if (n != null && st.moves.length > n) {
+          st.moves.removeRange(n, st.moves.length);
+          st.stageId = st.moves.lastOrNull?.toId ?? st.stageId;
+        }
       }
       changed(task: t);
     };
@@ -614,8 +638,81 @@ class AppStore extends ChangeNotifier {
     if (on == t.kanban || data.stages.isEmpty) return;
     if (on) {
       _move(t, stage ?? data.stage(t.stageId) ?? data.stages.first, how);
+      if (t.stepsOnBoard) _stepsOn(t, how);
     } else {
       _move(t, null, MoveHow.removed);
+      _stepsOff(t);
+    }
+    changed(task: t);
+  }
+
+  // --- Steps on the board (item 56) ---
+
+  /// Records a move of one checklist step and puts it in [to] (off the board when null).
+  StageMove _moveStep(Task t, TaskStep s, KanbanStage? to, String how, {DateTime? at, String? note, bool locate = true}) {
+    final from = s.placed ? data.stage(s.stageId) : null;
+    final m = StageMove.create(from: from, to: to, at: at ?? DateTime.now(), how: how, device: deviceName, note: note);
+    s.moves.add(m);
+    if (to != null) s.stageId = to.id;
+    if (locate) unawaited(_locateMove(t, m, s.moves));
+    return m;
+  }
+
+  /// Puts every step of [t] that isn't on the board yet into its stage: where it was before,
+  /// the last stage if it is ticked, otherwise the first.
+  void _stepsOn(Task t, String how, {DateTime? at}) {
+    if (data.stages.isEmpty) return;
+    final last = data.stages.last;
+    for (final s in t.steps) {
+      if (s.placed) continue;
+      final before = data.stage(s.stageId);
+      final to = s.done ? last : (before == null || before.id == last.id ? data.stages.first : before);
+      _moveStep(t, s, to, how, at: at, locate: false);
+    }
+  }
+
+  void _stepsOff(Task t) {
+    for (final s in t.steps.where((s) => s.placed)) {
+      _moveStep(t, s, null, MoveHow.removed, locate: false);
+    }
+  }
+
+  /// The task page's "Steps on the board too" switch.
+  void setStepsOnBoard(Task t, bool on) {
+    if (t.stepsOnBoard == on) return;
+    t.stepsOnBoard = on;
+    if (t.kanban) on ? _stepsOn(t, MoveHow.added) : _stepsOff(t);
+    changed(task: t);
+  }
+
+  /// Moves one step to [to]. Into the last stage ticks it; out of it unticks it. Returns true
+  /// when that finished the whole checklist.
+  bool moveStepToStage(Task t, TaskStep s, KanbanStage to, {required String how, String? note}) {
+    if (s.placed && s.stageId == to.id) return false;
+    _moveStep(t, s, to, how, note: note);
+    final last = to.id == data.stages.lastOrNull?.id;
+    if (last != s.done) s.done = last;
+    changed(task: t);
+    return last && t.steps.every((x) => x.done);
+  }
+
+  /// Keeps a board step's stage in step with its tick box.
+  void _stepTicked(Task t, TaskStep s) {
+    if (!t.boardSteps.contains(s) || data.stages.isEmpty) return;
+    final last = data.stages.last;
+    if (s.done && s.stageId != last.id) {
+      _moveStep(t, s, last, MoveHow.done, locate: false);
+    } else if (!s.done && s.stageId == last.id) {
+      final back = s.moves.isEmpty ? null : data.stage(s.moves.last.fromId);
+      _moveStep(t, s, back == null || back.id == last.id ? data.stages.first : back, MoveHow.reopened, locate: false);
+    }
+  }
+
+  /// Ticks every open step of [t] (moving board steps to the last stage).
+  void tickAllSteps(Task t) {
+    for (final s in t.steps.where((s) => !s.done)) {
+      s.done = true;
+      _stepTicked(t, s);
     }
     changed(task: t);
   }
@@ -658,8 +755,26 @@ class AppStore extends ChangeNotifier {
       }
       changed(task: t);
     }
+    for (final t in data.active) {
+      for (final st in t.steps.where((st) => st.stageId == s.id)) {
+        if (st.placed) {
+          _moveStep(t, st, moveTo, MoveHow.stageRemoved, locate: false);
+        } else {
+          st.stageId = moveTo.id;
+        }
+        changed(task: t);
+      }
+    }
     data.stages.remove(s);
     changed(settings: true);
+  }
+
+  /// The board's Show steps and Lanes buttons, remembered on this device.
+  void setBoardView({bool? showSteps, bool? lanes}) {
+    boardShowSteps = showSteps ?? boardShowSteps;
+    boardLanes = lanes ?? boardLanes;
+    notifyListeners();
+    saveDeviceSettings();
   }
 
   /// Picks a quick filter chip and remembers it on this device.
@@ -736,6 +851,7 @@ class AppStore extends ChangeNotifier {
   TaskStep addStep(Task t, String title) {
     final s = TaskStep.create(title);
     t.steps.add(s);
+    if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
     changed(task: t);
     return s;
   }
@@ -743,6 +859,7 @@ class AppStore extends ChangeNotifier {
   /// Returns true when this tick finished the whole checklist.
   bool toggleStep(Task t, TaskStep s) {
     s.done = !s.done;
+    _stepTicked(t, s);
     changed(task: t);
     return s.done && t.steps.every((x) => x.done);
   }

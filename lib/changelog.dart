@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.6.0', 'November 2026', [
+    'Kanban board: a task\'s checklist steps can be cards too (task page, "Steps on the board too"), each moving through the stages by itself.',
+    'Steps start folded into a chip on their task\'s card; tap it, or "Show all steps" at the top, to unfold them. Steps in another column sit together under their task\'s name.',
+    'Lanes view on wide screens: one row per task with steps, so a task and its steps read left to right.',
+    'Moving a step to Done ticks it and ticking it in the checklist moves it to Done. Moving the task to Done with open steps asks what to do with them.',
+    'Each step keeps its own board history; Statistics and kanban_moves.csv count step moves separately.',
+  ]),
   Release('1.5.0', 'November 2026', [
     'Kanban board (menu, Kanban board): Backlog, Up next, In progress, Blocked and Done columns. Put a task on it from the task page or "Add to board" on its block.',
     'Move cards by dragging or swiping (side by side on wide screens), the arrow on each card, or Move to… with a short note.',

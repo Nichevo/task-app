@@ -37,19 +37,20 @@ String buildCsv(AppData data) {
   return '${rows.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
 }
 
-const movesHeader = ['Task', 'Moved from', 'Moved to', 'When', 'Minutes in previous stage', 'How', 'Where', 'Device', 'Note'];
+const movesHeader = ['Task', 'Step', 'Moved from', 'Moved to', 'When', 'Minutes in previous stage', 'How', 'Where', 'Device', 'Note'];
 
 /// kanban_moves.csv: one row per board move of every task, oldest first. Null when nothing
 /// has been on the board.
 String? buildMovesCsv(AppData data) {
   final rows = <(DateTime, List<String>)>[];
-  for (final t in data.allTasks) {
+  void add(Task t, TaskStep? step, List<StageMove> moves) {
     DateTime? previous;
-    for (final m in t.moves) {
+    for (final m in moves) {
       rows.add((
         m.at,
         [
           t.title,
+          step?.title ?? '',
           m.fromName ?? '',
           m.toName ?? '',
           _date(m.at),
@@ -61,6 +62,14 @@ String? buildMovesCsv(AppData data) {
         ]
       ));
       previous = m.at;
+    }
+  }
+
+  for (final t in data.allTasks) {
+    add(t, null, t.moves);
+    // Item 56: checklist steps' own moves.
+    for (final st in t.steps) {
+      add(t, st, st.moves);
     }
   }
   if (rows.isEmpty) return null;

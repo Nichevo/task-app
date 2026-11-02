@@ -28,6 +28,7 @@ class Task {
     this.kanban = false,
     this.stageId,
     List<StageMove>? moves,
+    this.stepsOnBoard = false,
     DateTime? updatedAt,
   })  : steps = steps ?? [],
         moves = moves ?? [],
@@ -101,6 +102,13 @@ class Task {
   /// Every move between stages, oldest first. Never rewritten; synced by joining both copies.
   final List<StageMove> moves;
 
+  /// Item 56: its checklist steps are cards on the board too, each moving through the stages
+  /// on its own.
+  bool stepsOnBoard;
+
+  /// The steps showing on the board: none unless the task is on it with [stepsOnBoard] on.
+  List<TaskStep> get boardSteps => kanban && stepsOnBoard ? steps : const [];
+
   /// When it went into its current stage (null when not on the board or never moved).
   DateTime? get stageSince => kanban && moves.isNotEmpty ? moves.last.at : null;
 
@@ -135,6 +143,7 @@ class Task {
       ..place = place
       ..placeLeave = placeLeave
       ..seriesId = series
+      ..stepsOnBoard = stepsOnBoard
       ..source = TaskSource.repeat;
     // Each repeat starts with the checklist unticked.
     next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
@@ -176,6 +185,7 @@ class Task {
         if (kanban) 'kanban': true,
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
+        if (stepsOnBoard) 'stepsBoard': true,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -206,6 +216,7 @@ class Task {
         kanban: j['kanban'] as bool? ?? false,
         stageId: j['stage'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
+        stepsOnBoard: j['stepsBoard'] as bool? ?? false,
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -284,12 +295,26 @@ class GeoPoint {
 
 /// One line of a task's checklist. [taskId] is set when it was made into a full task.
 class TaskStep {
-  TaskStep({required this.id, required this.title, this.done = false, this.taskId});
+  TaskStep({required this.id, required this.title, this.done = false, this.taskId, this.stageId, List<StageMove>? moves})
+      : moves = moves ?? [];
 
   final String id;
   String title;
   bool done;
   String? taskId;
+
+  /// Item 56: the Kanban stage it is in when its task has steps on the board. Kept while they
+  /// are off the board, so it goes back there.
+  String? stageId;
+
+  /// Its own moves between stages, oldest first; synced by joining both copies like a task's.
+  final List<StageMove> moves;
+
+  /// On the board right now: its last move went into a stage.
+  bool get placed => moves.isNotEmpty && moves.last.toId != null;
+
+  /// When it went into its current stage.
+  DateTime? get stageSince => moves.isNotEmpty && moves.last.toId != null ? moves.last.at : null;
 
   factory TaskStep.create(String title) =>
       TaskStep(id: 's${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', title: title.trim());
@@ -299,6 +324,8 @@ class TaskStep {
         'title': title,
         if (done) 'done': true,
         if (taskId != null) 'taskId': taskId,
+        if (stageId != null) 'stage': stageId,
+        if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -306,6 +333,8 @@ class TaskStep {
         title: j['title'] as String? ?? '',
         done: j['done'] as bool? ?? false,
         taskId: j['taskId'] as String?,
+        stageId: j['stage'] as String?,
+        moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
       );
 }
 
@@ -592,11 +621,14 @@ class StageMove {
 typedef StageStint = ({String stageId, DateTime start, DateTime? end});
 
 /// The spells [t] spent in each stage, from its moves. Time off the board isn't counted.
-List<StageStint> stageStints(Task t) {
+List<StageStint> stageStints(Task t) => moveStints(t.moves);
+
+/// The spells in each stage from a list of moves (a task's or a step's).
+List<StageStint> moveStints(List<StageMove> moves) {
   final out = <StageStint>[];
   String? current;
   DateTime? since;
-  for (final m in t.moves) {
+  for (final m in moves) {
     if (current != null && since != null) out.add((stageId: current, start: since, end: m.at));
     current = m.toId;
     since = m.at;
@@ -1087,23 +1119,46 @@ AppData mergeData(AppData a, AppData b) {
   final tasks = <String, Task>{};
   // Board moves from both copies, so a move made on either device is never lost.
   final moves = <String, Map<String, StageMove>>{};
+  // The same for checklist steps on the board (item 56): task id → step id → moves.
+  final stepMoves = <String, Map<String, Map<String, StageMove>>>{};
   for (final t in [...a.active, ...a.archived, ...b.active, ...b.archived]) {
     final seen = tasks[t.id];
     if (seen == null || t.updatedAt.isAfter(seen.updatedAt)) tasks[t.id] = t;
     if (t.moves.isNotEmpty) moves.putIfAbsent(t.id, () => {}).addAll({for (final m in t.moves) m.id: m});
+    for (final st in t.steps) {
+      if (st.moves.isEmpty) continue;
+      stepMoves.putIfAbsent(t.id, () => {}).putIfAbsent(st.id, () => {}).addAll({for (final m in st.moves) m.id: m});
+    }
   }
+  // Copies, so this device's data isn't changed before the merge is accepted.
+  final copied = <String>{};
+  Task own(String id) {
+    if (copied.add(id)) tasks[id] = Task.fromJson(tasks[id]!.toJson());
+    return tasks[id]!;
+  }
+
   moves.forEach((id, all) {
     final t = tasks[id]!;
     if (all.length == t.moves.length) return;
-    // A copy, so this device's data isn't changed before the merge is accepted.
-    final joined = Task.fromJson(t.toJson());
+    final joined = own(id);
     joined.moves
       ..clear()
       ..addAll(all.values.toList()..sort((x, y) => x.at.compareTo(y.at)));
     final last = joined.moves.last;
     joined.kanban = last.toId != null;
     joined.stageId = last.toId ?? last.fromId ?? joined.stageId;
-    tasks[id] = joined;
+  });
+  stepMoves.forEach((id, bySteps) {
+    bySteps.forEach((stepId, all) {
+      final st = tasks[id]!.steps.where((s) => s.id == stepId).firstOrNull;
+      if (st == null || all.length == st.moves.length) return;
+      final joined = own(id).steps.firstWhere((s) => s.id == stepId);
+      joined.moves
+        ..clear()
+        ..addAll(all.values.toList()..sort((x, y) => x.at.compareTo(y.at)));
+      final last = joined.moves.last;
+      joined.stageId = last.toId ?? last.fromId ?? joined.stageId;
+    });
   });
   tasks.removeWhere((id, t) {
     final at = deleted[id];

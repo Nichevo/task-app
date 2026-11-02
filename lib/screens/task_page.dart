@@ -404,7 +404,12 @@ class _TaskPageState extends State<TaskPage> {
                     style: TextStyle(
                         decoration: s.done ? TextDecoration.lineThrough : null,
                         color: s.done ? Theme.of(context).disabledColor : null)),
-                subtitle: s.taskId == null ? null : Text('Task: ${data.task(s.taskId)?.title ?? '(deleted)'}'),
+                subtitle: s.taskId == null && !task.boardSteps.contains(s)
+                    ? null
+                    : Text([
+                        if (s.taskId != null) 'Task: ${data.task(s.taskId)?.title ?? '(deleted)'}',
+                        if (task.boardSteps.contains(s)) 'Board: ${data.stage(s.stageId)?.name ?? '?'}',
+                      ].join(' · ')),
                 onTap: () => _stepMenu(s),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   if (s.taskId != null) const Icon(Icons.link, size: 18),
@@ -619,6 +624,41 @@ class _TaskPageState extends State<TaskPage> {
               if (task.closedAt != null && mounted) _close();
             },
           ),
+        ),
+      if (task.kanban && !archived)
+        SwitchListTile(
+          secondary: const SizedBox(width: 24),
+          title: const Text('Steps on the board too'),
+          subtitle: const Text('Each checklist step gets its own card and moves through the stages by itself'),
+          value: task.stepsOnBoard,
+          onChanged: (v) => setState(() => widget.store.setStepsOnBoard(task, v)),
+        ),
+      if (task.steps.any((st) => st.moves.isNotEmpty))
+        ExpansionTile(
+          leading: const Icon(Icons.history),
+          title: const Text("Steps' board history"),
+          subtitle: Text('${task.steps.fold(0, (n, st) => n + st.moves.length)} moves'),
+          childrenPadding: const EdgeInsets.only(left: 56, right: 8, bottom: 8),
+          children: [
+            for (final (st, m) in [
+              for (final st in task.steps)
+                for (final m in st.moves) (st, m),
+            ]..sort((x, y) => y.$2.at.compareTo(x.$2.at)))
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('${st.title}: ${switch ((m.fromName, m.toName)) {
+                  (null, final to?) => 'onto the board, $to',
+                  (final from?, null) => 'off the board (was in $from)',
+                  (final from, final to) => '${from ?? '?'} → ${to ?? '?'}',
+                }}'),
+                subtitle: Text(
+                  [dateTimeFmt.format(m.at), MoveHow.label(m.how), ?m.device, if (m.note != null) '"${m.note}"'].join(' · '),
+                  style: hint,
+                ),
+                trailing: _mapButton(m.where),
+              ),
+          ],
         ),
       if (task.moves.isNotEmpty)
         ExpansionTile(
