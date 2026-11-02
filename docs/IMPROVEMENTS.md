@@ -1,12 +1,12 @@
 # Improvement plan
 
-Running list of changes from Jeff's feedback. Status: ☐ planned · ◐ in progress · ☑ done
+Running list of changes from the owner's feedback. Status: ☐ planned · ◐ in progress · ☑ done
 
 ## 1. Use the unfolded Samsung Fold screen sensibly ☑ (PR #1, merged 2026-10-28)
 
 **Feedback:** On the Fold's inner screen the single full-width list wastes space.
 
-**Approach (chosen by Jeff 2026-10-27; PR #1):** when the screen is wide (unfolded Fold, tablet, or a
+**Approach (chosen 2026-10-27; PR #1):** when the screen is wide (unfolded Fold, tablet, or a
 wide Windows window) switch to two side-by-side panes:
 
 - **Left:** the task list, exactly as now (colour blocks, drag to reorder, tick off).
@@ -192,7 +192,7 @@ A month grid (switch from the list with a calendar icon):
 
 ## 24. Widget additions (Android) ☑ (PR #3, merged 2026-10-28)
 
-Jeff asked for all of these (2026-10-28).
+All of these were asked for (2026-10-28).
 
 New widgets, chosen in Android's widget picker like the existing three:
 
@@ -228,7 +228,7 @@ accounts, costs or internet needed:
 
 ## 26. More ways to add tasks ☑ (PR #3, merged 2026-10-28)
 
-Jeff picked these five (2026-10-28):
+These five were picked (2026-10-28):
 
 1. **Share to Task Blocks** (Android): appears in the share sheet of any app. Shared text becomes the title
    (first line) and notes; a shared link goes into the notes. Opens a small add box with the date and category chips.
@@ -256,7 +256,7 @@ Settings → **Overdue reminders**:
 
 ## 28. Notification suggestions: settings placeholder only ☑ (PR #3, merged 2026-10-28)
 
-Jeff wants to consider this later (2026-10-28). Round 3 adds only the **settings, greyed out and marked
+To be considered later (2026-10-28). Round 3 adds only the **settings, greyed out and marked
 "Coming later"**, with no notification access and no listener code:
 
 - Settings → **Suggestions from notifications**: an on/off switch (disabled).
@@ -269,7 +269,7 @@ their own), everything stays on the phone.
 
 ## 29. Clean-up and speed review ☑ (PR #3, merged 2026-10-28)
 
-Jeff asked for a final review before round 3 was built. Done in the same PR:
+A final review was asked for before round 3 was built. Done in the same PR:
 
 - **Saving is debounced**: typing in a task used to rewrite the whole file, reschedule every reminder
   and redraw the widgets on every key. Now the screen updates at once and the rest happens 0.4 s
@@ -284,7 +284,7 @@ Jeff asked for a final review before round 3 was built. Done in the same PR:
 
 # Round 4 ☑
 
-Jeff's feedback on round 3 (2026-10-28). Items 31 and 32 are bugs; items from 30 on are the feature list,
+Feedback on round 3 (2026-10-28). Items 31 and 32 are bugs; items from 30 on are the feature list,
 to be agreed before building.
 
 ## 30. Where tasks came from, in Statistics ☑ (PR #10, merged 2026-11-01)
@@ -345,7 +345,7 @@ due today or overdue, once per place per day.
 Today: select text in Gmail, Share, Task Blocks. To build: Task Blocks signs in to Google once (OAuth, like
 Dropbox); on each sync it picks up emails carrying a chosen label (default "Task") or star, makes a task from
 the subject with sender and date in the notes and a link that opens the email in Gmail, then swaps the label
-to "Tasked". Phone and Windows. Jeff creates a Google Cloud OAuth client (steps to be written); Google shows a
+to "Tasked". Phone and Windows. The owner creates a Google Cloud OAuth client (steps to be written); Google shows a
 one-time "unverified app" screen. Source "Email" in statistics (item 30).
 
 ## 35. Skip a repeating task ☑ (PR #9, merged 2026-11-01)
@@ -433,7 +433,7 @@ Item 30 (By source in Statistics) builds on this.
 
 Recommended: a Dropbox `inbox/` folder that takes one small JSON file per task (title, due, notes, category,
 source, the tool's own id to avoid duplicates), then an Android "add task" intent for Tasker-style apps, and a
-small web endpoint only if a tool can only call webhooks. Open questions for Jeff are at the end of the doc.
+small web endpoint only if a tool can only call webhooks. Open questions for the owner are at the end of the doc.
 
 ## 49. Calendar look-ahead setting ☑ (PR #8, merged 2026-11-01)
 
@@ -451,7 +451,7 @@ later). Synced with the tasks, ready for place-based reminders (item 33).
 ## 51. iPad version ☑ (PR #8, merged 2026-11-01; details in docs/IPAD.md)
 
 An iOS target that runs on iPad (and iPhone) with the two-pane layout, reminders with Done/snooze buttons, and
-location recording. CI attaches an unsigned **TaskBlocks-ios** build; installing it needs Jeff's Apple ID
+location recording. CI attaches an unsigned **TaskBlocks-ios** build; installing it needs the owner's Apple ID
 (free, re-sent every 7 days) or a paid developer account (a year, TestFlight). Widgets, calendar suggestions,
 photo text, share and voice stay Android-only for now.
 
@@ -557,9 +557,9 @@ Built:
 
 Plan: Claude doc "Task Blocks round 5 plan". New: 53 Google sign-in, 54 tasks from emails sent by allowed
 addresses (replaces 34), 55 starred emails page, 56 Kanban steps. Carried over: 48 (pushing tasks in), 28
-(notification suggestions), iPad extras. Jeff asked for 56 first (2026-11-02).
+(notification suggestions), iPad extras. 56 was asked for first (2026-11-02).
 
-## 56. Checklist steps on the Kanban board ◐ (round 5 PR 1, version 1.6.0)
+## 56. Checklist steps on the Kanban board ☑ (PR #13, merged 2026-11-02)
 
 **Request (2026-11-02):** "have the sub tasks show on the kanban and be moved separately to the main tasks but
 maybe clearly in a stream so they are easily seen as linked to the task", without cluttering the board.
