@@ -176,14 +176,20 @@ class AppStore extends ChangeNotifier {
     if (any) notifyListeners();
   }
 
-  Future<void> _writeData() async {
+  Future<void> _writeData() {
     final dir = _dir;
-    if (dir == null) return;
-    // Write to a temporary file first so a crash mid-write can't corrupt the saved list.
-    final tmp = File('${dir.path}/tasks.json.tmp');
-    await tmp.writeAsString(jsonEncode(data.toJson()), flush: true);
-    await tmp.rename('${dir.path}/tasks.json');
+    if (dir == null) return Future.value();
+    // One write at a time: two at once (a sync and an edit) would share the temporary file and
+    // the second rename would fail.
+    return _writing = _writing.catchError((_) {}).then((_) async {
+      // Write to a temporary file first so a crash mid-write can't corrupt the saved list.
+      final tmp = File('${dir.path}/tasks.json.tmp');
+      await tmp.writeAsString(jsonEncode(data.toJson()), flush: true);
+      await tmp.rename('${dir.path}/tasks.json');
+    });
   }
+
+  Future<void> _writing = Future.value();
 
   Future<void> saveDeviceSettings() async {
     if (_dir == null) return;
@@ -1217,6 +1223,12 @@ class AppStore extends ChangeNotifier {
   DateTime? _emailCheckedAt;
   bool _checkingEmail = false;
 
+  /// Saves Gmail calls on each check: label ids, emails already found not to be tasks, and
+  /// ignored emails (kept until their sender is allowed). Reset when the app starts.
+  final _labels = <String, String>{};
+  final _notTasks = <String>{};
+  final _ignoredMessages = <String, GmailMessage>{};
+
   /// "Task" at the start of a subject, with an optional ":" or "-" after it.
   static final _taskPrefix = RegExp(r'^\s*task\b\s*[:\-–—]?\s*', caseSensitive: false);
 
@@ -1233,15 +1245,20 @@ class AppStore extends ChangeNotifier {
     _emailCheckedAt = DateTime.now();
     var added = 0;
     try {
-      final tasked = await g.labelId('Tasked');
-      final taskLabel = await g.labelId('Task');
+      final tasked = _labels['Tasked'] ??= await g.labelId('Tasked');
+      final taskLabel = _labels['Task'] ??= await g.labelId('Task');
       final ids = await g.search('newer_than:14d -label:tasked (subject:task OR label:task)', max: 50);
       final ignored = <IgnoredEmail>[];
       for (final id in ids) {
         if (data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
-        final m = await g.message(id, checkSender: true);
+        // Already looked at and not a task: don't fetch it again on every check.
+        if (_notTasks.contains(id)) continue;
+        final m = _ignoredMessages[id] ?? await g.message(id, checkSender: true);
         final bySubject = _taskPrefix.hasMatch(m.subject);
-        if (!bySubject && !m.labels.contains(taskLabel)) continue;
+        if (!bySubject && !m.labels.contains(taskLabel)) {
+          _notTasks.add(id);
+          continue;
+        }
         // Sent from this very account (it's in Sent): Gmail itself is the check.
         final own = m.labels.contains('SENT') && m.address == g.email?.toLowerCase();
         String? why;
@@ -1252,8 +1269,11 @@ class AppStore extends ChangeNotifier {
         }
         if (why != null) {
           ignored.add(IgnoredEmail(m, why));
+          // Kept, so the next check only looks again at whether the sender is now allowed.
+          _ignoredMessages[id] = m;
           continue;
         }
+        _ignoredMessages.remove(id);
         final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
         final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
         final t = addTask(p.title,
@@ -1266,6 +1286,7 @@ class AppStore extends ChangeNotifier {
           await g.modify(id, add: [tasked], remove: [if (m.labels.contains(taskLabel)) taskLabel]);
         } catch (e) {
           debugPrint('label swap: $e');
+          _labels.clear(); // The label may have been deleted in Gmail; look it up again next time.
         }
       }
       ignoredEmails

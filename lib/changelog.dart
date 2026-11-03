@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.2', 'November 2026', [
+    'Uses less battery: reminders are only set again when a due date, name or reminder setting changes, and home screen widgets only redraw when what they show changes.',
+    'Email to tasks no longer downloads the same emails again on every check.',
+    'The list stops redrawing every minute while the app is in the background.',
+    'Fixed a rare "could not save" error when a sync and an edit saved at the same moment.',
+  ]),
   Release('1.8.1', 'November 2026', [
     'The settings kept on each device (places, list and board view choices, location recording, the Google client ID and secret) are now saved to Dropbox too, so a reinstall can get them back. Sign-ins are not copied.',
     'After a reinstall, connecting Dropbox offers "Restore" at the top of the list. Settings, Dropbox also has Restore settings from a device, to copy them from another device.',

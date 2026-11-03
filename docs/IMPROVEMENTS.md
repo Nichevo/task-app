@@ -723,3 +723,23 @@ didn't know when it saved, and that loss then synced to every device.
   a line at the top of the list offers Restore or Not now; nothing is saved over it until answered.
 - Settings → Dropbox → Restore settings from a device lists every device's file, newest first, so an iPad can
   take the Mac's Google client too. A Google client already on the device is never replaced.
+
+## 71. Battery and speed review ☑ (version 1.8.2)
+
+Review of the whole app (2026-11-03) for battery use, speed and general bugs. Fixed:
+
+- Reminders: every save cancelled and re-set every notification (up to a few hundred system calls). Now skipped
+  unless something a reminder depends on changed, and at least once a day.
+- Widgets: every save redrew all eight widgets. Now only when the data they show changed.
+- Email to tasks: each check (every sync, at most every 2 minutes) downloaded every matching email from the last
+  14 days again, including ones already found not to be tasks, and listed the Gmail labels twice. These are now
+  remembered while the app runs.
+- The minute tick that re-colours the list kept running in the background; now only while on screen.
+- Two saves at the same moment (a sync and an edit) shared one temporary file, so one could fail. Saves now
+  take turns.
+
+Looked at and fine: place reminders use Android geofencing (no constant GPS), location is only read when adding or
+ticking off (a recent fix is reused), widget refresh is one 15-minute job only while a widget exists, reminders
+use inexact alarms, and edits are batched (0.4 s save, 2 s upload). Each sync is still about four small Dropbox
+calls; checking the file's revision first would save one download but needs the files.metadata.read permission,
+so it is left for now.

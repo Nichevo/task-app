@@ -24,6 +24,8 @@ class HomeWidgets {
   ];
 
   /// Writes what the widgets show and asks them to redraw.
+  String? _lastJson;
+
   Future<void> push(AppData data) async {
     if (!supported) return;
     final now = DateTime.now();
@@ -53,8 +55,11 @@ class HomeWidgets {
       'dueDays': stats.dueDays(now, const Duration(days: 62)),
       'stats': {'week': stats.doneThisWeek, 'streak': stats.streak},
     });
+    // Each update redraws every widget, so skip it when nothing they show has changed.
+    if (json == _lastJson) return;
     try {
       await HomeWidget.saveWidgetData<String>('widget_data', json);
+      _lastJson = json;
       for (final p in _providers) {
         await HomeWidget.updateWidget(qualifiedAndroidName: p);
       }

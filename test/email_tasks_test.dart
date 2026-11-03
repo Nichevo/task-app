@@ -81,11 +81,14 @@ class FakeGmail {
   final Map<String, Map<String, dynamic>> messages;
   final modified = <String, Map<String, dynamic>>{};
   String? lastQuery;
+  var fetched = 0;
+  var labelLists = 0;
 
   late final client = MockClient((req) async {
     final path = req.url.path;
     if (path == '/token') return http.Response('{"access_token":"a","expires_in":3600}', 200);
     if (path.endsWith('/labels') && req.method == 'GET') {
+      labelLists++;
       return http.Response(jsonEncode({
         'labels': [
           {'id': 'L_task', 'name': 'Task'},
@@ -103,6 +106,7 @@ class FakeGmail {
       modified[path.split('/')[path.split('/').length - 2]] = jsonDecode(req.body) as Map<String, dynamic>;
       return http.Response('{}', 200);
     }
+    fetched++;
     return http.Response(jsonEncode(messages[path.split('/').last]), 200);
   });
 }
@@ -275,6 +279,25 @@ void main() {
       expect(s.data.allowedSenders, contains('me@other.example'));
       expect(s.data.active.single.title, 'from my other address');
       expect(s.ignoredEmails, isEmpty);
+    });
+
+    test('later checks don\'t fetch emails already looked at, or the labels again', () async {
+      final g = FakeGmail({
+        'n': mail('n', 'Your task list for today', 'Shop <news@shop.example>', auth: 'dkim=pass header.i=@shop.example'),
+        'o': mail('o', 'Task: ring the vet', 'Me <me@other.example>', auth: 'dkim=pass header.i=@other.example'),
+      });
+      final s = storeWith(g);
+      await s.checkEmailTasks();
+      expect(g.fetched, 2);
+      expect(g.labelLists, 2);
+      expect(s.ignoredEmails, hasLength(1));
+      await s.checkEmailTasks(force: true);
+      expect(g.fetched, 2, reason: 'nothing fetched twice');
+      expect(g.labelLists, 2);
+      expect(s.ignoredEmails, hasLength(1), reason: 'the ignored list is still shown');
+      await s.allowSender('me@other.example');
+      expect(s.data.active.single.title, 'ring the vet');
+      expect(g.fetched, 2);
     });
 
     test('the settings sync', () {

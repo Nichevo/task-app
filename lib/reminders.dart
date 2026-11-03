@@ -160,11 +160,36 @@ class Reminders {
   /// can be noted down even when the app isn't running.
   String? dir;
 
+  String? _lastKey;
+
+  /// Everything the scheduled reminders depend on: the settings, each open task's name, dates
+  /// and reminder, how much is done (for the weekly review) and today's date.
+  static String scheduleKey(AppData data, DateTime now) {
+    final j = data.toJson()
+      ..removeWhere((k, _) => const {
+            'active', 'archived', 'done', 'deleted', 'skips', 'updatedAt', 'orderUpdatedAt', 'hiddenEmails',
+          }.contains(k));
+    return jsonEncode([
+      '${now.year}-${now.month}-${now.day}',
+      j,
+      data.done.length,
+      data.archived.length,
+      for (final t in data.active)
+        if (t.dueAt != null)
+          [t.id, t.title, t.dueAt!.toIso8601String(), t.remindBefore, t.snoozedUntil?.toIso8601String()],
+    ]);
+  }
+
   /// Replaces all scheduled reminders: one at each open task's due time, an earlier one if
   /// asked for, and the overdue summary or nudges chosen in Settings.
   Future<void> schedule(AppData data) async {
     if (!_ready) return;
     final now = DateTime.now();
+    // Rescheduling means up to a few hundred calls into the system, so skip it when nothing a
+    // reminder depends on has changed (at least once a day, for the daily and weekly ones).
+    final key = scheduleKey(data, now);
+    if (key == _lastKey) return;
+    _lastKey = key;
     try {
       await _plugin.cancelAllPendingNotifications();
       // Android allows ~500 alarms per app; stay well inside it. iOS keeps the soonest 64.
@@ -192,6 +217,7 @@ class Reminders {
       if (data.overdueMode == OverdueMode.daily) await _dailySummary(data, now);
       if (data.weeklyReview) await _weeklyReview(data, now);
     } catch (e) {
+      _lastKey = null; // Try again on the next change.
       debugPrint('Could not schedule reminders: $e');
     }
   }

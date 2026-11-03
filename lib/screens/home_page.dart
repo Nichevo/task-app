@@ -93,8 +93,13 @@ class HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     // Re-colour the blocks as they age, and bring back snoozed tasks.
-    _tick = Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}));
+    // Only while the app is on screen: in the background there is nothing to redraw.
+    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) setState(() {});
+    });
     _lifecycle = AppLifecycleListener(onResume: () {
+      setState(() {}); // Colours and snoozes may have moved on while it was hidden.
       store.syncIfStale();
       _checkStarred();
       if (store.dropbox == null) store.checkEmailTasks();
