@@ -429,7 +429,7 @@ CSV export (read back on import). It is a plain name, so outside tools can push 
 later (see item 48). Older tasks made from a calendar event count as Calendar; other older tasks are Unknown.
 Item 30 (By source in Statistics) builds on this.
 
-## 48. Plan: other tools pushing tasks in ◐ (design in docs/PUSH_TASKS.md)
+## 48. Plan: other tools pushing tasks in ☑ (A built in 1.7.1, B in 1.8.5; design in docs/PUSH_TASKS.md)
 
 Recommended: a Dropbox `inbox/` folder that takes one small JSON file per task (title, due, notes, category,
 source, the tool's own id to avoid duplicates), then an Android "add task" intent for Tasker-style apps, and a
@@ -624,13 +624,16 @@ didn't know when it saved, and that loss then synced to every device.
   `/backups` folder of the app's Dropbox folder (five slots, one per day in turn).
 - This has to reach every device before any round 5 field appears, so it ships first and on its own.
 
-## 66. Neutral app ids ◐ (iPad and Mac in 1.6.2; Android code names later)
+## 66. Neutral app ids ☑ (iPad and Mac in 1.6.2; Android code names in 1.8.5)
 
 - iPad and Mac bundle id is now `app.taskblocks`. They install as a new app once: connect Dropbox again, let it
   sync, then delete the old copy (see docs/IPAD.md).
 - Android keeps its application id, because changing it would install a second app instead of updating. The
   Android code package, the channel name and the widget class names move to a neutral name in the widgets PR
   (item 68), after which home screen widgets need adding again once.
+- Done in 1.8.5: the Kotlin package, Gradle namespace, method channel (`app.taskblocks/native`), place
+  reminder action and widget classes are all under `app.taskblocks`. Only the `applicationId` line in
+  android/app/build.gradle.kts keeps the old id, so the update installs over the existing app.
 
 ## 53. Google sign-in ☑ (version 1.7.0; setup in docs/GOOGLE.md)
 
@@ -787,3 +790,37 @@ so it is left for now.
 - Settings → Right-hand panel (device-only, saved with the device backup): starts on, or reopen the last view;
   views to offer; Statistics view shows (this week, added and done in 7 days, by category, by source, time in each
   stage); When I unfold the phone, open (the list and panel, the whole board, the whole matrix).
+
+## 68. Board and matrix widgets ☑ (version 1.8.5)
+
+Five Android home screen widgets, drawn from the mock-ups agreed in round 5:
+- **Board summary** (4×1 or 4×2): a tile per stage with its count (tasks, and board steps after a dot),
+  amber when over the stage's limit, with a note naming it. Tapping a tile opens the board on that stage
+  (`taskblocks://board?stage=…`; on a phone the board opens on that stage's tab).
+- **Board stage list** (4×3): the same tiles, then the cards in one stage, sorted by date. The arrows or a
+  tile switch stage (kept per widget). The arrow on a card moves it to the next stage.
+- **Now doing**: one board task, the one longest in a chosen stage (In progress by default) or one picked
+  when placing it. Shows its stage and time there, category and date, up to three open steps to tick, then
+  Next: <stage> and Done.
+- **Board steps**: only steps on the board, grouped by stage from the furthest along (the last stage left
+  out), each with its task's colour and name and an arrow to move it on.
+- **Matrix** (4×3): the four boxes with their names, counts and top tasks (1 to 3 rows, by widget height),
+  "+N more" opening the matrix on that box (`taskblocks://matrix?box=…`). A task opens its page.
+- Board summary, stage list, board steps and matrix can show one category; all take the light, dark or
+  see-through background.
+- Moves made on a widget wait in the widgets' store like ticks (`widget_moves`) and show at once on the
+  widgets. The app records them as board moves made by "Widget". Into the last stage a task is ticked off
+  only when the board is set to always do that; a step is ticked.
+- Snoozed board tasks are now sent to the widgets (marked), so the counts match the board. The list
+  widgets still leave them out.
+
+## 48B. Other Android apps add tasks ☑ (version 1.8.5; format in docs/PUSH_TASKS.md)
+
+- Tasker, Automate, MacroDroid and the like send an intent with action `app.taskblocks.ADD_TASK` (or open
+  `taskblocks://push?title=…`). The fields are the inbox file's: title, notes, due, category, starred,
+  steps, source, ref, url, or a `json` extra holding a whole task or list.
+- Nothing opens: a short "Added to Task Blocks" message shows (`quiet=true` turns it off, `open=true`
+  opens the app). The task is added the next time the app opens or comes back to the front, read by the
+  same code as the inbox folder (dates in the title, #category, category board defaults, no duplicates for
+  the same source + ref). Source "Another Android app" (`intent`) unless one is given.
+- Only "add", as agreed; no complete or update from outside yet.

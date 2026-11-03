@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.jeff.task_blocks"
+    namespace = "app.taskblocks"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.Manifest
 import android.content.Intent
@@ -25,7 +25,7 @@ class MainActivity : FlutterActivity() {
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
     takeShared(intent)
-    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.jeff.task_blocks/native").setMethodCallHandler {
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.taskblocks/native").setMethodCallHandler {
         call,
         result ->
       when (call.method) {

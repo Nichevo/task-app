@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'home_widgets.dart';
 import 'location.dart';
+import 'models.dart' show MatrixBox;
 import 'native.dart';
 import 'reminders.dart';
 import 'screens/home_page.dart';
@@ -99,6 +100,10 @@ class _TaskAppState extends State<TaskApp> {
           home.openCalendar(DateTime.tryParse(q['d'] ?? ''));
         case 'stats':
           home.openStats();
+        case 'board':
+          home.openBoard(stageId: q['stage']);
+        case 'matrix':
+          home.openMatrix(box: MatrixBox.byId(q['box']));
       }
     });
   }

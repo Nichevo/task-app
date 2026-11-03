@@ -116,6 +116,44 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_month" />
         </receiver>
+        <receiver android:name=".BoardSummaryWidget" android:exported="true" android:label="Board summary">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_board_summary" />
+        </receiver>
+        <receiver android:name=".StageListWidget" android:exported="true" android:label="Board stage list">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_stage_list" />
+        </receiver>
+        <receiver android:name=".NowDoingWidget" android:exported="true" android:label="Now doing">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_now" />
+        </receiver>
+        <receiver android:name=".BoardStepsWidget" android:exported="true" android:label="Board steps">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_board_steps" />
+        </receiver>
+        <receiver android:name=".MatrixWidget" android:exported="true" android:label="Matrix">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_matrix" />
+        </receiver>
+        <service
+            android:name=".StageListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".BoardStepsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
         <service
             android:name=".TaskListService"
             android:exported="false"
@@ -139,6 +177,26 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- Item 48B: other apps (Tasker, Automate, MacroDroid…) add a task without opening the
+             app: an intent with action app.taskblocks.ADD_TASK, or a taskblocks://push?title=… link.
+             See docs/PUSH_TASKS.md. -->
+        <activity
+            android:name=".AddTaskActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="app.taskblocks.ADD_TASK" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="taskblocks" android:host="push" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".WidgetActionActivity"
             android:exported="false"

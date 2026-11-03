@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.Manifest
 import android.appwidget.AppWidgetManager
@@ -16,8 +16,17 @@ import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** A checklist step as the widgets see it. */
-data class WidgetStep(val id: String, val title: String, val done: Boolean)
+/** A checklist step as the widgets see it; [stage] is set when it is on the board. */
+data class WidgetStep(
+    val id: String,
+    val title: String,
+    val done: Boolean,
+    val stage: String? = null,
+    val since: Long? = null,
+)
+
+/** A Kanban stage (item 68). */
+data class WidgetStage(val id: String, val name: String, val colour: Int?, val limit: Int?)
 
 /** A task (or, in the Today widget, a calendar event) as the widgets see it. */
 data class WidgetTask(
@@ -30,14 +39,33 @@ data class WidgetTask(
     val star: Boolean,
     val steps: List<WidgetStep> = emptyList(),
     val event: Boolean = false,
+    /** Board stage id, when on the board. */
+    val stage: String? = null,
+    val since: Long? = null,
+    /** Matrix box id: do, decide, delegate, delete. */
+    val box: String? = null,
+    val snoozed: Boolean = false,
 )
 
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
-class Snapshot(root: JSONObject, done: Set<String>, snoozed: Set<String>, steps: Set<String>) {
+class Snapshot(
+    root: JSONObject,
+    done: Set<String>,
+    snoozed: Set<String>,
+    steps: Set<String>,
+    moves: Map<String, Pair<String, Long>> = emptyMap(),
+) {
   val hoursToRed = root.optDouble("hoursToRed", 72.0)
   val byDue = root.optBoolean("colourByDue", true)
   val categories: List<Pair<String, String>>
+
+  /** Open tasks that aren't snoozed: what the list widgets show. */
   val tasks: List<WidgetTask>
+
+  /** Every open task the app sent, snoozed board tasks too. */
+  val all: List<WidgetTask>
+  val stages: List<WidgetStage>
+  val boxes: Map<String, String>
 
   /** yyyy-MM-dd -> (tasks due, only future repeats). */
   val dueDays: Map<String, Pair<Int, Boolean>>
@@ -62,8 +90,16 @@ class Snapshot(root: JSONObject, done: Set<String>, snoozed: Set<String>, steps:
           (0 until stepArr.length()).map {
             val s = stepArr.getJSONObject(it)
             val sid = s.optString("id")
-            WidgetStep(sid, s.optString("title"), s.optBoolean("done") || steps.contains("$id/$sid"))
+            val moved = moves["$id/$sid"]
+            WidgetStep(
+                sid,
+                s.optString("title"),
+                s.optBoolean("done") || steps.contains("$id/$sid"),
+                moved?.first ?: s.optString("stage").ifEmpty { null },
+                moved?.second ?: if (s.has("since")) s.optLong("since") else null,
+            )
           }
+      val moved = moves[id]
       out.add(
           WidgetTask(
               id,
@@ -74,9 +110,27 @@ class Snapshot(root: JSONObject, done: Set<String>, snoozed: Set<String>, steps:
               o.optBoolean("locked"),
               o.optBoolean("star"),
               stepList,
+              stage = moved?.first ?: o.optString("stage").ifEmpty { null },
+              since = moved?.second ?: if (o.has("since")) o.optLong("since") else null,
+              box = o.optString("box").ifEmpty { null },
+              snoozed = o.optBoolean("snoozed"),
           ))
     }
-    tasks = out
+    all = out
+    tasks = out.filter { !it.snoozed }
+    val stageArr = root.optJSONArray("stages") ?: JSONArray()
+    stages =
+        (0 until stageArr.length()).map {
+          val o = stageArr.getJSONObject(it)
+          WidgetStage(
+              o.optString("id"),
+              o.optString("name"),
+              if (o.has("colour")) o.optLong("colour").toInt() else null,
+              if (o.has("limit")) o.optInt("limit") else null,
+          )
+        }
+    val boxObj = root.optJSONObject("boxes") ?: JSONObject()
+    boxes = boxObj.keys().asSequence().associateWith { boxObj.optString(it) }
     val days = root.optJSONObject("dueDays") ?: JSONObject()
     dueDays =
         days.keys().asSequence().associateWith {
@@ -90,7 +144,23 @@ class Snapshot(root: JSONObject, done: Set<String>, snoozed: Set<String>, steps:
 
   fun categoryName(id: String?): String? = categories.firstOrNull { it.first == id }?.second
 
-  fun task(id: String): WidgetTask? = tasks.firstOrNull { it.id == id }
+  fun task(id: String): WidgetTask? = all.firstOrNull { it.id == id }
+
+  fun stage(id: String?): WidgetStage? = stages.firstOrNull { it.id == id }
+
+  /** The stage after [id], or null at the end. */
+  fun nextStage(id: String?): WidgetStage? {
+    val i = stages.indexOfFirst { it.id == id }
+    return if (i < 0) null else stages.getOrNull(i + 1)
+  }
+
+  /** Board tasks in [stageId], for an "all" or "cat:<id>" filter. */
+  fun boardTasks(stageId: String, f: String): List<WidgetTask> =
+      all.filter { it.stage == stageId && WidgetData.inCategory(it, f) }
+
+  /** Board steps in [stageId], each with its task. */
+  fun boardSteps(stageId: String, f: String): List<Pair<WidgetTask, WidgetStep>> =
+      all.filter { WidgetData.inCategory(it, f) }.flatMap { t -> t.steps.filter { it.stage == stageId }.map { t to it } }
 }
 
 /** How a widget looks: background and row size, chosen when it is placed. */
@@ -152,8 +222,18 @@ object WidgetData {
               o.optString("task") + "/" + o.optString("step")
             }
             .toSet()
-    return Snapshot(root, ids(c, "widget_done", "id"), ids(c, "widget_snoozed", "id"), steps)
+    val movesArr = array(c, "widget_moves")
+    val moves = HashMap<String, Pair<String, Long>>()
+    for (i in 0 until movesArr.length()) {
+      val o = movesArr.getJSONObject(i)
+      val key = if (o.has("step")) o.optString("task") + "/" + o.optString("step") else o.optString("task")
+      moves[key] = o.optString("stage") to o.optLong("at")
+    }
+    return Snapshot(root, ids(c, "widget_done", "id"), ids(c, "widget_snoozed", "id"), steps, moves)
   }
+
+  /** For the board and matrix widgets, whose filter is "all" or "cat:<id>". */
+  fun inCategory(t: WidgetTask, f: String): Boolean = !f.startsWith("cat:") || t.cat == f.removePrefix("cat:")
 
   // --- Per-widget choices ---
 
@@ -176,8 +256,15 @@ object WidgetData {
 
   fun forget(c: Context, widgetIds: IntArray) {
     val e = prefs(c).edit()
-    for (id in widgetIds) e.remove("filter_$id").remove("look_$id").remove("compact_$id")
+    for (id in widgetIds) e.remove("filter_$id").remove("look_$id").remove("compact_$id").remove("stage_$id")
     e.apply()
+  }
+
+  /** The stage a stage list widget shows (its arrows and tiles change it). */
+  fun shownStage(c: Context, widgetId: Int): String? = prefs(c).getString("stage_$widgetId", null)
+
+  fun setShownStage(c: Context, widgetId: Int, stageId: String) {
+    prefs(c).edit().putString("stage_$widgetId", stageId).apply()
   }
 
   fun filterLabel(c: Context, snap: Snapshot, f: String): String =
@@ -288,6 +375,25 @@ object WidgetData {
     append(c, "widget_snoozed", JSONObject().put("id", id).put("until", cal.timeInMillis))
   }
 
+  /** Moves a board task, or one of its board steps, to [stageId] (item 68). */
+  fun markMove(c: Context, taskId: String, stepId: String?, stageId: String) {
+    val o = JSONObject().put("task", taskId).put("stage", stageId).put("at", System.currentTimeMillis())
+    if (stepId != null) o.put("step", stepId)
+    append(c, "widget_moves", o)
+  }
+
+  /** How long something has been in its stage: "5 h", "3 days". */
+  fun spell(since: Long?): String {
+    if (since == null) return ""
+    val h = (System.currentTimeMillis() - since) / 3_600_000L
+    return when {
+      h < 1 -> "under an hour"
+      h < 24 -> "$h h"
+      h < 48 -> "1 day"
+      else -> "${h / 24} days"
+    }
+  }
+
   /** Ticks a checklist step on a widget. */
   fun markStep(c: Context, taskId: String, stepId: String) =
       append(c, "widget_steps", JSONObject().put("task", taskId).put("step", stepId))
@@ -304,6 +410,11 @@ object WidgetData {
           StatsWidget::class.java,
           MonthWidget::class.java,
           QuickAddWidget::class.java,
+          BoardSummaryWidget::class.java,
+          StageListWidget::class.java,
+          NowDoingWidget::class.java,
+          BoardStepsWidget::class.java,
+          MatrixWidget::class.java,
       )
 
   fun refreshAll(c: Context) {

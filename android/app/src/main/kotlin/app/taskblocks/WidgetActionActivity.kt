@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.app.Activity
 import android.app.PendingIntent
@@ -33,6 +33,20 @@ class WidgetActionActivity : Activity() {
           WidgetData.refreshAll(this)
         }
       }
+      "move" -> {
+        val stage = intent.getStringExtra("stage")
+        if (id != null && stage != null) {
+          WidgetData.markMove(this, id, intent.getStringExtra("step"), stage)
+          WidgetData.refreshAll(this)
+        }
+      }
+      "showstage" -> {
+        val widget = intent.getIntExtra("widget", -1)
+        if (id != null && widget != -1) {
+          WidgetData.setShownStage(this, widget, id)
+          WidgetData.refreshAll(this)
+        }
+      }
       "open" -> if (id != null) launch("taskblocks://open?id=" + Uri.encode(id))
       "day" -> launch("taskblocks://day?d=" + Uri.encode(intent.getStringExtra("d") ?: ""))
       "home" -> launch("taskblocks://home")
@@ -59,13 +73,16 @@ class WidgetActionActivity : Activity() {
     fun template(c: Context): PendingIntent =
         PendingIntent.getActivity(c, 1, Intent(c, WidgetActionActivity::class.java), flags())
 
-    /** A ready-made action for a single button (the Focus widget). */
-    fun action(c: Context, widgetId: Int, op: String, id: String): PendingIntent {
+    /** A ready-made action for a single button (the Focus and board widgets). */
+    fun action(c: Context, widgetId: Int, op: String, id: String, extras: Map<String, String> = emptyMap()): PendingIntent {
       val intent =
           Intent(c, WidgetActionActivity::class.java).apply {
             putExtra("op", op)
             putExtra("id", id)
-            data = Uri.parse("taskblocks://action/$widgetId/$op/" + Uri.encode(id))
+            putExtra("widget", widgetId)
+            for ((k, v) in extras) putExtra(k, v)
+            val more = extras.entries.joinToString("") { "/" + Uri.encode(it.key) + "=" + Uri.encode(it.value) }
+            data = Uri.parse("taskblocks://action/$widgetId/$op/" + Uri.encode(id) + more)
           }
       var f = PendingIntent.FLAG_UPDATE_CURRENT
       if (Build.VERSION.SDK_INT >= 23) f = f or PendingIntent.FLAG_IMMUTABLE

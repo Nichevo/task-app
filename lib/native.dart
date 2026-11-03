@@ -43,7 +43,7 @@ class CalendarEvent {
 /// The small amount of Android-only plumbing written in Kotlin (see MainActivity.kt):
 /// shared text, the phone's calendars and on-device text recognition.
 class Native {
-  static const _channel = MethodChannel('com.jeff.task_blocks/native');
+  static const _channel = MethodChannel('app.taskblocks/native');
 
   static bool get supported => !kIsWeb && Platform.isAndroid;
 

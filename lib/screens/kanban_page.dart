@@ -171,9 +171,12 @@ class _StageDot extends StatelessWidget {
 /// Item 52: the board. One column per stage; side by side when wide, one at a time with tabs
 /// when narrow (the folded phone).
 class KanbanPage extends StatefulWidget {
-  const KanbanPage({super.key, required this.store});
+  const KanbanPage({super.key, required this.store, this.initialStage});
 
   final AppStore store;
+
+  /// Opened from a board widget: on a phone the board starts on this stage's tab.
+  final String? initialStage;
 
   @override
   State<KanbanPage> createState() => _KanbanPageState();
@@ -346,6 +349,7 @@ class _KanbanPageState extends State<KanbanPage> {
           return DefaultTabController(
             key: ValueKey(stages.map((s) => s.id).join(',')),
             length: stages.length,
+            initialIndex: max(0, stages.indexWhere((s) => s.id == widget.initialStage)),
             child: Scaffold(
               appBar: appBar,
               body: Column(children: [

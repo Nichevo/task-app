@@ -299,6 +299,7 @@ abstract final class TaskSource {
   static const kanban = 'kanban';
   static const starredEmail = 'starredEmail';
   static const email = 'email';
+  static const intent = 'intent';
 
   static const labels = {
     typed: 'Typed in the app',
@@ -315,6 +316,7 @@ abstract final class TaskSource {
     kanban: 'Kanban board',
     starredEmail: 'Starred email',
     email: 'Email',
+    intent: 'Another Android app',
   };
 
   /// A name for showing; [source] null is a task from before sources were recorded.
@@ -701,6 +703,7 @@ abstract final class MoveHow {
   static const removed = 'removed';
   static const stageRemoved = 'stageRemoved';
   static const repeat = 'repeat';
+  static const widget = 'widget';
 
   static const labels = {
     added: 'Put on the board',
@@ -713,6 +716,7 @@ abstract final class MoveHow {
     removed: 'Taken off the board',
     stageRemoved: 'Stage removed',
     repeat: 'Next repeat',
+    widget: 'Widget',
   };
 
   static String label(String how) => labels[how] ?? how;

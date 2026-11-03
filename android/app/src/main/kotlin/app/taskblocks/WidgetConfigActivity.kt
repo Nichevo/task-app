@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.app.Activity
 import android.app.AlertDialog
@@ -28,6 +28,11 @@ class WidgetConfigActivity : Activity() {
     when {
       provider.endsWith("ChecklistWidget") -> pickTask(snap)
       provider.endsWith("QuickAddWidget") -> pickCategory(snap)
+      provider.endsWith("NowDoingWidget") -> pickNow(snap)
+      provider.endsWith("BoardSummaryWidget") ||
+          provider.endsWith("StageListWidget") ||
+          provider.endsWith("BoardStepsWidget") ||
+          provider.endsWith("MatrixWidget") -> pickCategoryFilter(snap)
       provider.endsWith("TodayWidget") || provider.endsWith("StatsWidget") || provider.endsWith("MonthWidget") ->
           pickLook(showRows = false)
       else -> pickFilter(snap, showRows = !provider.endsWith("CompactWidget") && !provider.endsWith("FocusWidget"))
@@ -95,6 +100,56 @@ class WidgetConfigActivity : Activity() {
           pickLook(showRows = false)
         }
         .setOnCancelListener { finish() }
+        .show()
+  }
+
+  /** Board and matrix widgets: everything, or one category. */
+  private fun pickCategoryFilter(snap: Snapshot) {
+    if (snap.categories.isEmpty()) {
+      WidgetData.setFilter(this, widgetId, "all")
+      pickLook(showRows = false)
+      return
+    }
+    val keys = mutableListOf("all")
+    val labels = mutableListOf("All categories")
+    for ((id, name) in snap.categories) {
+      keys.add("cat:$id")
+      labels.add("Only $name")
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Show in this widget")
+        .setItems(labels.toTypedArray()) { _, which ->
+          WidgetData.setFilter(this, widgetId, keys[which])
+          pickLook(showRows = false)
+        }
+        .setOnCancelListener { done() }
+        .show()
+  }
+
+  /** Now doing: the task longest in a stage, or one board task. */
+  private fun pickNow(snap: Snapshot) {
+    val keys = mutableListOf<String>()
+    val labels = mutableListOf<String>()
+    for (s in snap.stages.dropLast(1)) {
+      keys.add("stage:" + s.id)
+      labels.add("The task longest in ${s.name}")
+    }
+    for (t in snap.all.filter { it.stage != null }) {
+      keys.add("task:" + t.id)
+      labels.add("Always: ${t.title}")
+    }
+    if (keys.isEmpty()) {
+      WidgetData.setFilter(this, widgetId, "all")
+      pickLook(showRows = false)
+      return
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Which task?")
+        .setItems(labels.toTypedArray()) { _, which ->
+          WidgetData.setFilter(this, widgetId, keys[which])
+          pickLook(showRows = false)
+        }
+        .setOnCancelListener { done() }
         .show()
   }
 

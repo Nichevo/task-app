@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.app.job.JobInfo
 import android.app.job.JobParameters

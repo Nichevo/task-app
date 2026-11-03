@@ -9,6 +9,14 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.5', 'November 2026', [
+    'Five new home screen widgets (Android). Board summary: how many tasks are in each Kanban stage, amber when over its limit; tap one to open the board there.',
+    'Board stage list: the cards in one stage, switched with the arrows or the counts. The arrow on a card moves it to the next stage, saved in its board history as "Widget".',
+    'Now doing: the task longest in In progress (or one you pick), with its steps to tick, Next stage and Done. Board steps: only the steps on the board, by stage, each moved on with its arrow.',
+    'Matrix: the four boxes with the top tasks in each. Tap a task to open it, or a box to open the matrix there. The board and matrix widgets can show one category.',
+    'Other Android apps such as Tasker can now add a task without opening Task Blocks (an "app.taskblocks.ADD_TASK" intent; the details are in docs/PUSH_TASKS.md with the code). It arrives the next time the app opens.',
+    'Android: the app\'s inside names changed, so home screen widgets placed before this update stop working. Remove them and add them again once.',
+  ]),
   Release('1.8.4', 'November 2026', [
     'Wide screens (the Fold unfolded, tablets, computers): the right-hand side now has a row of views instead of just the archive. Agenda (overdue, today and the next 7 days, dated steps included), Matrix, Board, Calendar, Events, Statistics and Archive.',
     'The matrix takes half the screen so its four boxes fit. The board view lists each stage with its count; tap to see its tasks, or + to put a task there.',
