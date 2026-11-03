@@ -23,6 +23,8 @@ import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
+import 'matrix_page.dart';
+import 'search_page.dart';
 import 'settings_page.dart';
 import 'starred_page.dart';
 import 'stats_page.dart';
@@ -241,7 +243,7 @@ class HomePageState extends State<HomePage> {
   List<Task> _visibleTasks(DateTime now) {
     final q = _query;
     final shown = q.isNotEmpty
-        ? data.active.where((t) => matchesSearch(t, q))
+        ? data.active.where((t) => matchesSearch(t, q, data))
         : data.active.where((t) =>
             (_showSnoozed || !t.isSnoozed(now)) &&
             passesFilter(t, _filter, now) &&
@@ -397,6 +399,12 @@ class HomePageState extends State<HomePage> {
         actions: [
           if (_searching)
             IconButton(
+              tooltip: 'Search everything (steps, emails, archive)',
+              icon: const Icon(Icons.manage_search),
+              onPressed: () => _open(context, SearchPage(store: store, initialQuery: _search.text.trim())),
+            ),
+          if (_searching)
+            IconButton(
               tooltip: 'Clear',
               icon: const Icon(Icons.clear),
               onPressed: () => setState(_search.clear),
@@ -432,6 +440,8 @@ class HomePageState extends State<HomePage> {
                 }(),
               'stats' => openStats(),
               'board' => openBoard(),
+              'matrix' => _open(context, MatrixPage(store: store)),
+              'search' => _open(context, SearchPage(store: store)),
               'events' => _open(context, EventsPage(store: store)),
               'starred' => _open(context, StarredPage(store: store)),
               'paste' => _pasteList(),
@@ -448,6 +458,8 @@ class HomePageState extends State<HomePage> {
                   child: Text(data.groupByCategory ? 'Show as one list' : 'Group by category')),
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               const PopupMenuItem(value: 'board', child: Text('Kanban board')),
+              const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
+              const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
               const PopupMenuDivider(),
@@ -611,6 +623,7 @@ class HomePageState extends State<HomePage> {
           onStep: (s) => _toggleStep(t, s),
           onSkip: () => _skip(t),
           stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
+          boxName: MatrixBox.byId(t.matrixBox) == null ? null : data.boxName(MatrixBox.byId(t.matrixBox)!),
           onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),
           trailing: drag
               ? ReorderableDragStartListener(
@@ -742,7 +755,12 @@ class _AddBarState extends State<_AddBar> {
     final p = _parsed;
     final category = _forcedCategory ?? (_ignoreCategory ? null : p.categoryId);
     widget.store.addTask(_ignoreDate ? text : p.title,
-        due: _ignoreDate ? null : p.due, categoryId: category, source: _source ?? TaskSource.typed);
+        due: _ignoreDate ? null : p.due,
+        categoryId: category,
+        source: _source ?? TaskSource.typed,
+        box: p.box,
+        board: p.board,
+        star: p.star);
     _source = null;
     _input.clear();
     _ignoreDate = _ignoreCategory = false;
@@ -781,10 +799,24 @@ class _AddBarState extends State<_AddBar> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (due != null || showCategoryChip)
+          if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true)
             Align(
               alignment: Alignment.centerLeft,
               child: Wrap(spacing: 6, children: [
+                // Item 64: the "!" words that were picked up.
+                if (p?.box case final b?)
+                  Chip(
+                      avatar: const Icon(Icons.grid_view, size: 18),
+                      label: Text('Box: ${data.boxName(b)}'),
+                      visualDensity: VisualDensity.compact),
+                if (p?.board == true)
+                  const Chip(
+                      avatar: Icon(Icons.view_kanban_outlined, size: 18),
+                      label: Text('On the board'),
+                      visualDensity: VisualDensity.compact),
+                if (p?.star == true)
+                  const Chip(
+                      avatar: Icon(Icons.star, size: 18), label: Text('Starred'), visualDensity: VisualDensity.compact),
                 if (due != null)
                   InputChip(
                     avatar: const Icon(Icons.event, size: 18),

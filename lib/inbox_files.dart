@@ -49,7 +49,8 @@ List<Task> addInboxFile(AppData data, String text, DateTime now) {
       ..notes = notes
       ..dueAt = due
       ..categoryId = categoryId
-      ..starred = item['starred'] == true
+      ..starred = item['starred'] == true || parsed.star
+      ..matrixBox = parsed.box?.id
       ..sourceRef = ref == null || ref.isEmpty ? null : ref;
     for (final st in item['steps'] as List? ?? const []) {
       final name = st.toString().trim();

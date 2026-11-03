@@ -117,7 +117,13 @@ Future<Task?> showAddTaskDialog(BuildContext context, AppStore store,
             if (name.text.trim().isEmpty) return;
             final p = parseInput(name.text, store.data, DateTime.now());
             Navigator.pop(c, store.addTask(p.title,
-                due: p.due, categoryId: p.categoryId, notes: notesField.text.trim(), source: source));
+                due: p.due,
+                categoryId: p.categoryId,
+                notes: notesField.text.trim(),
+                source: source,
+                box: p.box,
+                board: p.board,
+                star: p.star));
           },
           child: const Text('Add'),
         ),

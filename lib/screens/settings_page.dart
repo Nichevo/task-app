@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../dropbox.dart';
 import '../google.dart';
 import '../inbox_files.dart';
+import '../input_parse.dart';
 import '../location.dart';
 import '../models.dart';
 import '../native.dart';
@@ -22,6 +23,9 @@ const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour b
 
 /// How far back the Starred emails page looks (days; 0 = all).
 const starredDaysOptions = {7: '1 week', 30: '1 month', 91: '3 months', 0: 'All'};
+
+/// Item 60: when the "Urgent?" hint shows, in days before the due date.
+const urgentDaysOptions = {0: 'Off', 1: '1 day', 2: '2 days', 3: '3 days', 7: '1 week', 14: '2 weeks'};
 
 /// Asks for a line of text, e.g. a category name.
 Future<String?> askText(BuildContext context, String title, {String initial = ''}) {
@@ -314,33 +318,160 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _editCategory(TaskCategory c) async {
     final name = TextEditingController(text: c.name);
     final keywords = TextEditingController(text: c.keywords.join(', '));
+    final stages = data.stages;
+    var board = c.boardByDefault;
+    var stageId = data.stage(c.boardStage)?.id ?? stages.firstOrNull?.id;
+    var steps = c.stepsOnBoard;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Category'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Name')),
-          const SizedBox(height: 12),
-          TextField(
-            controller: keywords,
-            minLines: 1,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Keywords',
-              helperText: 'Separated by commas. A new task with one of these words always goes here.',
-              helperMaxLines: 2,
-            ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) => AlertDialog(
+          title: const Text('Category'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Name')),
+              const SizedBox(height: 12),
+              TextField(
+                controller: keywords,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Keywords',
+                  helperText: 'Separated by commas. A new task with one of these words always goes here.',
+                  helperMaxLines: 2,
+                ),
+              ),
+              if (stages.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('New tasks go on the board'),
+                  subtitle: const Text('Also when a task is moved into this category'),
+                  value: board,
+                  onChanged: (v) => setInner(() => board = v),
+                ),
+                if (board) ...[
+                  Row(children: [
+                    const Text('Stage'),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: stageId,
+                        items: [for (final s in stages) DropdownMenuItem(value: s.id, child: Text(s.name))],
+                        onChanged: (v) => setInner(() => stageId = v),
+                      ),
+                    ),
+                  ]),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Steps on the board too'),
+                    value: steps,
+                    onChanged: (v) => setInner(() => steps = v ?? false),
+                  ),
+                ],
+              ],
+            ]),
           ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+          ],
+        ),
       ),
     );
     if (ok != true) return;
     if (name.text.trim().isNotEmpty) store.renameCategory(c, name.text);
     store.setKeywords(c, keywords.text.split(','));
+    final turnedOn = board && !c.boardByDefault;
+    store.setCategoryBoard(c, on: board, stageId: stageId, steps: steps);
+    final off = store.offBoardIn(c);
+    if (!turnedOn || off.isEmpty || !mounted) return;
+    final all = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text('Put your ${off.length} open ${c.name} task${off.length == 1 ? '' : 's'} on the board now?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Only new ones')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Put them on')),
+        ],
+      ),
+    );
+    if (all == true) store.boardAllIn(c);
+  }
+
+  /// Item 60: the matrix box names and the "Urgent?" hint.
+  List<Widget> _matrixSection(AppData data) => [
+        _heading('Matrix'),
+        Text('Only tasks you put on the matrix show there. Tap a box to rename it.',
+            style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+        for (final b in MatrixBox.values)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.grid_view),
+            title: Text(data.boxName(b)),
+            subtitle: Text(b.meaning),
+            onTap: () async {
+              final n = await askText(context, 'Name for "${b.meaning}"', initial: data.boxName(b));
+              if (n != null) store.setBoxName(b, n);
+            },
+          ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.priority_high),
+          title: const Text('"Urgent?" hint'),
+          subtitle: const Text('On a task in a not-urgent box when its due date is close'),
+          trailing: DropdownButton<int>(
+            value: urgentDaysOptions.containsKey(data.urgentDays) ? data.urgentDays : 0,
+            items: [for (final e in urgentDaysOptions.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+            onChanged: (v) => store.setUrgentDays(v ?? 0),
+          ),
+        ),
+      ];
+
+  /// Item 64: every word the add box understands, in one place.
+  List<Widget> _quickWordsSection(AppData data) {
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    final cats = data.categories.map((c) => '#${c.name.toLowerCase().replaceAll(' ', '')}').join(', ');
+    return [
+      _heading('Quick-add words'),
+      Text('Words you can type in the add box. They come off the task name.', style: hint),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.tag),
+        title: const Text('#category'),
+        subtitle: Text(cats.isEmpty ? 'Puts it in that category (add categories above)' : 'Puts it in that category: $cats'),
+      ),
+      const ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(Icons.event_outlined),
+        title: Text('Dates and times'),
+        subtitle: Text('today, tomorrow, friday, next week, 20 nov, 3pm, in 2 days'),
+      ),
+      for (final w in QuickWord.values)
+        Builder(builder: (context) {
+          final word = quickWord(data, w);
+          final what = w.box == null ? w.what : '${w.what} ${data.boxName(w.box!)}';
+          return ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.bolt_outlined),
+            title: Text(word == null ? 'Off' : '!$word',
+                style: TextStyle(color: word == null ? Theme.of(context).disabledColor : null)),
+            subtitle: Text(what),
+            onTap: word == null
+                ? null
+                : () async {
+                    final n = await askText(context, 'Word for: $what', initial: word);
+                    if (n == null) return;
+                    store.setQuickWord(w.id, n.trim().isEmpty ? null : n);
+                  },
+            trailing: Switch(
+              value: word != null,
+              onChanged: (on) => store.setQuickWord(w.id, on ? null : ''),
+            ),
+          );
+        }),
+    ];
   }
 
   Future<void> _loadCalendars() async {
@@ -598,6 +729,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
               ],
             ),
+            const Divider(height: 40),
+            ..._quickWordsSection(data),
+            const Divider(height: 40),
+            ..._matrixSection(data),
             const Divider(height: 40),
             Row(children: [
               Expanded(child: _heading('Checklist templates')),

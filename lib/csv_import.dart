@@ -86,6 +86,7 @@ int importCsvText(AppData data, String text) {
   final iTask = col('task'), iNotes = col('notes'), iCat = col('category'), iCreated = col('created');
   final iDue = col('due'), iClosed = col('closed'), iStatus = col('status'), iStar = col('starred');
   final iSteps = col('steps'), iSource = col('source'), iEst = col('estimate (min)');
+  final iBox = col('matrix box'), iWaiting = col('waiting on');
   if (iTask < 0) throw const FormatException('The file needs a "Task" column.');
   String cell(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
 
@@ -114,7 +115,9 @@ int importCsvText(AppData data, String text) {
       ..closedAt = closed
       ..categoryId = cat?.id
       ..starred = const {'yes', 'true', '1', 'y'}.contains(cell(r, iStar).toLowerCase())
-      ..estimate = int.tryParse(cell(r, iEst));
+      ..estimate = int.tryParse(cell(r, iEst))
+      ..matrixBox = _box(data, cell(r, iBox))?.id
+      ..waitingOn = cell(r, iWaiting).isEmpty ? null : cell(r, iWaiting);
     for (final part in cell(r, iSteps).split(';')) {
       final m = RegExp(r'^\s*(?:\[([ xX])\])?\s*(.+?)\s*$').firstMatch(part);
       if (m == null || m.group(2)!.isEmpty) continue;
@@ -130,6 +133,15 @@ int importCsvText(AppData data, String text) {
   }
   data.archived.sort((x, y) => y.closedAt!.compareTo(x.closedAt!));
   return added;
+}
+
+/// A matrix box from its name (as renamed here, or the standard one).
+MatrixBox? _box(AppData data, String name) {
+  final n = name.toLowerCase();
+  if (n.isEmpty) return null;
+  return MatrixBox.values
+      .where((b) => data.boxName(b).toLowerCase() == n || b.label.toLowerCase() == n || b.id == n)
+      .firstOrNull;
 }
 
 /// Whether [text] is an emails.csv from the export (item 63) rather than a list of tasks.

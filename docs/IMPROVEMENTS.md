@@ -652,8 +652,10 @@ didn't know when it saved, and that loss then synced to every device.
 - Optional line at the top of the list, "N starred emails not yet tasks" (off by default; checked on open and
   resume, at most every 10 minutes).
 
-## 63. Export carries the new fields ◐ (emails in 1.7.0; the rest with each feature)
+## 63. Export carries the new fields ◐ (emails in 1.7.0, matrix in 1.8.0; the rest with each feature)
 
+- Tasks CSV gains Matrix box and Waiting on columns (1.8.0); import reads the box by its name here or its
+  standard name.
 - Tasks CSV gains an Emails column (count). `task_emails_<date>.csv`: one row per email kept on a task; importing
   it puts the emails back on their tasks (matched by name and created time), skipping ones already there.
 
@@ -679,3 +681,41 @@ didn't know when it saved, and that loss then synced to every device.
 - Checked on open, resume (without Dropbox) and every sync, at most every 2 minutes, last 14 days.
 - Settings lists the emails ignored this week and why, with Allow this sender.
 
+## 60. Urgent / important matrix ☑ (version 1.8.0)
+
+- Opt in per task: task page → On the matrix, then a box. Boxes are Do, Decide, Delegate and Delete (renamable in
+  Settings → Matrix). `Task.matrixBox` (JSON `box`), copied to the next repeat.
+- Decide asks for a due date when there is none. Delegate asks who it is waiting on (`Task.waitingOn`, JSON
+  `waiting`). Delete offers to just file it, tick it off or delete it.
+- Menu → Matrix: a 2 by 2 grid with drag between boxes (long-press), a menu on each card, search, and the same
+  category and date filters as the Kanban page, remembered on each device. Box counts follow the filter.
+- Optional "Urgent?" hint (Settings → Matrix, off by default): a task in a not-urgent box due within the days
+  set.
+- The task block shows its box; the expanded block shows the box and Waiting on.
+
+## 64. Quick-add ! words ☑ (version 1.8.0)
+
+- `!do`, `!decide`, `!delegate`, `!delete` put a new task in that box, `!board` on the Kanban board, `!star` stars
+  it. They work in the add box, Paste a list and emails to tasks. Unknown `!words` stay in the name.
+- Settings → Quick-add words lists everything the add box reads (#category, dates, ! words). Each ! word can be
+  renamed or switched off (`AppData.quickWords`; '' is off). Box words follow a renamed box unless set by hand.
+
+## 65. Deep search ☑ (version 1.8.0)
+
+- The list search now also looks in the category, Waiting on, place and the emails kept on a task, ignores accents,
+  and keeps "quoted words" together.
+- Menu → Search everything (or the icon while searching): results grouped as Tasks, Steps, Emails and Archive,
+  with the matching words highlighted. Filters: category, open, done, starred, has a date, on the board, on the
+  matrix. All on the device.
+
+## 67. Categories that go on the board ☑ (version 1.8.0)
+
+- Settings → Categories → a category → New tasks go on the board, with the stage to start in and Steps on the
+  board too. Applies when a task is added in that category or moved into it; it never takes a task off.
+- Turning it on offers to put the category's open tasks on the board now.
+
+## 69. Device settings backup ○ (planned, next PR)
+
+- Most settings already sync in tasks.json. The ones kept on each device (places, view choices, location
+  recording, the Google client ID and secret) will be saved to Dropbox per device and offered back after a
+  reinstall. Sign-ins are not copied.

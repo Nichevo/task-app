@@ -9,6 +9,7 @@ import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import 'kanban_page.dart' show moveWithRule, describeSpell;
+import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
 
 /// Edit a task's name, notes and due date. Changes save as you go.
@@ -525,7 +526,7 @@ class _TaskPageState extends State<TaskPage> {
                 if (name == null || name.trim().isEmpty) return;
                 v = widget.store.addCategory(name).id;
               }
-              _update(() => task.categoryId = v);
+              setState(() => widget.store.setCategory(task, v));
             },
           ),
         ),
@@ -570,6 +571,7 @@ class _TaskPageState extends State<TaskPage> {
                   ),
           ),
         ..._board(context),
+        ..._matrix(context),
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
@@ -623,6 +625,81 @@ class _TaskPageState extends State<TaskPage> {
       ]),
     );
   }
+
+  /// Item 60: the On the matrix switch, the box, and "Waiting on" for Delegate.
+  List<Widget> _matrix(BuildContext context) {
+    final box = MatrixBox.byId(task.matrixBox);
+    if (archived && box == null) return [];
+    final urgent = widget.store.looksUrgent(task, DateTime.now());
+    return [
+      if (!archived)
+        SwitchListTile(
+          secondary: const Icon(Icons.grid_view),
+          title: const Text('On the matrix'),
+          subtitle: Text(box == null
+              ? 'Off'
+              : '${data.boxName(box)}: ${box.meaning}${urgent ? '. Due soon: urgent?' : ''}'),
+          value: box != null,
+          onChanged: (v) async {
+            if (!v) {
+              setState(() => widget.store.setBox(task, null));
+              return;
+            }
+            final picked = await _pickBox();
+            if (picked == null || !mounted) return;
+            await putInBox(this.context, widget.store, task, picked);
+            if (!mounted) return;
+            setState(() {});
+            if (task.closedAt != null || !data.active.contains(task)) _close();
+          },
+        ),
+      if (box != null && !archived)
+        ListTile(
+          leading: const SizedBox(width: 24),
+          title: const Text('Box'),
+          subtitle: DropdownButton<MatrixBox>(
+            isExpanded: true,
+            value: box,
+            items: [
+              for (final b in MatrixBox.values) DropdownMenuItem(value: b, child: Text('${data.boxName(b)}: ${b.meaning}')),
+            ],
+            onChanged: (b) async {
+              if (b == null || b == box) return;
+              await putInBox(this.context, widget.store, task, b);
+              if (!mounted) return;
+              setState(() {});
+              if (task.closedAt != null || !data.active.contains(task)) _close();
+            },
+          ),
+        ),
+      if (box == MatrixBox.delegate || (task.waitingOn ?? '').isNotEmpty)
+        ListTile(
+          leading: const SizedBox(width: 24),
+          title: const Text('Waiting on'),
+          subtitle: Text((task.waitingOn ?? '').isEmpty ? 'Nobody yet' : task.waitingOn!),
+          onTap: archived
+              ? null
+              : () async {
+                  final who = await askText(context, 'Waiting on', initial: task.waitingOn ?? '');
+                  if (who != null) setState(() => widget.store.setWaitingOn(task, who));
+                },
+        ),
+    ];
+  }
+
+  Future<MatrixBox?> _pickBox() => showDialog<MatrixBox>(
+        context: context,
+        builder: (c) => SimpleDialog(
+          title: const Text('Which box?'),
+          children: [
+            for (final b in MatrixBox.values)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, b),
+                child: ListTile(title: Text(data.boxName(b)), subtitle: Text(b.meaning)),
+              ),
+          ],
+        ),
+      );
 
   /// Item 52: the On the Kanban board switch, the stage, and the board history.
   List<Widget> _board(BuildContext context) {
