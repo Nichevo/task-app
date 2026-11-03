@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.6.2', 'November 2026', [
+    'Safer syncing between versions: if another device has a newer Task Blocks, this one keeps everything the newer version added instead of dropping it, and writes it back unchanged.',
+    'A note at the top of the list says when another device has a newer version, so you know to update this one.',
+    'Before an older version saves over data from a newer one, a copy is kept in Dropbox (backups folder, last 5 days).',
+    'iPad and Mac: new app id. Install this version once next to the old one, connect Dropbox again and let it sync, then delete the old copy.',
+  ]),
   Release('1.6.1', 'November 2026', [
     'Dragging tasks up and down works again whatever the list is sorted by. Dropping a task in a sorted list switches to hand-made order, keeping the order you saw (Undo puts the sort back).',
     'A note explains when "Starred at the top" moves a dropped task back.',

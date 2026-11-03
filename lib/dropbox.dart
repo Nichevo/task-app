@@ -71,6 +71,16 @@ class DropboxClient {
 
   Future<void> upload(String contents) => _upload(filePath, contents);
 
+  /// Item 62: keeps a copy of [contents] in /backups before an older version of the app saves
+  /// over data written by a newer one. Five slots, one per day in turn, so the last five days
+  /// with such a save are kept without needing to list or delete files.
+  Future<void> backup(String contents, DateTime now) {
+    final day = DateTime.utc(now.year, now.month, now.day).millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
+    return _upload('$backupFolder/tasks-backup-${day % 5 + 1}.json', contents);
+  }
+
+  static const backupFolder = '/backups';
+
   /// The inbox file, or null when it is missing or empty.
   Future<String?> downloadInbox() async {
     final text = await _download(inboxPath);

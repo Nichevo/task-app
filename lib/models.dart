@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'changelog.dart';
+
 /// A single task. Active tasks have [closedAt] == null.
 class Task {
   Task({
@@ -30,9 +32,22 @@ class Task {
     List<StageMove>? moves,
     this.stepsOnBoard = false,
     DateTime? updatedAt,
+    Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
         moves = moves ?? [],
+        extra = extra ?? {},
         updatedAt = updatedAt ?? createdAt;
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {
+    'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
+    'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
+    'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
+    'stepsBoard',
+  };
 
   final String id;
   String title;
@@ -159,6 +174,7 @@ class Task {
       );
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'id': id,
         'title': title,
         'notes': notes,
@@ -217,6 +233,7 @@ class Task {
         stageId: j['stage'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         stepsOnBoard: j['stepsBoard'] as bool? ?? false,
+        extra: unknownFields(j, _known),
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
@@ -295,8 +312,22 @@ class GeoPoint {
 
 /// One line of a task's checklist. [taskId] is set when it was made into a full task.
 class TaskStep {
-  TaskStep({required this.id, required this.title, this.done = false, this.taskId, this.stageId, List<StageMove>? moves})
-      : moves = moves ?? [];
+  TaskStep(
+      {required this.id,
+      required this.title,
+      this.done = false,
+      this.taskId,
+      this.stageId,
+      List<StageMove>? moves,
+      Map<String, dynamic>? extra})
+      : moves = moves ?? [],
+        extra = extra ?? {};
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'title', 'done', 'taskId', 'stage', 'moves'};
 
   final String id;
   String title;
@@ -320,6 +351,7 @@ class TaskStep {
       TaskStep(id: 's${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', title: title.trim());
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'id': id,
         'title': title,
         if (done) 'done': true,
@@ -335,12 +367,21 @@ class TaskStep {
         taskId: j['taskId'] as String?,
         stageId: j['stage'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
+        extra: unknownFields(j, _known),
       );
 }
 
 /// A saved checklist that can be added to any task.
 class ChecklistTemplate {
-  ChecklistTemplate({required this.id, required this.name, List<String>? steps}) : steps = steps ?? [];
+  ChecklistTemplate({required this.id, required this.name, List<String>? steps, Map<String, dynamic>? extra})
+      : steps = steps ?? [],
+        extra = extra ?? {};
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'name', 'steps'};
 
   final String id;
   String name;
@@ -349,12 +390,13 @@ class ChecklistTemplate {
   factory ChecklistTemplate.create(String name, List<String> steps) => ChecklistTemplate(
       id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim(), steps: steps);
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'steps': steps};
+  Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, 'steps': steps};
 
   factory ChecklistTemplate.fromJson(Map<String, dynamic> j) => ChecklistTemplate(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         steps: [for (final s in j['steps'] as List? ?? []) s as String],
+        extra: unknownFields(j, _known),
       );
 }
 
@@ -371,7 +413,14 @@ class DoneRecord {
     this.lateMinutes,
     this.missed = 0,
     this.stageMinutes,
+    this.extra = const {},
   });
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages'};
 
   final DateTime at;
 
@@ -422,6 +471,7 @@ class DoneRecord {
       );
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'at': at.toUtc().toIso8601String(),
         'took': tookMinutes,
         if (onTime != null) 'onTime': onTime,
@@ -447,6 +497,7 @@ class DoneRecord {
         stageMinutes: j['stages'] is Map
             ? {for (final e in (j['stages'] as Map).entries) e.key as String: (e.value as num).toInt()}
             : null,
+        extra: unknownFields(j, _known),
       );
 }
 
@@ -468,7 +519,14 @@ int missedCycles(Task t, DateTime at) {
 
 /// A column of the Kanban board.
 class KanbanStage {
-  KanbanStage({required this.id, required this.name, this.colour, this.limit});
+  KanbanStage({required this.id, required this.name, this.colour, this.limit, Map<String, dynamic>? extra})
+      : extra = extra ?? {};
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'name', 'colour', 'limit'};
 
   final String id;
   String name;
@@ -492,6 +550,7 @@ class KanbanStage {
       ];
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'id': id,
         'name': name,
         if (colour != null) 'colour': colour,
@@ -503,6 +562,7 @@ class KanbanStage {
         name: j['name'] as String? ?? '',
         colour: (j['colour'] as num?)?.toInt(),
         limit: (j['limit'] as num?)?.toInt(),
+        extra: unknownFields(j, _known),
       );
 }
 
@@ -549,7 +609,14 @@ class StageMove {
     this.where,
     this.device,
     this.note,
-  });
+    Map<String, dynamic>? extra,
+  }) : extra = extra ?? {};
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'from', 'fromName', 'to', 'toName', 'at', 'how', 'where', 'device', 'note'};
 
   final String id;
   final String? fromId;
@@ -591,6 +658,7 @@ class StageMove {
       );
 
   Map<String, dynamic> toJson() => {
+        ...extra,
         'id': id,
         if (fromId != null) 'from': fromId,
         if (fromName != null) 'fromName': fromName,
@@ -614,6 +682,7 @@ class StageMove {
         where: GeoPoint.tryParse(j['where']),
         device: j['device'] as String?,
         note: j['note'] as String?,
+        extra: unknownFields(j, _known),
       );
 }
 
@@ -809,7 +878,15 @@ class Repeat {
 }
 
 class TaskCategory {
-  TaskCategory({required this.id, required this.name, List<String>? keywords}) : keywords = keywords ?? [];
+  TaskCategory({required this.id, required this.name, List<String>? keywords, Map<String, dynamic>? extra})
+      : keywords = keywords ?? [],
+        extra = extra ?? {};
+
+  /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
+  /// and written back unchanged, so an older device never drops newer data when it syncs.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'name', 'keywords'};
 
   final String id;
   String name;
@@ -820,12 +897,13 @@ class TaskCategory {
   factory TaskCategory.create(String name) =>
       TaskCategory(id: 'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name);
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name, if (keywords.isNotEmpty) 'keywords': keywords};
+  Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, if (keywords.isNotEmpty) 'keywords': keywords};
 
   factory TaskCategory.fromJson(Map<String, dynamic> j) => TaskCategory(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         keywords: [for (final k in j['keywords'] as List? ?? []) k as String],
+        extra: unknownFields(j, _known),
       );
 }
 
@@ -868,7 +946,10 @@ class AppData {
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
     Map<String, DateTime>? deleted,
+    this.newestApp,
+    Map<String, dynamic>? extra,
   })  : active = active ?? [],
+        extra = extra ?? {},
         archived = archived ?? [],
         deleted = deleted ?? {},
         categories = categories ?? [],
@@ -993,8 +1074,30 @@ class AppData {
   /// Ids of deleted tasks and when, so a sync doesn't bring them back.
   final Map<String, DateTime> deleted;
 
+  /// Item 62: the newest app version that has saved this data (as read; this device's own
+  /// version is added when it is written). Newer than [currentAppVersion] means another
+  /// device runs a newer Task Blocks and this one should be updated.
+  String? newestApp;
+
+  /// Item 62: top-level fields from a newer version that this one doesn't know; kept as they are.
+  final Map<String, dynamic> extra;
+
+  /// Another device has saved this data with a newer version of the app.
+  bool get newerAppElsewhere => newestApp != null && compareVersions(newestApp!, currentAppVersion) > 0;
+
+  static const _known = {
+    'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
+    'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
+    'starredTop', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
+    'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
+    'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
+    'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
+  };
+
   Map<String, dynamic> toJson() => {
+        ...extra,
         'version': 1,
+        'newestApp': newerVersion(newestApp, currentAppVersion),
         'hoursToRed': hoursToRed,
         'colourByDue': colourByDue,
         'archiveKeepDays': archiveKeepDays,
@@ -1100,8 +1203,36 @@ class AppData {
         },
         active: [for (final t in j['active'] as List? ?? []) Task.fromJson(t)],
         archived: [for (final t in j['archived'] as List? ?? []) Task.fromJson(t)],
+        newestApp: j['newestApp'] as String?,
+        extra: unknownFields(j, _known),
       );
 }
+
+/// The version of this copy of the app (the newest entry in the changelog, which a test keeps
+/// in step with pubspec.yaml).
+String get currentAppVersion => releases.first.version;
+
+/// Compares version names like "1.6.2" part by part: negative when [a] is older than [b].
+int compareVersions(String a, String b) {
+  List<int> parts(String v) => [for (final p in v.split('+').first.split('.')) int.tryParse(p.trim()) ?? 0];
+  final x = parts(a), y = parts(b);
+  for (var i = 0; i < max(x.length, y.length); i++) {
+    final d = (i < x.length ? x[i] : 0) - (i < y.length ? y[i] : 0);
+    if (d != 0) return d;
+  }
+  return 0;
+}
+
+/// The newer of two version names; null only when both are.
+String? newerVersion(String? a, String? b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return compareVersions(a, b) >= 0 ? a : b;
+}
+
+/// Item 62: the entries of [j] whose keys aren't in [known], i.e. what a newer version added.
+Map<String, dynamic> unknownFields(Map<String, dynamic> j, Set<String> known) =>
+    {for (final e in j.entries) if (!known.contains(e.key)) e.key: e.value};
 
 /// Combines two copies of the data (this device's and Dropbox's) task by task, so edits
 /// made on both devices between syncs are kept. For each task the most recently changed
@@ -1226,5 +1357,8 @@ AppData mergeData(AppData a, AppData b) {
     updatedAt: b.updatedAt.isAfter(a.updatedAt) ? b.updatedAt : a.updatedAt,
     orderUpdatedAt: orderFrom.orderUpdatedAt,
     deleted: deleted,
+    newestApp: newerVersion(a.newestApp, b.newestApp),
+    // Fields only a newer version understands: keep them from both, the newer copy winning.
+    extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},
   );
 }

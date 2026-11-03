@@ -2,7 +2,7 @@
 
 ## What is set up
 
-- An iOS target (`ios/`, bundle id `com.jeff.taskBlocks`, name "Task Blocks") that runs on iPad and iPhone,
+- An iOS target (`ios/`, bundle id `app.taskblocks`, name "Task Blocks") that runs on iPad and iPhone,
   iOS 15 or later.
 - iPad uses the same two-pane layout as the unfolded Fold: the list on the left and the open task (or the
   archive) on the right, in portrait and landscape, and in Split View / Stage Manager. Below 600 points wide
@@ -39,9 +39,13 @@ The CI build is **not signed**, because signing needs an Apple account. iPads on
    sign and upload automatically; you would add these GitHub Actions secrets (I can't set secrets):
    - `IOS_CERTIFICATE_P12_BASE64` and `IOS_CERTIFICATE_PASSWORD` (an Apple Distribution certificate),
    - `APPSTORE_API_KEY_ID`, `APPSTORE_API_ISSUER_ID`, `APPSTORE_API_KEY_P8_BASE64` (an App Store Connect API
-     key with App Manager access), and the app record `com.jeff.taskBlocks` created in App Store Connect.
+     key with App Manager access), and the app record `app.taskblocks` created in App Store Connect.
 
 Your data moves across through Dropbox as on the other devices: Settings → Dropbox sync, same app key.
+
+**Changed in 1.6.2:** the bundle id (iPad and Mac) became `app.taskblocks`. The iPad and Mac see it as a new app,
+so install it once alongside the old one, connect Dropbox again (same app key) and let it sync, then delete the old
+copy. Later versions update in place again.
 
 ## Not tested yet
 

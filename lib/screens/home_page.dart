@@ -72,6 +72,9 @@ class HomePageState extends State<HomePage> {
   /// Upcoming calendar events worth offering, when the app checks on its own.
   int _eventCount = 0;
 
+  /// The "please update this device" note (item 62) was put away until the app restarts.
+  bool _updateNoteHidden = false;
+
   late final Timer _tick;
   late final AppLifecycleListener _lifecycle;
 
@@ -432,6 +435,14 @@ class HomePageState extends State<HomePage> {
         ],
       ),
       body: Column(children: [
+        if (data.newerAppElsewhere && !_updateNoteHidden)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.system_update_outlined),
+            content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
+                'Everything keeps working, and nothing the newer version added is lost.'),
+            actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
+          ),
         if (_eventCount > 0)
           MaterialBanner(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
