@@ -589,3 +589,16 @@ Built:
 - Task page: each board step shows its stage in the checklist, and **Steps' board history** lists every step
   move. Statistics: a separate table of time in each stage for steps and step moves a week (task numbers are
   unchanged). kanban_moves.csv gains a Step column with a row per step move.
+
+## 57. Drag to reorder works in any sort ☑ (version 1.6.1)
+
+**Feedback (2026-11-02):** "Dragging tasks up and down seems to have stopped working on android."
+
+Cause: since item 42 (PR #9, 1.4.0) the drag handles only showed with Sort by set to hand-made order, and a
+fresh install sorts by due date, so the list had no handles and long press did nothing.
+
+Fixed:
+- Drag handles and long press to drag show whatever the sort (not while searching). Dropping a task in a
+  sorted list switches Sort by to hand-made order, keeping the order that was on screen plus the move, with
+  Undo to put the old sort and order back.
+- With "Starred at the top" on, dropping a task where the star rule will move it back shows a short note.
