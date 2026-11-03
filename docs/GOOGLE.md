@@ -18,6 +18,12 @@ device.
 3. **APIs & Services → OAuth consent screen** (in newer consoles: **Google Auth Platform → Branding /
    Audience**):
    - User type **External**, app name "Task Blocks", your address as the support and developer contact.
+   - **Branding**: Google won't let you publish without these. They come from the repo's own GitHub Pages site
+     (see "Home page and privacy policy" below):
+     - Application home page: `https://nichevo.github.io/task-app/`
+     - Application privacy policy link: `https://nichevo.github.io/task-app/privacy.html`
+     - Terms of service: leave empty.
+     - Authorized domains: `nichevo.github.io`
    - **Data access / Scopes**: add `https://www.googleapis.com/auth/gmail.modify`.
    - **Audience / Test users**: add your own Gmail address.
    - **Publish the app** (Publishing status → **In production**). See "Staying signed in" below for why.
@@ -39,6 +45,13 @@ While the consent screen is left in **Testing**, Google ends the sign-in after 7
 sign in again. Publishing it (**In production**) avoids that. An unverified app that is in production still
 works for up to 100 users and shows the "hasn't verified" screen once at sign-in. If Google changes these rules,
 Task Blocks shows "Google signed this device out" and Settings offers Sign in again. Nothing is lost.
+
+## Home page and privacy policy
+
+The two pages Google asks for live in this repo as `docs/index.html` and `docs/privacy.html`. To put them online
+(once): on GitHub open the repo's **Settings → Pages**, set **Source** to "Deploy from a branch", branch **main**,
+folder **/docs**, and press **Save**. After a minute or two they are at the addresses above. If you change what the
+app does with Gmail, update `docs/privacy.html` to match.
 
 ## How sign-in works
 

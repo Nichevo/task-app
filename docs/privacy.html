@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task Blocks privacy policy</title>
+<meta name="description" content="How Task Blocks handles your data, including Gmail data from Google sign-in.">
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #5b5b57; --accent: #2e7d32; --line: #e2e2dc; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #151514; --fg: #ecece8; --muted: #a5a5a0; --accent: #81c784; --line: #2c2c2a; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 32px; }
+  h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+  a { color: var(--accent); }
+  code { font-size: 0.9em; overflow-wrap: anywhere; }
+  ul { padding-left: 1.2em; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy policy</h1>
+  <p class="lead">Task Blocks · last updated 3 November 2026</p>
+
+  <p>Task Blocks is a personal task app, made for its owner's own use. It has no server of its own, no user
+  accounts, no adverts and no analytics or tracking. Your data stays on your devices and in your own cloud
+  storage, and is never sold or shared with anyone.</p>
+
+  <h2>Data the app keeps</h2>
+  <ul>
+    <li><strong>Your tasks</strong> (names, dates, notes, categories, checklists) are saved on the device.</li>
+    <li>If you turn on <strong>Dropbox sync</strong>, your tasks and settings are also saved in your own Dropbox
+    account, which you sign in to yourself. Dropbox's own privacy policy applies to that copy.</li>
+    <li>Sign-in tokens for Dropbox and Google are saved only on the device that signed in. They are never synced.</li>
+  </ul>
+
+  <h2>Google user data (Gmail)</h2>
+  <p>Google sign-in is optional and off until you turn it on. The app asks for one permission,
+  <code>https://www.googleapis.com/auth/gmail.modify</code>, and uses it only for these features:</p>
+  <ul>
+    <li><strong>Email to tasks:</strong> it reads recent emails from senders you have allowed, and turns those whose
+    subject starts with "Task" (or that have the Gmail label "Task") into tasks. It then changes that email's labels
+    so it is not picked up twice.</li>
+    <li><strong>Starred emails:</strong> it lists your starred emails so you can make a task from one or attach it
+    to a task, and optionally removes the star or adds a label afterwards.</li>
+  </ul>
+  <p>The app does not send or delete email. Gmail is read directly between your device and Google. No email data
+  passes through any server run by Task Blocks, because there isn't one.</p>
+  <p>When an email is attached to a task, the app keeps its subject, sender, date, a short snippet and its Gmail id
+  with that task, on your device and in your Dropbox if sync is on. The full email body and attachments are not
+  stored.</p>
+  <p>Task Blocks' use and transfer of information received from Google APIs adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+  including the Limited Use requirements. Gmail data is used only to provide the features above, is not used for
+  advertising, is not used to train AI or machine-learning models, and is not transferred to anyone else.</p>
+
+  <h2>Other device permissions (Android)</h2>
+  <ul>
+    <li><strong>Calendar</strong> (optional): reads upcoming events so you can turn them into tasks.</li>
+    <li><strong>Location</strong> (optional): saves where a task was added and powers place reminders. It stays
+    on the device and in your Dropbox.</li>
+    <li><strong>Photos and camera</strong> (optional): text in a photo is read on the device to make tasks. The
+    photo is not uploaded.</li>
+  </ul>
+
+  <h2>Removing your data</h2>
+  <ul>
+    <li>Settings → Google → <strong>Sign out</strong> deletes the Google token from the device and revokes it at
+    Google. You can also remove access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+    <li>Uninstalling the app removes everything it saved on that device. The copy in your Dropbox stays until you
+    delete it there.</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: open an issue at
+  <a href="https://github.com/Nichevo/task-app/issues">github.com/Nichevo/task-app/issues</a>.</p>
+
+  <footer><a href="./">Task Blocks home</a></footer>
+</main>
+</body>
+</html>
