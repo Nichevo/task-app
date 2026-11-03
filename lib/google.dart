@@ -31,7 +31,7 @@ class GoogleClient {
   String? _accessToken;
   DateTime _accessExpiry = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Read emails and change their labels and stars. It can't send or delete mail.
+  /// Used only to read emails and change their labels and stars. The scope also allows sending, which the app never does.
   static const scope = 'https://www.googleapis.com/auth/gmail.modify';
 
   bool get isConnected => refreshToken != null;
