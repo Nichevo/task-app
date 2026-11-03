@@ -262,6 +262,8 @@ class AppStore extends ChangeNotifier {
         if (await _takeInbox(db)) await _writeData();
         final mine = jsonEncode(data.toJson());
         if (remoteText == null || mine != jsonEncode(remote!.toJson())) {
+          // Item 62: a newer version wrote the Dropbox copy; keep it before this one saves over it.
+          if (remote != null && remote.newerAppElsewhere) await db.backup(remoteText!, DateTime.now());
           await db.upload(mine);
         }
       } while (_syncAgain);

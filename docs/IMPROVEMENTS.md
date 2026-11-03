@@ -556,8 +556,15 @@ Built:
 # Round 5 (planned 2026-11-02)
 
 Plan: Claude doc "Task Blocks round 5 plan". New: 53 Google sign-in, 54 tasks from emails sent by allowed
-addresses (replaces 34), 55 starred emails page, 56 Kanban steps. Carried over: 48 (pushing tasks in), 28
-(notification suggestions), iPad extras. 56 was asked for first (2026-11-02).
+addresses (replaces 34), 55 starred emails page, 56 Kanban steps, 58 a calendar event as a step, 59 views for
+the unfolded right-hand panel, 60 urgent / important matrix (Do, Decide, Delegate, Delete), 61 step details and
+Split out, 62 older copies keep newer data, 63 export of the new fields, 64 quick-add words, 65 deep search,
+66 neutral app ids, 67 categories that go on the board by default, 68 Kanban and Matrix widgets. Carried over:
+48 (pushing tasks in). 28 (notification suggestions) and the iPad extras are left out this round. 56 was asked
+for first (2026-11-02).
+
+Build order (planned 2026-11-03): 1) 62 + iPad/Mac part of 66, 2) 53 + 55, 3) 48A + 54, 4) 60 + 64 + 65 + 67,
+5) 61 + 58, 6) 59, 7) 68 + 48B + Android part of 66. 63 goes into each PR for the fields it adds.
 
 ## 56. Checklist steps on the Kanban board ☑ (PR #13, merged 2026-11-02)
 
@@ -602,3 +609,25 @@ Fixed:
   sorted list switches Sort by to hand-made order, keeping the order that was on screen plus the move, with
   Undo to put the old sort and order back.
 - With "Starred at the top" on, dropping a task where the star rule will move it back shows a short note.
+
+## 62. Older copies keep newer data ☑ (version 1.6.2)
+
+Round 5 adds new things to the synced tasks.json. A device still on an older version used to drop any field it
+didn't know when it saved, and that loss then synced to every device.
+
+- Every task, step, category, stage, checklist template, board move, completion record and the file itself keep
+  any fields they don't recognise and write them back unchanged. When two copies are merged, unknown top-level
+  fields from both are kept (the newer copy wins on the same field); a task's come with whichever copy wins.
+- The file records the newest app version that saved it (`newestApp`). A device older than that shows a note at
+  the top of the list: "Another device has a newer Task Blocks (x.y.z). Please update this one."
+- Before an older device uploads over a Dropbox file written by a newer version, it keeps a copy in the
+  `/backups` folder of the app's Dropbox folder (five slots, one per day in turn).
+- This has to reach every device before any round 5 field appears, so it ships first and on its own.
+
+## 66. Neutral app ids ◐ (iPad and Mac in 1.6.2; Android code names later)
+
+- iPad and Mac bundle id is now `app.taskblocks`. They install as a new app once: connect Dropbox again, let it
+  sync, then delete the old copy (see docs/IPAD.md).
+- Android keeps its application id, because changing it would install a second app instead of updating. The
+  Android code package, the channel name and the widget class names move to a neutral name in the widgets PR
+  (item 68), after which home screen widgets need adding again once.
