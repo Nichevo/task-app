@@ -51,7 +51,7 @@ Map<String, dynamic> futureFile() {
   ((j['done'] as Map)['old'] as Map)['box'] = 'do';
   final task = (j['active'] as List).first as Map<String, dynamic>;
   task['matrix'] = 'decide';
-  task['emails'] = [
+  task['attachments'] = [
     {'subject': 'Your renewal', 'from': 'insurer@example.com'},
   ];
   (task['steps'] as List).first['due'] = '2026-11-20T09:00:00.000';
@@ -73,7 +73,7 @@ void main() {
     expect(((out['done'] as Map)['old'] as Map)['box'], 'do');
     final task = (out['active'] as List).first as Map;
     expect(task['matrix'], 'decide');
-    expect((task['emails'] as List).single['subject'], 'Your renewal');
+    expect((task['attachments'] as List).single['subject'], 'Your renewal');
     expect((task['steps'] as List).first['due'], '2026-11-20T09:00:00.000');
     expect(((task['moves'] as List).first as Map)['by'], 'widget');
   });
@@ -101,7 +101,7 @@ void main() {
   test('known fields never end up in the kept extras', () {
     final d = read(futureFile());
     expect(d.extra.keys, ['matrixNames']);
-    expect(d.active.first.extra.keys.toSet(), {'matrix', 'emails'});
+    expect(d.active.first.extra.keys.toSet(), {'matrix', 'attachments'});
     expect(d.active.first.steps.first.extra.keys, ['due']);
     expect(d.categories.first.extra.keys, ['boardByDefault']);
   });

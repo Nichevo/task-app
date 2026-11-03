@@ -24,6 +24,7 @@ import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
 import 'settings_page.dart';
+import 'starred_page.dart';
 import 'stats_page.dart';
 import 'task_page.dart';
 
@@ -72,6 +73,11 @@ class HomePageState extends State<HomePage> {
   /// Upcoming calendar events worth offering, when the app checks on its own.
   int _eventCount = 0;
 
+  /// Item 55: starred emails not yet tasks, for the optional line at the top.
+  int _starredCount = 0;
+  DateTime? _starredCheckedAt;
+  bool _starredHidden = false;
+
   /// The "please update this device" note (item 62) was put away until the app restarts.
   bool _updateNoteHidden = false;
 
@@ -86,9 +92,13 @@ class HomePageState extends State<HomePage> {
     super.initState();
     // Re-colour the blocks as they age, and bring back snoozed tasks.
     _tick = Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}));
-    _lifecycle = AppLifecycleListener(onResume: store.syncIfStale);
+    _lifecycle = AppLifecycleListener(onResume: () {
+      store.syncIfStale();
+      _checkStarred();
+    });
     store.addListener(_checkEvents);
     _checkEvents();
+    _checkStarred();
   }
 
   @override
@@ -117,6 +127,20 @@ class HomePageState extends State<HomePage> {
       // No access yet; the Upcoming events page explains how to allow it.
     } finally {
       _checkingEvents = false;
+    }
+  }
+
+  /// When the setting is on, counts starred emails not yet used (at most every 10 minutes).
+  Future<void> _checkStarred() async {
+    if (!data.starredLine || store.google == null || _starredHidden) return;
+    final last = _starredCheckedAt;
+    if (last != null && DateTime.now().difference(last) < const Duration(minutes: 10)) return;
+    _starredCheckedAt = DateTime.now();
+    try {
+      final n = await store.starredWaiting() ?? 0;
+      if (mounted && n != _starredCount) setState(() => _starredCount = n);
+    } catch (_) {
+      // Offline or signed out; the Starred emails page shows why.
     }
   }
 
@@ -406,6 +430,7 @@ class HomePageState extends State<HomePage> {
               'stats' => openStats(),
               'board' => openBoard(),
               'events' => _open(context, EventsPage(store: store)),
+              'starred' => _open(context, StarredPage(store: store)),
               'paste' => _pasteList(),
               'photo' => importPhoto(context, store),
               'csv' => exportCsv(context, store),
@@ -421,6 +446,7 @@ class HomePageState extends State<HomePage> {
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
+              const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'paste', child: Text('Paste a list')),
               if (Native.supported) const PopupMenuItem(value: 'photo', child: Text('Photo of a list')),
@@ -442,6 +468,22 @@ class HomePageState extends State<HomePage> {
             content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
                 'Everything keeps working, and nothing the newer version added is lost.'),
             actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
+          ),
+        if (_starredCount > 0 && data.starredLine && !_starredHidden)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.star_outline),
+            content: Text('$_starredCount starred email${_starredCount == 1 ? '' : 's'} not yet tasks'),
+            actions: [
+              TextButton(onPressed: () => setState(() => _starredHidden = true), child: const Text('Not now')),
+              TextButton(
+                onPressed: () {
+                  setState(() => _starredHidden = true);
+                  _open(context, StarredPage(store: store));
+                },
+                child: const Text('Have a look'),
+              ),
+            ],
           ),
         if (_eventCount > 0)
           MaterialBanner(
@@ -832,7 +874,10 @@ Future<void> exportCsv(BuildContext context, AppStore store) async {
     messenger.showSnackBar(SnackBar(content: Text('Exported $name')));
     // Board history goes in a second file, one row per move.
     final moves = buildMovesCsv(store.data);
-    if (moves == null) return;
+    if (moves == null) {
+      await _exportEmails(store, messenger);
+      return;
+    }
     final movesName = 'kanban_moves_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
     final savedMoves = await FilePicker.saveFile(
       dialogTitle: 'Export Kanban board moves',
@@ -841,6 +886,25 @@ Future<void> exportCsv(BuildContext context, AppStore store) async {
       mimeType: 'text/csv',
     );
     if (savedMoves != null) messenger.showSnackBar(SnackBar(content: Text('Exported $name and $movesName')));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+  }
+  await _exportEmails(store, messenger);
+}
+
+/// Emails kept on tasks go in a file of their own (item 63).
+Future<void> _exportEmails(AppStore store, ScaffoldMessengerState messenger) async {
+  final emails = buildEmailsCsv(store.data);
+  if (emails == null) return;
+  final emailsName = 'task_emails_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+  try {
+    final saved = await FilePicker.saveFile(
+      dialogTitle: 'Export emails kept on tasks',
+      fileName: emailsName,
+      bytes: Uint8List.fromList(utf8.encode('\uFEFF$emails')),
+      mimeType: 'text/csv',
+    );
+    if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Exported $emailsName')));
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
   }

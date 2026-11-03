@@ -132,6 +132,42 @@ int importCsvText(AppData data, String text) {
   return added;
 }
 
+/// Whether [text] is an emails.csv from the export (item 63) rather than a list of tasks.
+bool isEmailsCsv(String text) {
+  final rows = parseCsv(text);
+  return rows.isNotEmpty && rows.first.any((h) => h.trim().toLowerCase() == 'email id');
+}
+
+/// Puts the emails in an emails.csv back on their tasks (matched by name and created time).
+/// Emails a task already has are skipped. Returns how many were added.
+int importEmailsCsvText(AppData data, String text) {
+  final rows = parseCsv(text);
+  if (rows.isEmpty) return 0;
+  final header = [for (final h in rows.first) h.trim().toLowerCase()];
+  int col(String name) => header.indexOf(name);
+  final iTask = col('task'), iCreated = col('task created'), iId = col('email id'), iThread = col('thread id');
+  final iSubject = col('subject'), iFrom = col('from'), iDate = col('date'), iSnippet = col('snippet');
+  String cell(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
+  final byKey = <String, Task>{for (final t in data.allTasks) '${t.title}|${_parseDate(csvDateFormat.format(t.createdAt))}': t};
+  var added = 0;
+  for (final r in rows.skip(1)) {
+    final id = cell(r, iId);
+    final t = byKey['${cell(r, iTask)}|${_parseDate(cell(r, iCreated))}'];
+    if (id.isEmpty || t == null || t.emails.any((e) => e.id == id)) continue;
+    t.emails.add(TaskEmail(
+      id: id,
+      threadId: cell(r, iThread).isEmpty ? null : cell(r, iThread),
+      subject: cell(r, iSubject),
+      from: cell(r, iFrom),
+      date: _parseDate(cell(r, iDate)),
+      snippet: cell(r, iSnippet),
+    ));
+    t.touch();
+    added++;
+  }
+  return added;
+}
+
 Future<void> importCsv(BuildContext context, AppStore store) async {
   final messenger = ScaffoldMessenger.of(context);
   try {
@@ -142,7 +178,14 @@ Future<void> importCsv(BuildContext context, AppStore store) async {
     );
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
-    final added = importCsvText(store.data, utf8.decode(bytes, allowMalformed: true));
+    final text = utf8.decode(bytes, allowMalformed: true);
+    if (isEmailsCsv(text)) {
+      final added = importEmailsCsvText(store.data, text);
+      store.changed();
+      messenger.showSnackBar(SnackBar(content: Text('Put back $added email${added == 1 ? '' : 's'} on their tasks')));
+      return;
+    }
+    final added = importCsvText(store.data, text);
     store.changed(order: true);
     messenger.showSnackBar(SnackBar(content: Text('Imported $added task${added == 1 ? '' : 's'}')));
   } catch (e) {

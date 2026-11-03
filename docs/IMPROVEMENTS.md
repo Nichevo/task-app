@@ -631,3 +631,29 @@ didn't know when it saved, and that loss then synced to every device.
 - Android keeps its application id, because changing it would install a second app instead of updating. The
   Android code package, the channel name and the widget class names move to a neutral name in the widgets PR
   (item 68), after which home screen widgets need adding again once.
+
+## 53. Google sign-in ☑ (version 1.7.0; setup in docs/GOOGLE.md)
+
+- Settings → Google: client ID and secret of the owner's own "Desktop app" OAuth client, Sign in / Sign out,
+  the signed-in address. Phone, Windows and Mac; iPad later.
+- Installed-app flow with PKCE and a one-off page on 127.0.0.1; scope `gmail.modify` (read, labels and stars;
+  no send or delete). Refresh token and client details are device-only (device_settings.json), never synced.
+- A refused refresh token ("invalid_grant") signs the device out and Settings offers Sign in again.
+
+## 55. Starred emails page ☑ (version 1.7.0)
+
+- Menu → Starred emails: starred Gmail emails, newest first, look-back 1 week / 1 month (default) / 3 months / all.
+- Each: Make task (subject read for dates and #category; source "Starred email"), Attach to task (picker with
+  search, starred and board tasks first), Hide (synced; "Show hidden emails" in the menu). Used ones show
+  "Task: ..." or "Attached to: ...".
+- Tasks keep `emails` (Gmail id, thread id, subject, From, date, a snippet of at most 300 characters). Task page
+  Emails section with Open in Gmail and Remove; envelope on the block.
+- After use: keep the star (default), remove it, or remove it and add the "Tasked" label.
+- Optional line at the top of the list, "N starred emails not yet tasks" (off by default; checked on open and
+  resume, at most every 10 minutes).
+
+## 63. Export carries the new fields ◐ (emails in 1.7.0; the rest with each feature)
+
+- Tasks CSV gains an Emails column (count). `task_emails_<date>.csv`: one row per email kept on a task; importing
+  it puts the emails back on their tasks (matched by name and created time), skipping ones already there.
+

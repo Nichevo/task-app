@@ -4,7 +4,7 @@ import 'models.dart';
 
 final csvDateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)', 'Stage'];
+const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)', 'Stage', 'Emails'];
 
 String _cell(String s) =>
     RegExp(r'[",\r\n]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
@@ -28,6 +28,7 @@ String buildCsv(AppData data) {
         t.source == null ? '' : TaskSource.label(t.source),
         t.estimate?.toString() ?? '',
         t.kanban ? data.stage(t.stageId)?.name ?? '' : '',
+        t.emails.isEmpty ? '' : '${t.emails.length}',
       ];
   final rows = <List<String>>[
     csvHeader,
@@ -35,6 +36,20 @@ String buildCsv(AppData data) {
     for (final t in data.archived) row(t, 'Closed', ''),
   ];
   return '${rows.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
+}
+
+const emailsHeader = ['Task', 'Task created', 'Email id', 'Thread id', 'Subject', 'From', 'Date', 'Snippet'];
+
+/// emails.csv (item 55/63): one row per email kept on a task. Null when no task has one.
+String? buildEmailsCsv(AppData data) {
+  final rows = [
+    for (final t in data.allTasks)
+      for (final e in t.emails)
+        [t.title, _date(t.createdAt), e.id, e.threadId ?? '', e.subject, e.from, _date(e.date), e.snippet],
+  ];
+  if (rows.isEmpty) return null;
+  final lines = [emailsHeader, ...rows];
+  return '${lines.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
 }
 
 const movesHeader = ['Task', 'Step', 'Moved from', 'Moved to', 'When', 'Minutes in previous stage', 'How', 'Where', 'Device', 'Note'];

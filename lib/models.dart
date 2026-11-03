@@ -31,10 +31,12 @@ class Task {
     this.stageId,
     List<StageMove>? moves,
     this.stepsOnBoard = false,
+    List<TaskEmail>? emails,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
         moves = moves ?? [],
+        emails = emails ?? [],
         extra = extra ?? {},
         updatedAt = updatedAt ?? createdAt;
 
@@ -46,7 +48,7 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard',
+    'stepsBoard', 'emails',
   };
 
   final String id;
@@ -120,6 +122,9 @@ class Task {
   /// Item 56: its checklist steps are cards on the board too, each moving through the stages
   /// on its own.
   bool stepsOnBoard;
+
+  /// Item 55: emails attached to it (or that it was made from), newest last.
+  final List<TaskEmail> emails;
 
   /// The steps showing on the board: none unless the task is on it with [stepsOnBoard] on.
   List<TaskStep> get boardSteps => kanban && stepsOnBoard ? steps : const [];
@@ -202,6 +207,7 @@ class Task {
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
         if (stepsOnBoard) 'stepsBoard': true,
+        if (emails.isNotEmpty) 'emails': emails.map((e) => e.toJson()).toList(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -233,6 +239,7 @@ class Task {
         stageId: j['stage'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         stepsOnBoard: j['stepsBoard'] as bool? ?? false,
+        emails: [for (final e in j['emails'] as List? ?? []) TaskEmail.fromJson(e as Map<String, dynamic>)],
         extra: unknownFields(j, _known),
       );
 
@@ -255,6 +262,7 @@ abstract final class TaskSource {
   static const repeat = 'repeat';
   static const step = 'step';
   static const kanban = 'kanban';
+  static const starredEmail = 'starredEmail';
 
   static const labels = {
     typed: 'Typed in the app',
@@ -269,6 +277,7 @@ abstract final class TaskSource {
     repeat: 'Repeat of an earlier task',
     step: 'Checklist step',
     kanban: 'Kanban board',
+    starredEmail: 'Starred email',
   };
 
   /// A name for showing; [source] null is a task from before sources were recorded.
@@ -276,6 +285,60 @@ abstract final class TaskSource {
     if (source == null || source.isEmpty) return 'Unknown';
     return labels[source] ?? source[0].toUpperCase() + source.substring(1);
   }
+}
+
+/// Item 55: an email kept on a task. Only these few details are stored, never the whole email,
+/// because tasks sync through Dropbox.
+class TaskEmail {
+  TaskEmail({
+    required this.id,
+    this.threadId,
+    this.subject = '',
+    this.from = '',
+    this.date,
+    this.snippet = '',
+    Map<String, dynamic>? extra,
+  }) : extra = extra ?? {};
+
+  /// Gmail's message id.
+  final String id;
+  final String? threadId;
+  final String subject;
+
+  /// The From line as Gmail shows it ("Name <address>").
+  final String from;
+  final DateTime? date;
+
+  /// The first part of the text, as Gmail gives it.
+  final String snippet;
+
+  /// Item 62: fields from a newer version, kept as they are.
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'thread', 'subject', 'from', 'date', 'snippet'};
+
+  /// Opens the email in Gmail (the app on a phone, the browser on a computer).
+  Uri get link => Uri.parse('https://mail.google.com/mail/u/0/#all/${threadId ?? id}');
+
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'id': id,
+        if (threadId != null) 'thread': threadId,
+        'subject': subject,
+        'from': from,
+        if (date != null) 'date': date!.toUtc().toIso8601String(),
+        if (snippet.isNotEmpty) 'snippet': snippet,
+      };
+
+  factory TaskEmail.fromJson(Map<String, dynamic> j) => TaskEmail(
+        id: j['id'] as String,
+        threadId: j['thread'] as String?,
+        subject: j['subject'] as String? ?? '',
+        from: j['from'] as String? ?? '',
+        date: DateTime.tryParse(j['date'] as String? ?? '')?.toLocal(),
+        snippet: j['snippet'] as String? ?? '',
+        extra: unknownFields(j, _known),
+      );
 }
 
 /// A location fix: latitude and longitude in degrees, accuracy in metres, and when it was taken.
@@ -948,7 +1011,12 @@ class AppData {
     Map<String, DateTime>? deleted,
     this.newestApp,
     Map<String, dynamic>? extra,
+    Set<String>? hiddenEmails,
+    this.starredDays = 30,
+    this.starredAfter = StarredAfter.keep,
+    this.starredLine = false,
   })  : active = active ?? [],
+        hiddenEmails = hiddenEmails ?? {},
         extra = extra ?? {},
         archived = archived ?? [],
         deleted = deleted ?? {},
@@ -1074,6 +1142,21 @@ class AppData {
   /// Ids of deleted tasks and when, so a sync doesn't bring them back.
   final Map<String, DateTime> deleted;
 
+  /// Item 55: starred emails the user chose to hide from the Starred emails page.
+  final Set<String> hiddenEmails;
+
+  /// How far back the Starred emails page looks, in days; 0 for all of them.
+  int starredDays;
+
+  /// What happens to an email's star once it has been made into a task or attached to one.
+  StarredAfter starredAfter;
+
+  /// Show "N starred emails not yet tasks" at the top of the list.
+  bool starredLine;
+
+  /// The task an email (by Gmail id) was made into or attached to, if any.
+  Task? taskForEmail(String id) => allTasks.where((t) => t.emails.any((e) => e.id == id)).firstOrNull;
+
   /// Item 62: the newest app version that has saved this data (as read; this device's own
   /// version is added when it is written). Newer than [currentAppVersion] means another
   /// device runs a newer Task Blocks and this one should be updated.
@@ -1092,6 +1175,7 @@ class AppData {
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
+    'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine',
   };
 
   Map<String, dynamic> toJson() => {
@@ -1128,6 +1212,10 @@ class AppData {
         'nudgeHours': nudgeHours,
         'quietStart': quietStart,
         'quietEnd': quietEnd,
+        if (hiddenEmails.isNotEmpty) 'hiddenEmails': hiddenEmails.toList(),
+        'starredDays': starredDays,
+        'starredAfter': starredAfter.name,
+        if (starredLine) 'starredLine': true,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
@@ -1204,6 +1292,10 @@ class AppData {
         active: [for (final t in j['active'] as List? ?? []) Task.fromJson(t)],
         archived: [for (final t in j['archived'] as List? ?? []) Task.fromJson(t)],
         newestApp: j['newestApp'] as String?,
+        hiddenEmails: {for (final e in j['hiddenEmails'] as List? ?? []) e as String},
+        starredDays: (j['starredDays'] as num?)?.toInt() ?? 30,
+        starredAfter: _enum(StarredAfter.values, j['starredAfter'], StarredAfter.keep),
+        starredLine: j['starredLine'] as bool? ?? false,
         extra: unknownFields(j, _known),
       );
 }
@@ -1358,7 +1450,21 @@ AppData mergeData(AppData a, AppData b) {
     orderUpdatedAt: orderFrom.orderUpdatedAt,
     deleted: deleted,
     newestApp: newerVersion(a.newestApp, b.newestApp),
+    hiddenEmails: {...a.hiddenEmails, ...b.hiddenEmails},
+    starredDays: settingsFrom.starredDays,
+    starredAfter: settingsFrom.starredAfter,
+    starredLine: settingsFrom.starredLine,
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},
   );
+}
+
+/// Item 55: what happens to a starred email's star after it is used for a task.
+enum StarredAfter {
+  keep('Keep the star'),
+  unstar('Remove the star'),
+  unstarLabel('Remove the star and add the label "Tasked"');
+
+  const StarredAfter(this.label);
+  final String label;
 }
