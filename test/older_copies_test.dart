@@ -63,7 +63,7 @@ Map<String, dynamic> futureFile() {
   task['attachments'] = [
     {'subject': 'Your renewal', 'from': 'insurer@example.com'},
   ];
-  (task['steps'] as List).first['due'] = '2026-11-20T09:00:00.000';
+  (task['steps'] as List).first['colour'] = 'blue';
   ((task['moves'] as List).first as Map)['by'] = 'widget';
   return j;
 }
@@ -83,7 +83,7 @@ void main() {
     final task = (out['active'] as List).first as Map;
     expect(task['matrix'], 'decide');
     expect((task['attachments'] as List).single['subject'], 'Your renewal');
-    expect((task['steps'] as List).first['due'], '2026-11-20T09:00:00.000');
+    expect((task['steps'] as List).first['colour'], 'blue');
     expect(((task['moves'] as List).first as Map)['by'], 'widget');
   });
 
@@ -97,9 +97,9 @@ void main() {
     var task = (written(d)['active'] as List).first as Map;
     expect(task['title'], 'Renew car insurance');
     expect(task['matrix'], 'decide');
-    expect((task['steps'] as List).first['due'], isNotNull);
+    expect((task['steps'] as List).first['colour'], isNotNull);
     expect((task['steps'] as List).first['done'], isTrue);
-    expect((task['steps'] as List).last.containsKey('due'), isFalse);
+    expect((task['steps'] as List).last.containsKey('colour'), isFalse);
 
     // A known field switched back off isn't brought back by the kept fields.
     t.starred = false;
@@ -111,7 +111,7 @@ void main() {
     final d = read(futureFile());
     expect(d.extra.keys, ['focusMode']);
     expect(d.active.first.extra.keys.toSet(), {'matrix', 'attachments'});
-    expect(d.active.first.steps.first.extra.keys, ['due']);
+    expect(d.active.first.steps.first.extra.keys, ['colour']);
     expect(d.categories.first.extra.keys, ['icon']);
   });
 

@@ -67,7 +67,8 @@ Gmail then labels the email **Tasked** (and takes the Task label off), so it isn
 is also kept on the task, so two devices never both add it.
 
 The app checks emails from the last 14 days when it opens, when it comes back to the front, and on each Dropbox
-sync. Settings shows "N ignored this week" with each email and why (not on the list, or failed the sender
+sync. **Also check while the app is open** (off by default) adds a check every 30 minutes, hour or 2 hours while
+it stays on screen, for a computer left open all day. Settings shows "N ignored this week" with each email and why (not on the list, or failed the sender
 check), plus **Allow this sender**.
 
 ## Starred emails page

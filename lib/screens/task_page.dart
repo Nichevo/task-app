@@ -80,10 +80,24 @@ class _TaskPageState extends State<TaskPage> {
         children: [
           if (linked != null)
             SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"'))
-          else if (!archived)
+          else if (!archived) ...[
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'due'),
+              child: Text(s.dueAt == null ? 'Give it a date and reminder' : 'Change its date or reminder'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'note'),
+              child: Text(s.note.isEmpty ? 'Add a note' : 'Edit the note'),
+            ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'task'),
-              child: const Text('Make into a task of its own (so it can have a date and notes)'),
+              child: const Text('Make into a linked task (ticks this step when done)'),
+            ),
+          ],
+          if (!archived)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'split'),
+              child: const Text('Split out into a task of its own (leaves this checklist)'),
             ),
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'rename'), child: const Text('Rename')),
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'remove'), child: const Text('Remove step')),
@@ -98,6 +112,26 @@ class _TaskPageState extends State<TaskPage> {
         final t = widget.store.stepToTask(task, s);
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added "${t.title}" as a task after this one')));
+      case 'due':
+        await _stepDue(s);
+      case 'note':
+        final note = await askText(context, 'Note for "${s.title}"', initial: s.note);
+        if (note != null) setState(() => widget.store.setStepNote(task, s, note));
+      case 'split':
+        final (t, undo) = widget.store.splitOut(task, s);
+        setState(() {});
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
+            content: Text('"${t.title}" is now a task of its own'),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () {
+                undo();
+                if (mounted) setState(() {});
+              },
+            ),
+          ));
       case 'rename':
         final name = await askText(context, 'Rename step', initial: s.title);
         if (name != null && name.trim().isNotEmpty) {
@@ -107,6 +141,42 @@ class _TaskPageState extends State<TaskPage> {
       case 'remove':
         setState(() => widget.store.removeStep(task, s));
     }
+  }
+
+  /// Item 61: a step's date and reminder.
+  Future<void> _stepDue(TaskStep s) async {
+    if (s.dueAt != null) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (c) => SimpleDialog(title: Text(s.title), children: [
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'date'), child: const Text('Change the date')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'remind'), child: const Text('Change the reminder')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'clear'), child: const Text('Remove the date')),
+        ]),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == 'clear') return setState(() => widget.store.setStepDue(task, s, null));
+      if (choice == 'remind') return _stepRemind(s);
+    }
+    final d = await _pickDateTime(s.dueAt ?? task.dueAt ?? DateTime.now().add(const Duration(days: 1)),
+        time: s.dueAt == null ? const TimeOfDay(hour: 9, minute: 0) : null);
+    if (d == null || !mounted) return;
+    setState(() => widget.store.setStepDue(task, s, d, remindBefore: s.remindBefore));
+  }
+
+  Future<void> _stepRemind(TaskStep s) async {
+    final v = await showDialog<int>(
+      context: context,
+      builder: (c) => SimpleDialog(title: const Text('Reminder'), children: [
+        SimpleDialogOption(
+            onPressed: () => Navigator.pop(c, -1),
+            child: Text('Same as Settings (${remindOptions[data.defaultRemindBefore] ?? '${data.defaultRemindBefore} min'})')),
+        for (final e in remindOptions.entries)
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, e.key), child: Text(e.value)),
+      ]),
+    );
+    if (v == null || !mounted) return;
+    setState(() => widget.store.setStepDue(task, s, s.dueAt, remindBefore: v < 0 ? null : v));
   }
 
   Future<void> _templateMenu() async {
@@ -440,14 +510,19 @@ class _TaskPageState extends State<TaskPage> {
                     style: TextStyle(
                         decoration: s.done ? TextDecoration.lineThrough : null,
                         color: s.done ? Theme.of(context).disabledColor : null)),
-                subtitle: s.taskId == null && !task.boardSteps.contains(s)
+                subtitle: s.taskId == null && !task.boardSteps.contains(s) && s.dueAt == null && s.note.isEmpty
                     ? null
                     : Text([
+                        if (s.dueAt != null)
+                          'Due ${dateTimeFmt.format(s.dueAt!)}${s.remindBefore != null && s.remindBefore! > 0 ? ' (${remindOptions[s.remindBefore] ?? '${s.remindBefore} min before'})' : ''}',
                         if (s.taskId != null) 'Task: ${data.task(s.taskId)?.title ?? '(deleted)'}',
                         if (task.boardSteps.contains(s)) 'Board: ${data.stage(s.stageId)?.name ?? '?'}',
+                        if (s.note.isNotEmpty) s.note,
                       ].join(' · ')),
                 onTap: () => _stepMenu(s),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (s.dueAt != null && !s.done)
+                    Icon(Icons.event, size: 18, color: s.dueAt!.isBefore(DateTime.now()) ? Colors.red : null),
                   if (s.taskId != null) const Icon(Icons.link, size: 18),
                   ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle)),
                 ]),
@@ -477,6 +552,18 @@ class _TaskPageState extends State<TaskPage> {
           isThreeLine: true,
           trailing: _mapButton(task.addedWhere),
         ),
+        if (task.splitFrom != null)
+          Builder(builder: (context) {
+            final from = data.task(task.splitFrom);
+            return ListTile(
+              leading: const Icon(Icons.call_split),
+              title: const Text('Split from'),
+              subtitle: Text(from?.title ?? '(a task since deleted)'),
+              onTap: from == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: widget.store, task: from))),
+            );
+          }),
         ListTile(
           leading: const Icon(Icons.event),
           title: const Text('Due'),

@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.3', 'November 2026', [
+    'Checklist steps can have their own date, reminder and note: tap a step. Dated steps show in the calendar with their task\'s name and get their own reminder.',
+    '"Split out" turns a step into a task of its own. It takes the task\'s category, star, place, estimate, matrix box and board stage, and its date when the step has none. Undo puts it back.',
+    'Upcoming events: add an event as a dated step of an existing task (the list icon), for example a fitting as a step of "Wedding".',
+    'Email to tasks can also check while the app stays open (Settings, Google: every 30 minutes, hour or 2 hours). Off by default.',
+    'CSV export keeps step dates.',
+  ]),
   Release('1.8.2', 'November 2026', [
     'Uses less battery: reminders are only set again when a due date, name or reminder setting changes, and home screen widgets only redraw when what they show changes.',
     'Email to tasks no longer downloads the same emails again on every check.',

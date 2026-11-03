@@ -25,6 +25,9 @@ const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour b
 /// How far back the Starred emails page looks (days; 0 = all).
 const starredDaysOptions = {7: '1 week', 30: '1 month', 91: '3 months', 0: 'All'};
 
+/// Item 70: how often Gmail is checked for email tasks while the app is open (minutes; 0 = off).
+const emailCheckOptions = {0: 'Off', 30: 'Every 30 minutes', 60: 'Every hour', 120: 'Every 2 hours'};
+
 /// Item 60: when the "Urgent?" hint shows, in days before the due date.
 const urgentDaysOptions = {0: 'Off', 1: '1 day', 2: '2 days', 3: '3 days', 7: '1 week', 14: '2 weeks'};
 
@@ -306,6 +309,17 @@ class _SettingsPageState extends State<SettingsPage> {
         },
       ),
       if (data.emailTasks) ...[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Also check while the app is open'),
+          subtitle: const Text('Opening the app or coming back to it always checks. This is for a computer that '
+              'stays open all day (this device only).'),
+          trailing: DropdownButton<int>(
+            value: emailCheckOptions.containsKey(store.emailCheckMinutes) ? store.emailCheckMinutes : 0,
+            items: [for (final e in emailCheckOptions.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+            onChanged: (v) => store.setEmailCheckMinutes(v ?? 0),
+          ),
+        ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Allowed senders'),

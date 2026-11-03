@@ -121,7 +121,17 @@ int importCsvText(AppData data, String text) {
     for (final part in cell(r, iSteps).split(';')) {
       final m = RegExp(r'^\s*(?:\[([ xX])\])?\s*(.+?)\s*$').firstMatch(part);
       if (m == null || m.group(2)!.isEmpty) continue;
-      t.steps.add(TaskStep.create(m.group(2)!)..done = (m.group(1) ?? ' ').toLowerCase() == 'x');
+      // Item 61: "Book hall (due 2026-11-20 09:00)" keeps the step's date.
+      var name = m.group(2)!;
+      DateTime? due;
+      final d = RegExp(r'\s*\(due ([^)]+)\)$').firstMatch(name);
+      if (d != null && _parseDate(d.group(1)!) != null) {
+        due = _parseDate(d.group(1)!);
+        name = name.substring(0, d.start);
+      }
+      t.steps.add(TaskStep.create(name)
+        ..done = (m.group(1) ?? ' ').toLowerCase() == 'x'
+        ..dueAt = due);
     }
     final task = Task.fromJson({...t.toJson(), 'createdAt': created.toIso8601String()});
     if (closed == null) {

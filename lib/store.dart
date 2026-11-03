@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding, AppLifecycleState;
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'dropbox.dart';
@@ -12,6 +14,7 @@ import 'inbox_files.dart';
 import 'input_parse.dart';
 import 'location.dart';
 import 'models.dart';
+import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
 import 'task_list.dart';
@@ -114,6 +117,7 @@ class AppStore extends ChangeNotifier {
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
+      emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? 0;
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
@@ -131,6 +135,7 @@ class AppStore extends ChangeNotifier {
     unawaited(watchPlaces());
     unawaited(reminders?.schedule(data));
     unawaited(widgets?.push(data));
+    _startEmailTimer();
     unawaited(sync());
   }
 
@@ -207,6 +212,7 @@ class AppStore extends ChangeNotifier {
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (deviceBackupChecked) 'deviceBackupChecked': true,
+      if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
       if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
@@ -345,6 +351,7 @@ class AppStore extends ChangeNotifier {
         if (matrixCategory != null) 'matrixCategory': matrixCategory,
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
         if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
+        if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       };
 
   /// On each sync: the first time, looks for this kind of device's backup and offers it; after
@@ -407,6 +414,8 @@ class AppStore extends ChangeNotifier {
     boardLanes = s['boardLanes'] as bool? ?? boardLanes;
     matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? matrixFilter;
     matrixCategory = s['matrixCategory'] as String? ?? matrixCategory;
+    emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? emailCheckMinutes;
+    _startEmailTimer();
     if (googleClientId.isEmpty && google == null) {
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
@@ -1162,6 +1171,96 @@ class AppStore extends ChangeNotifier {
     return linked;
   }
 
+  /// Item 61: a step's own due date and reminder (minutes before; null = the default).
+  void setStepDue(Task t, TaskStep s, DateTime? due, {int? remindBefore}) {
+    s.dueAt = due;
+    s.remindBefore = due == null ? null : remindBefore;
+    changed(task: t);
+  }
+
+  void setStepNote(Task t, TaskStep s, String note) {
+    s.note = note.trim();
+    changed(task: t);
+  }
+
+  /// Item 61: "Split out". Turns [s] into a task of its own that no longer belongs to [t]. It
+  /// takes [t]'s category, star, place, estimate and matrix box, the step's date (or [t]'s when
+  /// it has none) and reminder, its stage on the board (the step's own when steps are on the
+  /// board) and the step's board history. Not the repeat, checklist or notes. A step already
+  /// made into a linked task frees that task instead. Returns the task and how to undo it.
+  (Task, void Function()) splitOut(Task t, TaskStep s) {
+    final index = t.steps.indexOf(s);
+    final linked = data.task(s.taskId);
+    if (linked != null) {
+      linked.splitFrom = t.id;
+      t.steps.remove(s);
+      changed(task: t);
+      changed(task: linked);
+      return (
+        linked,
+        () {
+          linked.splitFrom = null;
+          t.steps.insert(index.clamp(0, t.steps.length), s);
+          changed(task: t);
+          changed(task: linked);
+        }
+      );
+    }
+    final n = Task.create(s.title, source: TaskSource.step)
+      ..categoryId = t.categoryId
+      ..starred = t.starred
+      ..place = t.place
+      ..placeLeave = t.placeLeave
+      ..estimate = t.estimate
+      ..matrixBox = t.matrixBox
+      ..waitingOn = t.waitingOn
+      ..notes = s.note
+      ..splitFrom = t.id
+      ..dueAt = s.dueAt ?? t.dueAt
+      ..remindBefore = s.dueAt != null ? s.remindBefore : t.remindBefore;
+    final onBoardAsStep = t.boardSteps.contains(s) && s.placed;
+    if (onBoardAsStep) {
+      // Its own card already: it keeps its stage and history.
+      n
+        ..kanban = true
+        ..stageId = s.stageId
+        ..moves.addAll(s.moves);
+    } else if (t.kanban) {
+      setOnBoard(n, true, stage: data.stage(t.stageId) ?? data.stages.firstOrNull, how: MoveHow.added);
+    }
+    if (s.done) n.closedAt = DateTime.now();
+    t.steps.remove(s);
+    final at = data.active.indexOf(t);
+    if (n.closedAt == null) {
+      data.active.insert(at < 0 ? data.active.length : at + 1, n);
+    } else {
+      data.archived.insert(0, n);
+    }
+    changed(task: t, order: true);
+    return (
+      n,
+      () {
+        data.active.remove(n);
+        data.archived.remove(n);
+        data.deleted[n.id] = DateTime.now().toUtc();
+        t.steps.insert(index.clamp(0, t.steps.length), s);
+        changed(task: t, order: true);
+      }
+    );
+  }
+
+  /// Item 58: adds a calendar event as a step of [t], with the event's date as the step's due
+  /// date (so it gets a reminder and shows in the calendar). The event isn't offered again.
+  TaskStep addEventAsStep(Task t, CalendarEvent e) {
+    final fmt = e.allDay ? DateFormat('EEE d MMM') : DateFormat('EEE d MMM, HH:mm');
+    final s = addStep(t, '${e.title} (${fmt.format(e.start)})')
+      ..dueAt = e.allDay ? DateTime(e.start.year, e.start.month, e.start.day, 9) : e.start
+      ..eventId = e.id
+      ..note = e.location == null || e.location!.isEmpty ? '' : 'At ${e.location}';
+    changed(task: t);
+    return s;
+  }
+
   ChecklistTemplate saveTemplate(String name, List<String> steps) {
     final tpl = ChecklistTemplate.create(name, [for (final s in steps) s.trim()].where((s) => s.isNotEmpty).toList());
     data.templates.add(tpl);
@@ -1228,6 +1327,34 @@ class AppStore extends ChangeNotifier {
   final _labels = <String, String>{};
   final _notTasks = <String>{};
   final _ignoredMessages = <String, GmailMessage>{};
+
+  /// Item 70: also check every this many minutes while the app is open on this device; 0 = only
+  /// on open, resume and sync.
+  int emailCheckMinutes = 0;
+  Timer? _emailTimer;
+
+  void setEmailCheckMinutes(int minutes) {
+    emailCheckMinutes = minutes;
+    _startEmailTimer();
+    unawaited(saveDeviceSettings());
+    notifyListeners();
+  }
+
+  void _startEmailTimer() {
+    _emailTimer?.cancel();
+    _emailTimer = null;
+    if (emailCheckMinutes <= 0) return;
+    _emailTimer = Timer.periodic(Duration(minutes: emailCheckMinutes), (_) {
+      // Only while the app is on screen; opening it again checks anyway.
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (state != null && state != AppLifecycleState.resumed && state != AppLifecycleState.inactive) return;
+      if (dropbox?.isConnected ?? false) {
+        unawaited(sync());
+      } else {
+        unawaited(checkEmailTasks());
+      }
+    });
+  }
 
   /// "Task" at the start of a subject, with an optional ":" or "-" after it.
   static final _taskPrefix = RegExp(r'^\s*task\b\s*[:\-–—]?\s*', caseSensitive: false);
