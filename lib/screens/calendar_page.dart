@@ -48,6 +48,17 @@ class _CalendarPageState extends State<CalendarPage> {
         next = r.nextDue(due: next, completedAt: next);
       }
     }
+    // Item 61: steps with their own date, shown with their task's name.
+    for (final t in data.active) {
+      for (final st in t.steps) {
+        final due = st.dueAt;
+        if (due == null || st.done || due.isBefore(from) || !due.isBefore(to)) continue;
+        out.putIfAbsent(_dayOf(due), () => []).add(_Due(t, false, step: st));
+      }
+    }
+    for (final l in out.values) {
+      l.sort((a, b) => a.when.compareTo(b.when));
+    }
     return out;
   }
 
@@ -146,7 +157,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final items = due[day] ?? const [];
     final selected = day == _day;
     final outside = dim && day.month != _month.month;
-    final overdue = items.any((d) => !d.faded && d.task.dueAt!.isBefore(now));
+    final overdue = items.any((d) => !d.faded && d.when.isBefore(now));
     return DragTarget<Task>(
       onWillAcceptWithDetails: (d) => true,
       onAcceptWithDetails: (d) => _moveTo(d.data, day),
@@ -210,6 +221,16 @@ class _CalendarPageState extends State<CalendarPage> {
                 textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).hintColor)))
             : ListView(children: [
                 for (final d in items)
+                  if (d.step case final st?)
+                    ListTile(
+                      leading: Checkbox(value: st.done, onChanged: (_) => store.toggleStep(d.task, st)),
+                      title: Text(st.title),
+                      subtitle: Text('${DateFormat('HH:mm').format(st.dueAt!)} · Step of ${d.task.title}'),
+                      trailing: const Icon(Icons.checklist, size: 18),
+                      onTap: () => Navigator.of(context)
+                          .push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: d.task))),
+                    )
+                  else
                   LongPressDraggable<Task>(
                     data: d.task,
                     feedback: Material(
@@ -249,8 +270,13 @@ class _CalendarPageState extends State<CalendarPage> {
 }
 
 class _Due {
-  const _Due(this.task, this.faded);
+  const _Due(this.task, this.faded, {this.step});
   final Task task;
+
+  /// Set when it is one of [task]'s steps with its own date (item 61), not the task itself.
+  final TaskStep? step;
+
+  DateTime get when => step?.dueAt ?? task.dueAt!;
 
   /// A future occurrence of a repeating task, not the task itself.
   final bool faded;

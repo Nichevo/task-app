@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
+import 'starred_page.dart' show pickTask;
 
 /// Events in the next [AppData.eventDays] days from the chosen calendars that aren't tasks yet and weren't dismissed.
 Future<List<CalendarEvent>> upcomingEvents(AppData data) async {
@@ -11,7 +12,7 @@ Future<List<CalendarEvent>> upcomingEvents(AppData data) async {
   final events = await Native.events(now, now.add(Duration(days: data.eventDays)), data.eventCalendars);
   return [
     for (final e in events)
-      if (!data.dismissedEvents.contains(e.id) && data.taskForEvent(e.id) == null) e,
+      if (!data.dismissedEvents.contains(e.id) && data.taskForEvent(e.id) == null && data.stepTaskForEvent(e.id) == null) e,
   ];
 }
 
@@ -77,6 +78,15 @@ class _EventsPageState extends State<EventsPage> {
     setState(() {});
   }
 
+  /// Item 58: adds the event as a dated step of an open task.
+  Future<void> _addAsStep(CalendarEvent e) async {
+    final t = await pickTask(context, store.data, title: 'Add "${e.title}" as a step of');
+    if (t == null || !mounted) return;
+    store.addEventAsStep(t, e);
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added as a step of "${t.title}"')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = store.data;
@@ -111,14 +121,15 @@ class _EventsPageState extends State<EventsPage> {
       body = ListView(children: [
         for (final e in _events!)
           Builder(builder: (context) {
-            final task = data.taskForEvent(e.id);
+            final task = data.taskForEvent(e.id) ?? data.stepTaskForEvent(e.id);
+            final asStep = task != null && task.eventId != e.id;
             final dismissed = data.dismissedEvents.contains(e.id);
             return ListTile(
               leading: Icon(task != null ? Icons.check_circle : Icons.event, color: task != null ? Colors.green : null),
               title: Text(e.title, style: TextStyle(color: dismissed ? Theme.of(context).disabledColor : null)),
               subtitle: Text('${fmt.format(e.start)}${e.allDay ? '' : ', ${timeFmt.format(e.start)}'}'
                   '${e.location == null || e.location!.isEmpty ? '' : ' · ${e.location}'}'
-                  '${task != null ? '\nTask: ${task.title}' : dismissed ? '\nNot suggested again' : ''}'),
+                  '${task != null ? '\n${asStep ? 'Step of' : 'Task:'} ${task.title}' : dismissed ? '\nNot suggested again' : ''}'),
               isThreeLine: task != null || dismissed,
               trailing: task != null
                   ? null
@@ -129,6 +140,11 @@ class _EventsPageState extends State<EventsPage> {
                           icon: const Icon(Icons.close),
                           onPressed: () => store.dismissEvent(e.id),
                         ),
+                      IconButton(
+                        tooltip: 'Add as a step of a task',
+                        icon: const Icon(Icons.playlist_add),
+                        onPressed: () => _addAsStep(e),
+                      ),
                       FilledButton.tonal(onPressed: () => _makeTask(e), child: const Text('+ Task')),
                     ]),
             );

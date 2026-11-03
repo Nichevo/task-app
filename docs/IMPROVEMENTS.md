@@ -743,3 +743,31 @@ ticking off (a recent fix is reused), widget refresh is one 15-minute job only w
 use inexact alarms, and edits are batched (0.4 s save, 2 s upload). Each sync is still about four small Dropbox
 calls; checking the file's revision first would save one download but needs the files.metadata.read permission,
 so it is left for now.
+
+## 61. Step dates, notes and Split out ☑ (version 1.8.3)
+
+- Tap a step: give it a date and reminder, add a note. `TaskStep.dueAt` (`due`), `remindBefore` (`remind`),
+  `note`. Dated steps show in the calendar on their day ("Step of <task>") and get their own reminder with the
+  task's name (no Done or Snooze buttons, as those act on whole tasks). A repeat moves step dates along with the
+  task's due date.
+- **Split out into a task of its own**: the step leaves the checklist and becomes a task placed after its task.
+  It takes the task's category, star, place, estimate, matrix box and Waiting on; the step's date and reminder,
+  or the task's when the step has none; its own stage and board history when steps are on the board, otherwise
+  the task's stage. Not the repeat, checklist or notes (the step's note becomes its notes). `Task.splitFrom`
+  links back ("Split from" on the task page). A step already made into a linked task frees that task instead.
+  Undo puts it back. "Make into a linked task" stays as it was.
+
+## 58. Calendar event as a step ☑ (version 1.8.3)
+
+- Upcoming events: the list icon adds the event as a step of an open task (with search): "Suit fitting (Sat 14
+  Nov, 10:30)", dated at the event (all-day: 9am) so it is reminded and shows in the calendar, with the location
+  as its note. `TaskStep.eventId` (`event`) stops it being offered again.
+- Question 9 asked for a linked task to keep the date and reminder; with step dates (61) the step keeps them
+  itself, without an extra task in the list.
+
+## 70. Email to tasks while the app is open ☑ (version 1.8.3)
+
+- Settings → Google → Email to tasks → Also check while the app is open: off (default), every 30 minutes, hour or
+  2 hours. Device-only (saved with the device backup, item 69). Runs only while the app is on screen: a sync with
+  Dropbox, otherwise just the Gmail check. Opening or coming back to the app already checks.
+- A background check with the app closed was dropped: checking on opening is enough.

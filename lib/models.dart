@@ -21,6 +21,7 @@ class Task {
     List<TaskStep>? steps,
     this.eventId,
     this.sourceRef,
+    this.splitFrom,
     this.matrixBox,
     this.waitingOn,
     this.source,
@@ -51,7 +52,7 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails', 'ref', 'box', 'waiting',
+    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom',
   };
 
   final String id;
@@ -91,6 +92,9 @@ class Task {
   /// Item 48: the sending tool's own id for it (an email's Gmail id, a Zapier item...), so the
   /// same thing is never added twice, even by two devices at once. See [mergeData].
   String? sourceRef;
+
+  /// Item 61: the task it was split out of (a step turned into a task of its own).
+  String? splitFrom;
 
   /// Item 60: the urgent / important box it is in ([MatrixBox] id), or null when it isn't on
   /// the matrix. Only tasks put there show on it.
@@ -180,9 +184,17 @@ class Task {
       ..stepsOnBoard = stepsOnBoard
       ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
-    // Each repeat starts with the checklist unticked.
-    next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
     next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
+    // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
+    // from the task's due date; without one to measure from they are left off.
+    final shift = dueAt == null || next.dueAt == null ? null : next.dueAt!.difference(dueAt!);
+    next.steps.addAll([
+      for (final st in steps)
+        TaskStep.create(st.title)
+          ..note = st.note
+          ..remindBefore = st.remindBefore
+          ..dueAt = st.dueAt == null || shift == null ? null : st.dueAt!.add(shift),
+    ]);
     return next;
   }
 
@@ -212,6 +224,7 @@ class Task {
         if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
         if (eventId != null) 'eventId': eventId,
         if (sourceRef != null) 'ref': sourceRef,
+        if (splitFrom != null) 'splitFrom': splitFrom,
         if (matrixBox != null) 'box': matrixBox,
         if (waitingOn != null && waitingOn!.isNotEmpty) 'waiting': waitingOn,
         if (source != null) 'source': source,
@@ -246,6 +259,7 @@ class Task {
         steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
         eventId: j['eventId'] as String?,
         sourceRef: j['ref'] as String?,
+        splitFrom: j['splitFrom'] as String?,
         matrixBox: MatrixBox.byId(j['box'] as String?)?.id,
         waitingOn: j['waiting'] as String?,
         // Older calendar tasks are known to be from the calendar even without a source.
@@ -404,6 +418,10 @@ class TaskStep {
       this.done = false,
       this.taskId,
       this.stageId,
+      this.dueAt,
+      this.remindBefore,
+      this.note = '',
+      this.eventId,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
       : moves = moves ?? [],
@@ -413,12 +431,23 @@ class TaskStep {
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'title', 'done', 'taskId', 'stage', 'moves'};
+  static const _known = {'id', 'title', 'done', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event'};
 
   final String id;
   String title;
   bool done;
   String? taskId;
+
+  /// Item 61: its own due date, shown in the calendar with the task's name and reminded like a
+  /// task's. [remindBefore] is minutes before (null = the default in Settings).
+  DateTime? dueAt;
+  int? remindBefore;
+
+  /// Item 61: a short note under the step.
+  String note;
+
+  /// Item 58: the calendar event it was added from, so the event isn't offered again.
+  String? eventId;
 
   /// Item 56: the Kanban stage it is in when its task has steps on the board. Kept while they
   /// are off the board, so it goes back there.
@@ -444,6 +473,10 @@ class TaskStep {
         if (taskId != null) 'taskId': taskId,
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
+        if (dueAt != null) 'due': dueAt!.toIso8601String(),
+        if (remindBefore != null) 'remind': remindBefore,
+        if (note.isNotEmpty) 'note': note,
+        if (eventId != null) 'event': eventId,
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -452,6 +485,10 @@ class TaskStep {
         done: j['done'] as bool? ?? false,
         taskId: j['taskId'] as String?,
         stageId: j['stage'] as String?,
+        dueAt: DateTime.tryParse(j['due'] as String? ?? ''),
+        remindBefore: (j['remind'] as num?)?.toInt(),
+        note: j['note'] as String? ?? '',
+        eventId: j['event'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         extra: unknownFields(j, _known),
       );
@@ -1334,6 +1371,9 @@ class AppData {
 
   /// The task made from a calendar event, if any.
   Task? taskForEvent(String eventId) => allTasks.where((t) => t.eventId == eventId).firstOrNull;
+
+  /// Item 58: the task holding a step added from a calendar event, if any.
+  Task? stepTaskForEvent(String eventId) => allTasks.where((t) => t.steps.any((s) => s.eventId == eventId)).firstOrNull;
 
   static T _enum<T extends Enum>(List<T> values, Object? name, T fallback) =>
       values.where((v) => v.name == name).firstOrNull ?? fallback;

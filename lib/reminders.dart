@@ -177,6 +177,9 @@ class Reminders {
       for (final t in data.active)
         if (t.dueAt != null)
           [t.id, t.title, t.dueAt!.toIso8601String(), t.remindBefore, t.snoozedUntil?.toIso8601String()],
+      for (final t in data.active)
+        for (final st in t.steps)
+          if (st.dueAt != null) [st.id, st.title, st.done, st.dueAt!.toIso8601String(), st.remindBefore, t.title],
     ]);
   }
 
@@ -213,6 +216,23 @@ class Reminders {
           }
         }
         if (budget <= 0) break;
+      }
+      // Item 61: steps with their own date, reminded with the task's name.
+      for (final t in data.active) {
+        for (final st in t.steps) {
+          final due = st.dueAt;
+          if (due == null || st.done || budget <= 0) continue;
+          final before = st.remindBefore ?? data.defaultRemindBefore;
+          // Negative ids, so they never meet a task's (0 and up).
+          final base = -2 - (st.id.hashCode & 0x0fffffff) * 2;
+          final body = '${st.title}\nPart of: ${t.title}';
+          if (await _at(base, due, 'Step due', body, now, t, step: true)) budget--;
+          if (before > 0 &&
+              await _at(base + 1, due.subtract(Duration(minutes: before)), 'Step due ${_describe(before)}', body, now, t,
+                  step: true)) {
+            budget--;
+          }
+        }
       }
       if (data.overdueMode == OverdueMode.daily) await _dailySummary(data, now);
       if (data.weeklyReview) await _weeklyReview(data, now);
@@ -352,7 +372,19 @@ class Reminders {
     ),
   );
 
-  Future<bool> _at(int id, DateTime when, String title, String body, DateTime now, Task t) async {
+  /// A step's reminder: opens its task, with no Done or Snooze buttons (those act on a task).
+  static const _stepDue = NotificationDetails(
+    iOS: DarwinNotificationDetails(),
+    android: AndroidNotificationDetails(
+      'due',
+      'Due tasks',
+      channelDescription: 'Reminders when a task is due',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+  );
+
+  Future<bool> _at(int id, DateTime when, String title, String body, DateTime now, Task t, {bool step = false}) async {
     if (!when.isAfter(now)) return false;
     await _plugin.zonedSchedule(
       id: id,
@@ -361,7 +393,7 @@ class Reminders {
       payload: jsonEncode({'task': t.id, 'dir': dir}),
       // A UTC time is the same moment wherever the phone is.
       scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-      notificationDetails: t.repeat == null ? _due : _dueRepeat,
+      notificationDetails: step ? _stepDue : t.repeat == null ? _due : _dueRepeat,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
     return true;

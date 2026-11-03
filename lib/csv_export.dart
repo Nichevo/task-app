@@ -24,7 +24,9 @@ String buildCsv(AppData data) {
         _date(t.closedAt),
         t.starred ? 'Yes' : '',
         t.repeat?.describe() ?? '',
-        t.steps.map((s) => '${s.done ? '[x]' : '[ ]'} ${s.title}').join('; '),
+        t.steps
+            .map((s) => '${s.done ? '[x]' : '[ ]'} ${s.title}${s.dueAt == null ? '' : ' (due ${_date(s.dueAt)})'}')
+            .join('; '),
         t.source == null ? '' : TaskSource.label(t.source),
         t.estimate?.toString() ?? '',
         t.kanban ? data.stage(t.stageId)?.name ?? '' : '',
