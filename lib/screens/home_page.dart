@@ -185,7 +185,9 @@ class HomePageState extends State<HomePage> {
 
   void openStats() => _open(context, StatsPage(store: store));
 
-  void openBoard() => _open(context, KanbanPage(store: store));
+  void openBoard({String? stageId}) => _open(context, KanbanPage(store: store, initialStage: stageId));
+
+  void openMatrix({MatrixBox? box}) => _open(context, MatrixPage(store: store, initialBox: box));
 
   /// Text shared from another app: one task, or several when it is a list.
   Future<void> addShared(SharedText shared) async {

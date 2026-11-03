@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -49,7 +49,7 @@ object PlaceStore {
   }
 
   private fun pendingIntent(ctx: Context): PendingIntent {
-    val intent = Intent(ctx, PlaceReceiver::class.java).setAction("com.jeff.task_blocks.PLACE")
+    val intent = Intent(ctx, PlaceReceiver::class.java).setAction("app.taskblocks.PLACE")
     // Geofencing fills in the event, so the intent must be mutable.
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or
         (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)

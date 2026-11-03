@@ -1,4 +1,4 @@
-package com.jeff.task_blocks
+package app.taskblocks
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider

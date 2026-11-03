@@ -62,7 +62,7 @@ class PlaceSetup {
 /// the app is closed); on arriving or leaving, PlaceReceiver.kt reads the saved task list and
 /// shows the matching reminders.
 class PlaceReminders {
-  static const _channel = MethodChannel('com.jeff.task_blocks/native');
+  static const _channel = MethodChannel('app.taskblocks/native');
 
   static bool get supported => !kIsWeb && Platform.isAndroid;
 

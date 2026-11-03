@@ -1,7 +1,7 @@
 # Letting other tools push tasks into Task Blocks
 
-Status: option A (the inbox folder) and `sourceRef` are built in 1.7.1. Option B (Android intent) follows in round 5
-PR 7. Answers taken (2026-11-03): pushed tasks go straight in, "add" only, no outside complete or update yet.
+Status: option A (the inbox folder) and `sourceRef` are built in 1.7.1, option B (Android intent) in 1.8.5.
+Answers taken (2026-11-03): pushed tasks go straight in, "add" only, no outside complete or update yet.
 
 ## Goal
 
@@ -38,6 +38,28 @@ able to add tasks to Task Blocks without anyone typing them, and each task shoul
 2. **Add B** for instant phone automations (Tasker etc.), with the same fields as A.
 3. **Add D only if** a tool can't write to Dropbox but can call a webhook. It is a thin wrapper around A,
    so the app side doesn't change.
+
+## Option B: the Android intent (built, 1.8.5)
+
+Send an intent to the activity `AddTaskActivity` (action `app.taskblocks.ADD_TASK`, category DEFAULT), or open
+the link `taskblocks://push?title=Renew%20insurance&due=2026-11-20` with an `android.intent.action.VIEW` intent.
+Extras (or query parameters) have the same names as the file format below:
+
+| Name | What |
+|---|---|
+| `title` | Required. `android.intent.extra.TEXT` works too. Dates and `#category` in it are read. |
+| `notes`, `due`, `category`, `source`, `ref`, `url` | As in the file format. `source` defaults to `intent`. |
+| `starred` | `true` to star it. |
+| `steps` | A string list extra, or one string with a step per line or separated by `;`. |
+| `json` | Instead of the above: a whole task object, or a list of them, as in an inbox file. |
+| `quiet` | `true`: no "Added to Task Blocks" message. |
+| `open` | `true`: open the app afterwards. |
+
+Tasker example: Task → System → Send Intent. Action `app.taskblocks.ADD_TASK`, Category Default, Extra
+`title:Put the bins out tomorrow 7pm`, Extra `ref:%TIMES` if the task might run twice, Target Activity.
+
+Nothing opens on the screen. The task waits on the phone and is added the next time Task Blocks opens or comes
+back to the front, so it reaches other devices with that sync.
 
 ## Task file format (options A, B, D)
 

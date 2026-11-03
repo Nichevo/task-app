@@ -179,7 +179,47 @@ class AppStore extends ChangeNotifier {
       snooze(t, until);
       any = true;
     }
+    for (final m in await widgets?.takeMoves() ?? const <WidgetMove>[]) {
+      any = applyWidgetMove(m) || any;
+    }
+    final pushed = await widgets?.takePushed() ?? const [];
+    if (pushed.isNotEmpty) any = addPushed(pushed).isNotEmpty || any;
     if (any) notifyListeners();
+  }
+
+  /// Item 68: a move made with a board widget's arrow or "Next" button. Into the last stage, a
+  /// task is ticked off only when the board is set to always do that (a widget can't ask).
+  bool applyWidgetMove(WidgetMove m) {
+    final t = data.task(m.task);
+    final to = data.stage(m.stage);
+    if (t == null || t.closedAt != null || to == null) return false;
+    if (m.step != null) {
+      final s = t.steps.where((s) => s.id == m.step).firstOrNull;
+      if (s == null || !t.boardSteps.contains(s)) return false;
+      moveStepToStage(t, s, to, how: MoveHow.widget);
+      return true;
+    }
+    if (!t.kanban) return false;
+    final last = moveToStage(t, to, how: MoveHow.widget);
+    if (last && data.kanbanDone == KanbanDone.always) complete(t, at: m.at);
+    return true;
+  }
+
+  /// Item 48B: tasks sent by another Android app, in the inbox file format. Bad entries are
+  /// dropped one by one so a good one sent with them still arrives.
+  List<Task> addPushed(List<dynamic> items) {
+    final added = <Task>[];
+    for (final item in items) {
+      try {
+        final ts = addInboxFile(data, jsonEncode(item), DateTime.now());
+        ts.forEach(_boardByCategory);
+        added.addAll(ts);
+      } catch (e) {
+        debugPrint('pushed task: $e');
+      }
+    }
+    if (added.isNotEmpty) changed();
+    return added;
   }
 
   Future<void> _writeData() {
