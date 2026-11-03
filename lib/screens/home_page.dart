@@ -484,6 +484,17 @@ class HomePageState extends State<HomePage> {
                 'Everything keeps working, and nothing the newer version added is lost.'),
             actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
           ),
+        if (store.restoreOffer case final b?)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.settings_backup_restore),
+            content: Text('Dropbox has settings saved from your ${b.device} '
+                'on ${DateFormat('d MMM').format(b.savedAt.toLocal())}: ${b.describe()}. Restore them here?'),
+            actions: [
+              TextButton(onPressed: store.dismissRestoreOffer, child: const Text('Not now')),
+              TextButton(onPressed: () => store.restoreDeviceSettings(b), child: const Text('Restore')),
+            ],
+          ),
         if (_starredCount > 0 && data.starredLine && !_starredHidden)
           MaterialBanner(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),

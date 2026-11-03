@@ -29,7 +29,9 @@ device.
    verified this app". Press **Advanced → Go to Task Blocks (unsafe)**, then allow access. The page then says
    "Signed in" and you can go back to the app.
 
-Do the last step on each device. The client ID and secret stay on that device and are never synced.
+Do the last step on each device. The client ID and secret aren't synced with your tasks, but they are saved in
+Dropbox's devices folder, so another device or a reinstall can take them with Settings → Dropbox → **Restore
+settings from a device**. You still sign in on each device.
 
 ## Staying signed in
 

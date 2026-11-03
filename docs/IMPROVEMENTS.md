@@ -714,8 +714,12 @@ didn't know when it saved, and that loss then synced to every device.
   board too. Applies when a task is added in that category or moved into it; it never takes a task off.
 - Turning it on offers to put the category's open tasks on the board now.
 
-## 69. Device settings backup ○ (planned, next PR)
+## 69. Device settings backup ☑ (version 1.8.1)
 
-- Most settings already sync in tasks.json. The ones kept on each device (places, view choices, location
-  recording, the Google client ID and secret) will be saved to Dropbox per device and offered back after a
-  reinstall. Sign-ins are not copied.
+- Most settings already sync in tasks.json. The ones kept on each device (places, list and board view choices,
+  location recording, the Google client ID and secret) are saved on each sync, when they changed, to
+  `Apps/<app>/devices/<kind>.json` (android, iphone-or-ipad, mac, windows). Sign-ins are never copied.
+- After connecting Dropbox, the first sync looks for this kind of device's file. If it holds something different,
+  a line at the top of the list offers Restore or Not now; nothing is saved over it until answered.
+- Settings → Dropbox → Restore settings from a device lists every device's file, newest first, so an iPad can
+  take the Mac's Google client too. A Google client already on the device is never replaced.

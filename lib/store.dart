@@ -66,7 +66,7 @@ class AppStore extends ChangeNotifier {
   /// until the first load, which counts as seen.
   String? seenVersion;
 
-  /// Saved places for place reminders (device-only: coordinates stay on this phone).
+  /// Saved places for place reminders (device-only; copied to Dropbox's devices folder, item 69).
   final places = <Place>[];
 
   /// On arriving at a saved place, show one notification with that day's tasks (device-only).
@@ -113,6 +113,7 @@ class AppStore extends ChangeNotifier {
       boardLanes = s['boardLanes'] as bool? ?? false;
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
+      deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
@@ -199,6 +200,7 @@ class AppStore extends ChangeNotifier {
       if (boardLanes) 'boardLanes': true,
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
+      if (deviceBackupChecked) 'deviceBackupChecked': true,
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
       if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
@@ -290,6 +292,7 @@ class AppStore extends ChangeNotifier {
         if (await _takeInbox(db)) await _writeData();
         if (await _takeInboxFolder(db)) await _writeData();
         if (await checkEmailTasks() > 0) await _writeData();
+        await _deviceBackup(db);
         final mine = jsonEncode(data.toJson());
         if (remoteText == null || mine != jsonEncode(remote!.toJson())) {
           // Item 62: a newer version wrote the Dropbox copy; keep it before this one saves over it.
@@ -305,6 +308,124 @@ class AppStore extends ChangeNotifier {
       syncing = false;
       notifyListeners();
     }
+  }
+
+  // --- Device settings backup (item 69) ---
+
+  /// The kinds of device a backup can come from, as [deviceName] names them.
+  static const deviceKinds = ['Android', 'iPhone or iPad', 'Mac', 'Windows'];
+
+  static String deviceBackupPath(String kind) =>
+      '${DropboxClient.devicesFolder}/${kind.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}.json';
+
+  /// Whether this device has looked for its own backup since Dropbox was connected. Until it has,
+  /// it never saves one, so a fresh install can't save its empty settings over the old ones.
+  bool deviceBackupChecked = false;
+
+  /// A backup from this kind of device found on the first sync, offered at the top of the list.
+  DeviceBackup? restoreOffer;
+
+  String? _lastDeviceBackup;
+
+  /// The settings that stay on this device, as saved to Dropbox. Sign-ins are left out.
+  Map<String, dynamic> deviceSettingsBackup() => {
+        'recordLocation': recordLocation,
+        'quickFilter': quickFilter.name,
+        if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
+        'arrivalSummary': arrivalSummary,
+        'boardShowSteps': boardShowSteps,
+        'boardLanes': boardLanes,
+        'matrixFilter': matrixFilter.name,
+        if (matrixCategory != null) 'matrixCategory': matrixCategory,
+        if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
+        if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
+      };
+
+  /// On each sync: the first time, looks for this kind of device's backup and offers it; after
+  /// that, saves this device's settings when they changed.
+  Future<void> _deviceBackup(DropboxClient db) async {
+    final path = deviceBackupPath(deviceName);
+    if (!deviceBackupChecked) {
+      final found = DeviceBackup.tryParse(await db.downloadPath(path));
+      deviceBackupChecked = true;
+      if (found != null && jsonEncode(found.settings) != jsonEncode(deviceSettingsBackup())) {
+        restoreOffer = found;
+        // Not saved yet: the offer must not be overwritten before it is answered.
+        deviceBackupChecked = false;
+        notifyListeners();
+        return;
+      }
+      await saveDeviceSettings();
+    }
+    if (restoreOffer != null) return;
+    final settings = deviceSettingsBackup();
+    final text = jsonEncode(settings);
+    if (text == _lastDeviceBackup) return;
+    await db.uploadPath(
+        path,
+        jsonEncode({
+          'device': deviceName,
+          'app': currentAppVersion,
+          'savedAt': DateTime.now().toUtc().toIso8601String(),
+          'settings': settings,
+        }));
+    _lastDeviceBackup = text;
+  }
+
+  /// The device backups in Dropbox, newest first, for Settings → Restore.
+  Future<List<DeviceBackup>> deviceBackups() async {
+    final db = dropbox;
+    if (db == null) return [];
+    final out = <DeviceBackup>[];
+    for (final kind in {...deviceKinds, deviceName}) {
+      final b = DeviceBackup.tryParse(await db.downloadPath(deviceBackupPath(kind)));
+      if (b != null) out.add(b);
+    }
+    out.sort((a, b) => b.savedAt.compareTo(a.savedAt));
+    return out;
+  }
+
+  /// Puts [b]'s settings on this device. The Google client is only taken when this device has
+  /// none, so restoring never breaks a working sign-in.
+  Future<void> restoreDeviceSettings(DeviceBackup b) async {
+    final s = b.settings;
+    recordLocation = s['recordLocation'] as bool? ?? recordLocation;
+    quickFilter = QuickFilter.values.where((f) => f.name == s['quickFilter']).firstOrNull ?? quickFilter;
+    if (s['places'] is List) {
+      places
+        ..clear()
+        ..addAll([for (final p in s['places'] as List) ?Place.tryParse(p)]);
+    }
+    arrivalSummary = s['arrivalSummary'] as bool? ?? arrivalSummary;
+    boardShowSteps = s['boardShowSteps'] as bool? ?? boardShowSteps;
+    boardLanes = s['boardLanes'] as bool? ?? boardLanes;
+    matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? matrixFilter;
+    matrixCategory = s['matrixCategory'] as String? ?? matrixCategory;
+    if (googleClientId.isEmpty && google == null) {
+      googleClientId = s['googleClientId'] as String? ?? '';
+      googleClientSecret = s['googleClientSecret'] as String? ?? '';
+    }
+    restoreOffer = null;
+    deviceBackupChecked = true;
+    await saveDeviceSettings();
+    notifyListeners();
+    unawaited(watchPlaces());
+    final db = dropbox;
+    if (db != null) {
+      try {
+        await _deviceBackup(db);
+      } catch (_) {
+        // Saved on the next sync.
+      }
+    }
+  }
+
+  /// "Not now" on the offer: this device's own settings are saved from the next sync on.
+  Future<void> dismissRestoreOffer() async {
+    restoreOffer = null;
+    deviceBackupChecked = true;
+    await saveDeviceSettings();
+    notifyListeners();
   }
 
   /// Item 48A: why the inbox folder can't be read (a Dropbox permission missing), or null.
@@ -377,6 +498,9 @@ class AppStore extends ChangeNotifier {
 
   Future<void> disconnectDropbox() async {
     dropbox = null;
+    deviceBackupChecked = false;
+    restoreOffer = null;
+    _lastDeviceBackup = null;
     _setStatus('Not connected');
     await saveDeviceSettings();
   }
@@ -1328,4 +1452,36 @@ class IgnoredEmail {
 
   final GmailMessage message;
   final String reason;
+}
+
+/// Item 69: one device's settings as saved in Dropbox.
+class DeviceBackup {
+  DeviceBackup(this.device, this.savedAt, this.settings, {this.app});
+
+  final String device;
+  final DateTime savedAt;
+  final String? app;
+  final Map<String, dynamic> settings;
+
+  /// What it holds, for the offer: "2 places, Google client, view choices".
+  String describe() => [
+        if ((settings['places'] as List?)?.isNotEmpty ?? false)
+          '${(settings['places'] as List).length} place${(settings['places'] as List).length == 1 ? '' : 's'}',
+        if ((settings['googleClientId'] as String? ?? '').isNotEmpty) 'Google client ID and secret',
+        if (settings['recordLocation'] == true) 'location recording',
+        'list and board view choices',
+      ].join(', ');
+
+  static DeviceBackup? tryParse(String? text) {
+    if (text == null || text.trim().isEmpty) return null;
+    try {
+      final j = jsonDecode(text) as Map<String, dynamic>;
+      final s = j['settings'];
+      if (s is! Map) return null;
+      return DeviceBackup(j['device'] as String? ?? '?', DateTime.tryParse(j['savedAt'] as String? ?? '') ?? DateTime(2000),
+          Map<String, dynamic>.from(s), app: j['app'] as String?);
+    } catch (_) {
+      return null;
+    }
+  }
 }

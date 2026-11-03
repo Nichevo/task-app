@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../dropbox.dart';
@@ -153,6 +154,45 @@ class _SettingsPageState extends State<SettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not connect: $e')));
       }
     }
+  }
+
+  /// Item 69: picks a device's saved settings from Dropbox and puts them on this one.
+  Future<void> _restoreDevice() async {
+    List<DeviceBackup> found;
+    try {
+      found = await store.deviceBackups();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not look: $e')));
+      return;
+    }
+    if (!mounted) return;
+    if (found.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No device settings saved in Dropbox yet. They are saved on each sync.')));
+      return;
+    }
+    final fmt = DateFormat('d MMM HH:mm');
+    final pick = await showDialog<DeviceBackup>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('Restore settings from'),
+        children: [
+          for (final b in found)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, b),
+              child: ListTile(
+                title: Text('${b.device}${b.device == AppStore.deviceName ? ' (this kind of device)' : ''}'),
+                subtitle: Text('Saved ${fmt.format(b.savedAt.toLocal())}: ${b.describe()}'),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (pick == null) return;
+    await store.restoreDeviceSettings(pick);
+    _gId.text = store.googleClientId;
+    _gSecret.text = store.googleClientSecret;
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Settings from ${pick.device} restored')));
   }
 
   /// Item 53: Google sign-in in the browser; the answer comes back to the app by itself.
@@ -944,6 +984,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 OutlinedButton(onPressed: store.disconnectDropbox, child: const Text('Disconnect')),
               ]),
+            if (connected)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _restoreDevice,
+                  icon: const Icon(Icons.settings_backup_restore),
+                  label: const Text('Restore settings from a device'),
+                ),
+              ),
+            if (connected)
+              Text(
+                'Most settings sync with your tasks. The ones kept on each device (places, list and board view choices, '
+                'location recording, the Google client ID and secret) are saved to Dropbox too, in the devices folder. '
+                'Sign-ins are not.',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+              ),
             if (store.inboxFolderNote != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

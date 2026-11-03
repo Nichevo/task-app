@@ -36,8 +36,14 @@ class FolderDropbox extends DropboxClient {
     return inbox.keys.toList();
   }
 
+  /// Files outside the inbox folder (device settings backups).
+  final other = <String, String>{};
+
   @override
-  Future<String?> downloadPath(String path) async => inbox[path];
+  Future<String?> downloadPath(String path) async => inbox[path] ?? other[path];
+
+  @override
+  Future<void> uploadPath(String path, String contents) async => other[path] = contents;
 
   @override
   Future<void> delete(String path) async => inbox.remove(path);
