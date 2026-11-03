@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.7.0', 'November 2026', [
+    'Google sign-in (Settings, Google) on the phone, Windows and Mac. Setup steps are in docs/GOOGLE.md. The app can read emails and change stars and labels, never send or delete.',
+    'Starred emails (menu): your starred Gmail emails, with Make task, Attach to task and Hide on each.',
+    'Tasks keep the emails they came from or were attached to, in a new Emails section with Open in Gmail. An envelope on the block shows which tasks have them.',
+    'Settings: how far back to look, what happens to the star afterwards (keep, remove, or remove and label "Tasked"), and an optional line at the top of the list.',
+    'CSV export adds an Emails column and a task_emails file; importing that file puts the emails back.',
+  ]),
   Release('1.6.2', 'November 2026', [
     'Safer syncing between versions: if another device has a newer Task Blocks, this one keeps everything the newer version added instead of dropping it, and writes it back unchanged.',
     'A note at the top of the list says when another device has a newer version, so you know to update this one.',

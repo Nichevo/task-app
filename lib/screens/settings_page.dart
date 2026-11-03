@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../dropbox.dart';
+import '../google.dart';
 import '../location.dart';
 import '../models.dart';
 import '../native.dart';
@@ -16,6 +17,9 @@ import '../widgets/task_colors.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
 const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour before', 1440: '1 day before', 10080: '1 week before'};
+
+/// How far back the Starred emails page looks (days; 0 = all).
+const starredDaysOptions = {7: '1 week', 30: '1 month', 91: '3 months', 0: 'All'};
 
 /// Asks for a line of text, e.g. a category name.
 Future<String?> askText(BuildContext context, String title, {String initial = ''}) {
@@ -81,6 +85,9 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late final _key = TextEditingController(text: widget.store.dropboxAppKey);
+  late final _gId = TextEditingController(text: widget.store.googleClientId);
+  late final _gSecret = TextEditingController(text: widget.store.googleClientSecret);
+  bool _gBusy = false;
   List<DeviceCalendar>? _calendars;
 
   AppStore get store => widget.store;
@@ -89,6 +96,8 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _key.dispose();
+    _gId.dispose();
+    _gSecret.dispose();
     super.dispose();
   }
 
@@ -138,6 +147,98 @@ class _SettingsPageState extends State<SettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not connect: $e')));
       }
     }
+  }
+
+  /// Item 53: Google sign-in in the browser; the answer comes back to the app by itself.
+  Future<void> _connectGoogle() async {
+    final id = _gId.text.trim(), secret = _gSecret.text.trim();
+    if (id.isEmpty || secret.isEmpty) return;
+    store.googleClientId = id;
+    store.googleClientSecret = secret;
+    setState(() => _gBusy = true);
+    try {
+      await store.connectGoogle((url) => launchUrl(url, mode: LaunchMode.externalApplication));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not sign in: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _gBusy = false);
+    }
+  }
+
+  Widget _googleSection(AppData data) {
+    final g = store.google;
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    if (!googleSupported) {
+      return Text('Google sign-in is on the phone, Windows and Mac for now; the iPad comes later.', style: hint);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (g == null) ...[
+        Text(
+          'One-time setup (about 10 minutes, steps in docs/GOOGLE.md on GitHub): in Google Cloud make a project, '
+          'turn on the Gmail API, set up the consent screen for just you and publish it, then create an OAuth '
+          'client of type "Desktop app". Copy its client ID and secret here. They stay on this device.',
+          style: hint,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _gId,
+          decoration: const InputDecoration(labelText: 'Client ID', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _gSecret,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Client secret', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _gBusy ? null : _connectGoogle,
+          icon: _gBusy
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.login),
+          label: Text(_gBusy ? 'Waiting for the browser…' : 'Sign in with Google'),
+        ),
+        const SizedBox(height: 8),
+        Text('The app asks to read emails and change their labels and stars. It cannot send or delete mail.',
+            style: hint),
+      ] else ...[
+        Text('Signed in as ${g.email ?? 'your Google account'}'),
+        const SizedBox(height: 8),
+        OutlinedButton(onPressed: store.disconnectGoogle, child: const Text('Sign out')),
+      ],
+      const SizedBox(height: 8),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Starred emails: look back'),
+        subtitle: const Text('How far back the Starred emails page looks.'),
+        trailing: DropdownButton<int>(
+          value: starredDaysOptions.containsKey(data.starredDays) ? data.starredDays : 30,
+          items: [
+            for (final e in starredDaysOptions.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+          ],
+          onChanged: (v) => _set(() => data.starredDays = v ?? 30),
+        ),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('After using a starred email'),
+        subtitle: Text(data.starredAfter.label),
+        trailing: PopupMenuButton<StarredAfter>(
+          icon: const Icon(Icons.arrow_drop_down),
+          onSelected: (v) => _set(() => data.starredAfter = v),
+          itemBuilder: (_) => [for (final v in StarredAfter.values) PopupMenuItem(value: v, child: Text(v.label))],
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Line at the top of the list'),
+        subtitle: const Text('"4 starred emails not yet tasks", checked when the app opens.'),
+        value: data.starredLine,
+        onChanged: (v) => _set(() => data.starredLine = v),
+      ),
+    ]);
   }
 
   Future<void> _editCategory(TaskCategory c) async {
@@ -646,6 +747,9 @@ class _SettingsPageState extends State<SettingsPage> {
               '(handy with email-to-Dropbox, IFTTT or Zapier). Dates and #categories in the line are read too.',
               style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
             ),
+            const Divider(height: 40),
+            _heading('Google'),
+            _googleSection(data),
             const Divider(height: 40),
             ListTile(
               contentPadding: EdgeInsets.zero,

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'dropbox.dart';
+import 'google.dart';
 import 'home_widgets.dart';
 import 'input_parse.dart';
 import 'location.dart';
@@ -39,6 +40,12 @@ class AppStore extends ChangeNotifier {
   bool syncing = false;
   bool _syncAgain = false;
   DateTime? _lastSync;
+
+  /// Item 53: Google sign-in on this device (device-only, never synced): the OAuth client's id and
+  /// secret, typed in Settings, and the signed-in client.
+  String googleClientId = '';
+  String googleClientSecret = '';
+  GoogleClient? google;
 
   /// When the app last offered tasks from calendar events on its own (device-only).
   DateTime? eventPromptAt;
@@ -99,6 +106,13 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      googleClientId = s['googleClientId'] as String? ?? '';
+      googleClientSecret = s['googleClientSecret'] as String? ?? '';
+      final gRefresh = s['googleRefreshToken'] as String?;
+      if (googleClientId.isNotEmpty && gRefresh != null) {
+        google = GoogleClient(googleClientId, googleClientSecret,
+            refreshToken: gRefresh, email: s['googleEmail'] as String?);
+      }
     }
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
@@ -176,6 +190,10 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
+      if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
+      if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
+      if (google?.email != null) 'googleEmail': google!.email,
     }));
   }
 
@@ -306,6 +324,30 @@ class AppStore extends ChangeNotifier {
     dropbox = null;
     _setStatus('Not connected');
     await saveDeviceSettings();
+  }
+
+  /// Item 53: signs in to Google with the client id and secret from Settings.
+  Future<void> connectGoogle(Future<void> Function(Uri url) open, {GoogleClient? client}) async {
+    final g = client ?? GoogleClient(googleClientId.trim(), googleClientSecret.trim());
+    await g.signIn(open);
+    google = g;
+    await saveDeviceSettings();
+    notifyListeners();
+  }
+
+  Future<void> disconnectGoogle() async {
+    final g = google;
+    google = null;
+    await saveDeviceSettings();
+    notifyListeners();
+    await g?.signOut();
+  }
+
+  /// Google stopped accepting this device's sign-in; forget it so Settings offers Sign in.
+  Future<void> googleSignedOut() async {
+    google = null;
+    await saveDeviceSettings();
+    notifyListeners();
   }
 
   void _setStatus(String s) {
@@ -915,6 +957,69 @@ class AppStore extends ChangeNotifier {
   }
 
   // --- Calendar events ---
+
+  // --- Starred emails (item 55) ---
+
+  /// A new task made from a starred email, with the email kept on it.
+  Task addTaskFromEmail(GmailMessage m,
+      {required String title, DateTime? due, String? categoryId, String notes = '', String source = TaskSource.starredEmail}) {
+    final t = addTask(title, due: due, categoryId: categoryId, notes: notes, source: source);
+    t.emails.add(emailOf(m));
+    changed(task: t);
+    unawaited(_afterStarUse(m));
+    return t;
+  }
+
+  /// Keeps a starred email on an existing task, in its Emails section.
+  void attachEmail(Task t, GmailMessage m) {
+    if (t.emails.any((e) => e.id == m.id)) return;
+    t.emails.add(emailOf(m));
+    changed(task: t);
+    unawaited(_afterStarUse(m));
+  }
+
+  void removeEmail(Task t, TaskEmail e) {
+    t.emails.removeWhere((x) => x.id == e.id);
+    changed(task: t);
+  }
+
+  static TaskEmail emailOf(GmailMessage m) => TaskEmail(
+        id: m.id,
+        threadId: m.threadId,
+        subject: m.subject,
+        from: m.from,
+        date: m.date,
+        // A short snippet only; the whole email never goes into the synced file.
+        snippet: m.snippet.length > 300 ? '${m.snippet.substring(0, 300)}…' : m.snippet,
+      );
+
+  void hideEmail(String id) {
+    data.hiddenEmails.add(id);
+    changed(settings: true);
+  }
+
+  /// What the Starred emails setting says to do with the star once the email is used.
+  Future<void> _afterStarUse(GmailMessage m) async {
+    final g = google;
+    if (g == null || data.starredAfter == StarredAfter.keep) return;
+    try {
+      await g.modify(m.id,
+          remove: const ['STARRED'],
+          add: data.starredAfter == StarredAfter.unstarLabel ? [await g.labelId('Tasked')] : const []);
+    } catch (e) {
+      debugPrint('star change: $e');
+    }
+  }
+
+  /// Starred emails not yet used for a task and not hidden; null when not signed in.
+  Future<int?> starredWaiting() async {
+    final g = google;
+    if (g == null) return null;
+    final ids = await g.search(
+        data.starredDays > 0 ? 'is:starred newer_than:${data.starredDays}d' : 'is:starred',
+        max: 100);
+    return ids.where((id) => !data.hiddenEmails.contains(id) && data.taskForEmail(id) == null).length;
+  }
 
   void dismissEvent(String eventId) {
     data.dismissedEvents.add(eventId);

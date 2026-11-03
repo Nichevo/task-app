@@ -372,6 +372,41 @@ class _TaskPageState extends State<TaskPage> {
                 ),
             ]),
           ),
+        // Item 55: emails kept on the task.
+        if (task.emails.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            const Icon(Icons.mail_outline),
+            const SizedBox(width: 16),
+            Text(task.emails.length == 1 ? 'Email' : 'Emails  ${task.emails.length}',
+                style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          for (final e in task.emails)
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.only(left: 4),
+              title: Text(e.subject.isEmpty ? '(no subject)' : e.subject),
+              subtitle: Text([
+                [e.from, if (e.date != null) dateTimeFmt.format(e.date!)].join(' · '),
+                if (e.snippet.isNotEmpty) e.snippet,
+              ].join('\n'), maxLines: 3, overflow: TextOverflow.ellipsis),
+              isThreeLine: e.snippet.isNotEmpty,
+              onTap: () => launchUrl(e.link, mode: LaunchMode.externalApplication),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Open in Gmail',
+                  icon: const Icon(Icons.open_in_new, size: 20),
+                  onPressed: () => launchUrl(e.link, mode: LaunchMode.externalApplication),
+                ),
+                if (!archived)
+                  IconButton(
+                    tooltip: 'Remove from this task',
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => setState(() => widget.store.removeEmail(task, e)),
+                  ),
+              ]),
+            ),
+        ],
         const SizedBox(height: 12),
         Row(children: [
           const Icon(Icons.checklist),

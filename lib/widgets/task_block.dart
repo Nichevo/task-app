@@ -133,6 +133,19 @@ class TaskBlock extends StatelessWidget {
                                   child: Text('${task.stepsDone}/${task.steps.length}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
                                 ),
+                              if (task.emails.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Tooltip(
+                                    message: '${task.emails.length} email${task.emails.length == 1 ? '' : 's'} attached',
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                      const Icon(Icons.mail_outline, size: 14, color: Color(0xAA000000)),
+                                      if (task.emails.length > 1)
+                                        Text('${task.emails.length}',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
+                                    ]),
+                                  ),
+                                ),
                               if (task.estimate != null)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 6),
