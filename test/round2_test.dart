@@ -127,6 +127,10 @@ void main() {
   });
 
   testWidgets('Next 30 days chip hides later tasks behind a link; snoozed tasks hide too', (tester) async {
+    // A phone: on a wide screen the agenda beside the list shows the task too.
+    tester.view.physicalSize = const Size(400 * 3, 800 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
     final s = AppStore()
       ..addTask('Soon')
       ..addTask('Far off')

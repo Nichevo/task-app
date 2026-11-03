@@ -118,6 +118,7 @@ class AppStore extends ChangeNotifier {
       matrixCategory = s['matrixCategory'] as String?;
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
       emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? 0;
+      _readPanel(s);
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
@@ -213,6 +214,7 @@ class AppStore extends ChangeNotifier {
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (deviceBackupChecked) 'deviceBackupChecked': true,
       if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
+      ..._panelJson(),
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
       if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
@@ -322,6 +324,72 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  // --- Right-hand panel (item 59), all device-only ---
+
+  /// The view the panel shows when the app starts (Settings), and the one showing now.
+  PanelView panelStart = PanelView.agenda;
+  PanelView panelView = PanelView.agenda;
+
+  /// Reopen the view used last instead of [panelStart].
+  bool panelRemember = false;
+
+  /// Views left out of the panel's chip row.
+  final panelHidden = <PanelView>{};
+
+  /// What the Statistics view shows.
+  final panelStats = <PanelStat>{PanelStat.week, PanelStat.category};
+
+  /// What opens when the Fold is unfolded.
+  UnfoldOpens unfoldOpens = UnfoldOpens.panel;
+
+  Map<String, dynamic> _panelJson() => {
+        if (panelStart != PanelView.agenda) 'panelStart': panelStart.name,
+        if (panelRemember) 'panelRemember': true,
+        if (panelRemember) 'panelLast': panelView.name,
+        if (panelHidden.isNotEmpty) 'panelHidden': [for (final v in panelHidden) v.name],
+        'panelStats': [for (final v in panelStats) v.name],
+        if (unfoldOpens != UnfoldOpens.panel) 'unfoldOpens': unfoldOpens.name,
+      };
+
+  void _readPanel(Map<String, dynamic> s) {
+    T? byName<T extends Enum>(List<T> values, Object? name) => values.where((v) => v.name == name).firstOrNull;
+    panelStart = byName(PanelView.values, s['panelStart']) ?? panelStart;
+    panelRemember = s['panelRemember'] as bool? ?? panelRemember;
+    if (s['panelHidden'] is List) {
+      panelHidden
+        ..clear()
+        ..addAll([for (final n in s['panelHidden'] as List) ?byName(PanelView.values, n)]);
+    }
+    if (s['panelStats'] is List) {
+      panelStats
+        ..clear()
+        ..addAll([for (final n in s['panelStats'] as List) ?byName(PanelStat.values, n)]);
+    }
+    unfoldOpens = byName(UnfoldOpens.values, s['unfoldOpens']) ?? unfoldOpens;
+    panelView = (panelRemember ? byName(PanelView.values, s['panelLast']) : null) ?? panelStart;
+    if (panelHidden.contains(panelView)) panelView = shownPanelViews.first;
+  }
+
+  /// The chips in the panel, in order. Never empty: Agenda stays when all are hidden.
+  List<PanelView> get shownPanelViews {
+    final v = [for (final v in PanelView.values) if (!panelHidden.contains(v)) v];
+    return v.isEmpty ? [PanelView.agenda] : v;
+  }
+
+  void showPanel(PanelView v) {
+    if (panelView == v) return;
+    panelView = v;
+    notifyListeners();
+    if (panelRemember) unawaited(saveDeviceSettings());
+  }
+
+  /// Saves a change to the panel settings made in Settings.
+  void panelSettingsChanged() {
+    if (panelHidden.contains(panelView)) panelView = shownPanelViews.first;
+    notifyListeners();
+    unawaited(saveDeviceSettings());
+  }
+
   // --- Device settings backup (item 69) ---
 
   /// The kinds of device a backup can come from, as [deviceName] names them.
@@ -352,6 +420,7 @@ class AppStore extends ChangeNotifier {
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
         if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
         if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
+        ..._panelJson(),
       };
 
   /// On each sync: the first time, looks for this kind of device's backup and offers it; after
@@ -415,6 +484,7 @@ class AppStore extends ChangeNotifier {
     matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? matrixFilter;
     matrixCategory = s['matrixCategory'] as String? ?? matrixCategory;
     emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? emailCheckMinutes;
+    _readPanel(s);
     _startEmailTimer();
     if (googleClientId.isEmpty && google == null) {
       googleClientId = s['googleClientId'] as String? ?? '';
@@ -1632,4 +1702,40 @@ class DeviceBackup {
       return null;
     }
   }
+}
+
+/// Item 59: what the right-hand panel on a wide screen shows when no task is open.
+enum PanelView {
+  agenda('Agenda'),
+  matrix('Matrix'),
+  board('Board'),
+  calendar('Calendar'),
+  events('Events'),
+  stats('Statistics'),
+  archive('Archive');
+
+  const PanelView(this.label);
+  final String label;
+}
+
+/// Item 59: the parts of the panel's Statistics view.
+enum PanelStat {
+  week('This week: done, streak, open, overdue'),
+  addedDone('Added and done, last 7 days'),
+  category('By category'),
+  source('By source'),
+  board('Time in each board stage');
+
+  const PanelStat(this.label);
+  final String label;
+}
+
+/// Item 59: what opens when the phone is unfolded.
+enum UnfoldOpens {
+  panel('The list and the panel'),
+  board('The whole Kanban board'),
+  matrix('The whole matrix');
+
+  const UnfoldOpens(this.label);
+  final String label;
 }
