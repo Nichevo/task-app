@@ -67,7 +67,7 @@ if it's lost, the app has to be uninstalled and reinstalled to update.
 ## Dropbox sync
 
 1. Go to https://www.dropbox.com/developers/apps and **Create app**: *Scoped access*, *App folder*, any name.
-2. On the app's **Permissions** tab tick `files.content.read` and `files.content.write`, then **Submit**.
+2. On the app's **Permissions** tab tick `files.content.read`, `files.content.write` and `files.metadata.read` (the last one is for the inbox folder), then **Submit**. If you added `files.metadata.read` later, disconnect and connect Dropbox again on each device.
 3. Copy the **App key** from the Settings tab.
 4. In Task Blocks open **⋮ → Settings**, paste the key, tap **Connect Dropbox**, approve in the browser and paste the code back.
 5. Do the same on the other device with the same key.

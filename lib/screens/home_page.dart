@@ -95,10 +95,13 @@ class HomePageState extends State<HomePage> {
     _lifecycle = AppLifecycleListener(onResume: () {
       store.syncIfStale();
       _checkStarred();
+      if (store.dropbox == null) store.checkEmailTasks();
     });
     store.addListener(_checkEvents);
     _checkEvents();
     _checkStarred();
+    // With Dropbox, each sync checks Gmail too (item 54).
+    if (store.dropbox == null) store.checkEmailTasks();
   }
 
   @override

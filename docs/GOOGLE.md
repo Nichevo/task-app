@@ -45,6 +45,29 @@ port), opens Google in the browser, and Google sends the browser back to that pa
 swaps the code for a refresh token, which stays on the device (device_settings.json, like the Dropbox sign-in).
 Sign out in Settings removes it here and revokes it at Google.
 
+## Email to tasks (item 54)
+
+Settings → Google → **Email to tasks** (off until you turn it on), then **Allowed senders**: one address per line,
+for example your work and personal addresses. `@example.com` allows a whole domain, only if you write it that way.
+
+An email becomes a task only when all of these are true:
+
+- it is from an allowed address,
+- Gmail's own sender check passed for that address's domain (SPF or DKIM in the Authentication-Results header),
+  because the From line of an email can be faked. Emails you sent from the signed-in account itself count as
+  checked,
+- its subject starts with the word **Task** ("Task: Pay council tax friday #Home", "task - ring the vet"), or it
+  has the Gmail label **Task**.
+
+Anything else you email yourself stays an ordinary email. The word Task comes off the title, and dates and
+`#category` are read as when typing. The task's source is "Email" and the email is kept in its Emails section.
+Gmail then labels the email **Tasked** (and takes the Task label off), so it isn't picked up again; the Gmail id
+is also kept on the task, so two devices never both add it.
+
+The app checks emails from the last 14 days when it opens, when it comes back to the front, and on each Dropbox
+sync. Settings shows "N ignored this week" with each email and why (not on the list, or failed the sender
+check), plus **Allow this sender**.
+
 ## Starred emails page
 
 Menu → **Starred emails** lists your starred emails, newest first, going back as far as Settings → Google →

@@ -20,6 +20,7 @@ class Task {
     this.remindBefore,
     List<TaskStep>? steps,
     this.eventId,
+    this.sourceRef,
     this.source,
     this.addedWhere,
     this.doneWhere,
@@ -48,7 +49,7 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails',
+    'stepsBoard', 'emails', 'ref',
   };
 
   final String id;
@@ -84,6 +85,10 @@ class Task {
 
   /// The calendar event this task was made from, so it isn't offered twice.
   String? eventId;
+
+  /// Item 48: the sending tool's own id for it (an email's Gmail id, a Zapier item...), so the
+  /// same thing is never added twice, even by two devices at once. See [mergeData].
+  String? sourceRef;
 
   /// How the task got into the app: one of the [TaskSource] names, or another name sent by an
   /// outside tool. Null for tasks made before sources were recorded ("Unknown").
@@ -196,6 +201,7 @@ class Task {
         if (remindBefore != null) 'remindBefore': remindBefore,
         if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
         if (eventId != null) 'eventId': eventId,
+        if (sourceRef != null) 'ref': sourceRef,
         if (source != null) 'source': source,
         if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
@@ -227,6 +233,7 @@ class Task {
         remindBefore: (j['remindBefore'] as num?)?.toInt(),
         steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
         eventId: j['eventId'] as String?,
+        sourceRef: j['ref'] as String?,
         // Older calendar tasks are known to be from the calendar even without a source.
         source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
         addedWhere: GeoPoint.tryParse(j['addedWhere']),
@@ -263,6 +270,7 @@ abstract final class TaskSource {
   static const step = 'step';
   static const kanban = 'kanban';
   static const starredEmail = 'starredEmail';
+  static const email = 'email';
 
   static const labels = {
     typed: 'Typed in the app',
@@ -278,6 +286,7 @@ abstract final class TaskSource {
     step: 'Checklist step',
     kanban: 'Kanban board',
     starredEmail: 'Starred email',
+    email: 'Email',
   };
 
   /// A name for showing; [source] null is a task from before sources were recorded.
@@ -1015,8 +1024,11 @@ class AppData {
     this.starredDays = 30,
     this.starredAfter = StarredAfter.keep,
     this.starredLine = false,
+    this.emailTasks = false,
+    List<String>? allowedSenders,
   })  : active = active ?? [],
         hiddenEmails = hiddenEmails ?? {},
+        allowedSenders = allowedSenders ?? [],
         extra = extra ?? {},
         archived = archived ?? [],
         deleted = deleted ?? {},
@@ -1154,6 +1166,21 @@ class AppData {
   /// Show "N starred emails not yet tasks" at the top of the list.
   bool starredLine;
 
+  /// Item 54: turn emails from [allowedSenders] into tasks.
+  bool emailTasks;
+
+  /// Exact addresses ("me@work.example"), or a whole domain when written "@work.example".
+  final List<String> allowedSenders;
+
+  /// Whether [address] is on the allowed list.
+  bool senderAllowed(String address) {
+    final a = address.trim().toLowerCase();
+    return allowedSenders.any((e) {
+      final x = e.trim().toLowerCase();
+      return x.isNotEmpty && (x.startsWith('@') ? a.endsWith(x) : a == x);
+    });
+  }
+
   /// The task an email (by Gmail id) was made into or attached to, if any.
   Task? taskForEmail(String id) => allTasks.where((t) => t.emails.any((e) => e.id == id)).firstOrNull;
 
@@ -1175,7 +1202,7 @@ class AppData {
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
-    'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine',
+    'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
   };
 
   Map<String, dynamic> toJson() => {
@@ -1216,6 +1243,8 @@ class AppData {
         'starredDays': starredDays,
         'starredAfter': starredAfter.name,
         if (starredLine) 'starredLine': true,
+        if (emailTasks) 'emailTasks': true,
+        if (allowedSenders.isNotEmpty) 'allowedSenders': allowedSenders,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
@@ -1296,6 +1325,8 @@ class AppData {
         starredDays: (j['starredDays'] as num?)?.toInt() ?? 30,
         starredAfter: _enum(StarredAfter.values, j['starredAfter'], StarredAfter.keep),
         starredLine: j['starredLine'] as bool? ?? false,
+        emailTasks: j['emailTasks'] as bool? ?? false,
+        allowedSenders: [for (final a in j['allowedSenders'] as List? ?? []) a as String],
         extra: unknownFields(j, _known),
       );
 }
@@ -1387,6 +1418,19 @@ AppData mergeData(AppData a, AppData b) {
     final at = deleted[id];
     return at != null && !t.updatedAt.isAfter(at);
   });
+  // Item 48: the same outside item added on two devices before they synced: keep the first.
+  final byRef = <String, Task>{};
+  for (final t in tasks.values.toList()..sort((x, y) => x.createdAt.compareTo(y.createdAt))) {
+    final ref = t.sourceRef;
+    if (ref == null) continue;
+    final key = '${t.source}|$ref';
+    if (byRef.containsKey(key)) {
+      tasks.remove(t.id);
+      deleted[t.id] = DateTime.now().toUtc();
+    } else {
+      byRef[key] = t;
+    }
+  }
   // Forget deletions after 90 days to keep the file small.
   final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 90));
   deleted.removeWhere((_, at) => at.isBefore(cutoff));
@@ -1454,6 +1498,8 @@ AppData mergeData(AppData a, AppData b) {
     starredDays: settingsFrom.starredDays,
     starredAfter: settingsFrom.starredAfter,
     starredLine: settingsFrom.starredLine,
+    emailTasks: settingsFrom.emailTasks,
+    allowedSenders: settingsFrom.allowedSenders,
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},
   );
