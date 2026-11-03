@@ -771,3 +771,19 @@ so it is left for now.
   2 hours. Device-only (saved with the device backup, item 69). Runs only while the app is on screen: a sync with
   Dropbox, otherwise just the Gmail check. Opening or coming back to the app already checks.
 - A background check with the app closed was dropped: checking on opening is enough.
+
+## 59. Right-hand panel views ☑ (version 1.8.4)
+
+- On a wide screen with no task open, the right-hand side has a chip row: Agenda (default), Matrix, Board,
+  Calendar, Events (phones and tablets), Statistics and Archive. Opening a task and closing it comes back to the
+  chosen view.
+- Agenda: Overdue, Today, Tomorrow, then each day up to a week, with dated steps ("Step of …"); tick boxes tick off
+  the task or step. Snoozed tasks are left out.
+- Matrix: the full matrix page at half the screen (the list and panel split 50/50), so the 2 by 2 grid fits on the
+  Fold's ~700 dp inner screen. Board: a mini board, one row per stage with its count (red when over the limit),
+  tapping unfolds its tasks; + puts a task in that stage. (The plan had dragging from the list; the list's long
+  press already reorders, so + is used instead.) Statistics: the parts picked in Settings, stacked, plus All
+  statistics.
+- Settings → Right-hand panel (device-only, saved with the device backup): starts on, or reopen the last view;
+  views to offer; Statistics view shows (this week, added and done in 7 days, by category, by source, time in each
+  stage); When I unfold the phone, open (the list and panel, the whole board, the whole matrix).

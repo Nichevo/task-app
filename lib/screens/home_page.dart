@@ -26,6 +26,7 @@ import 'kanban_page.dart';
 import 'matrix_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
+import 'side_panel.dart';
 import 'starred_page.dart';
 import 'stats_page.dart';
 import 'task_page.dart';
@@ -348,6 +349,7 @@ class HomePageState extends State<HomePage> {
         if (open == null) _selectedId = null;
         return LayoutBuilder(builder: (context, box) {
           final wide = box.maxWidth >= _twoPaneWidth;
+          _unfolded(wide);
           final list = _listScaffold(context, wide);
           if (!wide) {
             return PopScope(
@@ -360,19 +362,34 @@ class HomePageState extends State<HomePage> {
                   : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
             );
           }
+          // Item 59: the matrix needs room for its 2 by 2 grid, so it gets half the screen.
+          final half = open == null && store.panelView == PanelView.matrix;
           return Row(children: [
-            Expanded(flex: 3, child: list),
+            Expanded(flex: half ? 1 : 3, child: list),
             const VerticalDivider(width: 1),
             Expanded(
-              flex: 2,
+              flex: half ? 1 : 2,
               child: open == null
-                  ? ArchivePage(store: store, embedded: true, onOpen: (t) => _select(t.id))
+                  ? SidePanel(store: store, onOpen: (t) => _select(t.id))
                   : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
             ),
           ]);
         });
       },
     );
+  }
+
+  bool? _wasWide;
+
+  /// Item 59: on going from narrow to wide (unfolding the Fold), open what Settings asks for.
+  void _unfolded(bool wide) {
+    final was = _wasWide;
+    _wasWide = wide;
+    if (was != false || !wide || store.unfoldOpens == UnfoldOpens.panel) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? false)) return;
+      _open(context, store.unfoldOpens == UnfoldOpens.board ? KanbanPage(store: store) : MatrixPage(store: store));
+    });
   }
 
   Widget _listScaffold(BuildContext context, bool wide) {
@@ -435,7 +452,11 @@ class HomePageState extends State<HomePage> {
               child: const Icon(Icons.inventory_2_outlined),
             ),
             // On wide screens the archive lives in the right-hand pane.
-            onPressed: () => wide ? _select(null) : _open(context, ArchivePage(store: store)),
+            onPressed: () {
+              if (!wide) return _open(context, ArchivePage(store: store));
+              store.showPanel(PanelView.archive);
+              _select(null);
+            },
           ),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {

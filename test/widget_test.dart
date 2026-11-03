@@ -78,7 +78,7 @@ void main() {
     addTearDown(tester.view.reset);
     final store = AppStore()..addTask('Fix gate latch');
     await tester.pumpWidget(TaskApp(store: store));
-    expect(find.text('Archive (0)'), findsOneWidget); // archive in the right pane
+    expect(find.text('Nothing due in the next 7 days.'), findsOneWidget); // agenda in the right pane
 
     await tester.tap(find.text('Fix gate latch'));
     await tester.pumpAndSettle();
@@ -89,7 +89,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
-    expect(find.text('Archive (0)'), findsOneWidget);
+    expect(find.text('Nothing due in the next 7 days.'), findsOneWidget);
   });
 
   testWidgets('folded (narrow) screen opens the task full screen', (tester) async {

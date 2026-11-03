@@ -17,6 +17,7 @@ import 'about_page.dart';
 import 'backups_page.dart';
 import 'kanban_page.dart';
 import 'places_page.dart';
+import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
@@ -945,6 +946,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlacesPage(store: store))),
               ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.vertical_split_outlined),
+              title: const Text('Right-hand panel'),
+              subtitle: Text('On wide screens: starts on ${store.panelStart.label}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PanelSettingsPage(store: store))),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.view_kanban_outlined),

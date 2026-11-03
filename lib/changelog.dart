@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.4', 'November 2026', [
+    'Wide screens (the Fold unfolded, tablets, computers): the right-hand side now has a row of views instead of just the archive. Agenda (overdue, today and the next 7 days, dated steps included), Matrix, Board, Calendar, Events, Statistics and Archive.',
+    'The matrix takes half the screen so its four boxes fit. The board view lists each stage with its count; tap to see its tasks, or + to put a task there.',
+    'Opening a task and closing it comes back to the same view.',
+    'Settings, Right-hand panel: which view it starts on (Agenda unless you change it), or reopen the last one; which views to offer; what the Statistics view shows; and what opens when you unfold the phone (the list and panel, the whole board or the whole matrix).',
+  ]),
   Release('1.8.3', 'November 2026', [
     'Checklist steps can have their own date, reminder and note: tap a step. Dated steps show in the calendar with their task\'s name and get their own reminder.',
     '"Split out" turns a step into a task of its own. It takes the task\'s category, star, place, estimate, matrix box and board stage, and its date when the step has none. Undo puts it back.',
