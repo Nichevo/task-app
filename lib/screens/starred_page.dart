@@ -168,7 +168,9 @@ class _StarredPageState extends State<StarredPage> {
         final m = shown[i];
         final task = data.taskForEmail(m.id);
         final hidden = data.hiddenEmails.contains(m.id);
-        final made = task != null && task.source == TaskSource.starredEmail && task.emails.first.id == m.id;
+        final made = task != null &&
+            (task.source == TaskSource.starredEmail || task.source == TaskSource.email) &&
+            task.emails.first.id == m.id;
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 6),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

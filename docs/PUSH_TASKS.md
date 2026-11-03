@@ -1,6 +1,7 @@
 # Letting other tools push tasks into Task Blocks
 
-Status: design only (2026-11-01). Nothing here is built yet except what is marked **exists**.
+Status: option A (the inbox folder) and `sourceRef` are built in 1.7.1. Option B (Android intent) follows in round 5
+PR 7. Answers taken (2026-11-03): pushed tasks go straight in, "add" only, no outside complete or update yet.
 
 ## Goal
 
@@ -76,7 +77,10 @@ the first version.
 
 ## App changes needed for A
 
-- `Task.sourceRef` (string, optional), saved and synced like `source`.
+- **Built (1.7.1).** `Task.sourceRef` (string, optional, JSON key `ref`), saved and synced like `source`. Two
+  devices that add the same `source` + `ref` before syncing are merged down to the first one.
+- **Built (1.7.1).** The Dropbox app needs the `files.metadata.read` permission (to list the folder); without it
+  Settings → Dropbox says so and everything else keeps working.
 - In `AppStore.sync`, after the merge: list `inbox/` in Dropbox, download each `.json`, add the tasks
   (skipping known `source` + `ref`), then delete just those files. Bad files are moved to `inbox/failed/`
   with a note rather than retried forever.

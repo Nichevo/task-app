@@ -168,11 +168,12 @@ class GoogleClient {
     return ids;
   }
 
-  /// The headers and snippet of one message.
-  Future<GmailMessage> message(String id) async {
+  /// The headers and snippet of one message. [checkSender] also fetches Gmail's sender check
+  /// (the Authentication-Results header), for item 54.
+  Future<GmailMessage> message(String id, {bool checkSender = false}) async {
     final j = await _get('/gmail/v1/users/me/messages/$id', {
       'format': 'metadata',
-      'metadataHeaders': ['Subject', 'From', 'Date'],
+      'metadataHeaders': ['Subject', 'From', 'Date', if (checkSender) 'Authentication-Results'],
     });
     return GmailMessage.fromJson(j);
   }
@@ -232,7 +233,34 @@ class GmailMessage {
     required this.date,
     required this.snippet,
     required this.labels,
+    this.authResults = '',
   });
+
+  /// Gmail's Authentication-Results header (SPF, DKIM, DMARC), when asked for.
+  final String authResults;
+
+  /// The part after @ of the sender's address.
+  String get domain => address.contains('@') ? address.split('@').last : '';
+
+  /// Item 54: Gmail's own check says the email really came from the sender's domain: SPF or
+  /// DKIM passed for that domain (or one under it). The From line alone can be faked.
+  bool get senderVerified {
+    final d = domain;
+    if (d.isEmpty) return false;
+    bool matches(String? x) {
+      final v = x?.toLowerCase().replaceFirst(RegExp(r'^.*@'), '') ?? '';
+      return v.isNotEmpty && (v == d || d.endsWith('.$v') || v.endsWith('.$d'));
+    }
+
+    final text = authResults.toLowerCase();
+    for (final m in RegExp(r'dkim=pass[^;]*?header\.(?:i|d)=([^\s;]+)').allMatches(text)) {
+      if (matches(m.group(1))) return true;
+    }
+    for (final m in RegExp(r'spf=pass[^;]*?smtp\.mailfrom=([^\s;]+)').allMatches(text)) {
+      if (matches(m.group(1))) return true;
+    }
+    return false;
+  }
 
   final String id;
   final String threadId;
@@ -259,10 +287,12 @@ class GmailMessage {
   }
 
   factory GmailMessage.fromJson(Map<String, dynamic> j) {
-    final headers = <String, String>{
-      for (final h in (j['payload'] as Map?)?['headers'] as List? ?? [])
-        ((h as Map)['name'] as String).toLowerCase(): h['value'] as String? ?? '',
-    };
+    // A header can appear more than once (Authentication-Results often does): join them.
+    final headers = <String, String>{};
+    for (final h in (j['payload'] as Map?)?['headers'] as List? ?? []) {
+      final name = ((h as Map)['name'] as String).toLowerCase(), value = h['value'] as String? ?? '';
+      headers[name] = headers.containsKey(name) ? '${headers[name]}; $value' : value;
+    }
     final ms = int.tryParse(j['internalDate']?.toString() ?? '');
     return GmailMessage(
       id: j['id'] as String,
@@ -272,6 +302,7 @@ class GmailMessage {
       date: ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms),
       snippet: _unescape(j['snippet'] as String? ?? ''),
       labels: {for (final l in j['labelIds'] as List? ?? []) l as String},
+      authResults: headers['authentication-results'] ?? '',
     );
   }
 

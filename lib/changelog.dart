@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.7.1', 'November 2026', [
+    'Email to tasks (Settings, Google): an email from one of your allowed senders whose subject starts with "Task" (or that has the Gmail label "Task") becomes a task. "Task: Pay council tax friday #Home" reads the date and category.',
+    'Only addresses you allow, and only when Gmail\'s own sender check passes, so a faked From line is ignored. Settings lists what was ignored this week, with "Allow this sender".',
+    'Used emails get the label "Tasked" and are never added twice, even by two devices at once.',
+    'Dropbox inbox folder: tools like Zapier can drop one .json file per task into Apps/<app>/inbox/ (format in docs/PUSH_TASKS.md). Needs the files.metadata.read permission on the Dropbox app.',
+  ]),
   Release('1.7.0', 'November 2026', [
     'Google sign-in (Settings, Google) on the phone, Windows and Mac. Setup steps are in docs/GOOGLE.md. The app can read emails and change stars and labels, never send or delete.',
     'Starred emails (menu): your starred Gmail emails, with Make task, Attach to task and Hide on each.',

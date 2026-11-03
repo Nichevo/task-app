@@ -81,6 +81,45 @@ class DropboxClient {
 
   static const backupFolder = '/backups';
 
+  /// Item 48A: one-task-per-file inbox folder.
+  static const inboxFolder = '/inbox';
+
+  /// Paths of the .json files waiting in [inboxFolder] (not its sub-folders). Empty when the
+  /// folder doesn't exist yet. Needs the files.metadata.read permission.
+  Future<List<String>> inboxFiles() async {
+    final out = <String>[];
+    var res = await _rpc('/2/files/list_folder', {'path': inboxFolder}, notFoundOk: true);
+    while (res != null) {
+      for (final e in res['entries'] as List? ?? []) {
+        final m = e as Map;
+        final path = m['path_display'] as String? ?? m['path_lower'] as String?;
+        if (m['.tag'] == 'file' && path != null && path.toLowerCase().endsWith('.json')) out.add(path);
+      }
+      res = res['has_more'] == true ? await _rpc('/2/files/list_folder/continue', {'cursor': res['cursor']}) : null;
+    }
+    return out;
+  }
+
+  Future<String?> downloadPath(String path) => _download(path);
+
+  Future<void> delete(String path) => _rpc('/2/files/delete_v2', {'path': path}, notFoundOk: true);
+
+  /// Moves a file that couldn't be read to inbox/failed, so it isn't tried again and again.
+  Future<void> moveToFailed(String path) => _rpc('/2/files/move_v2', {
+        'from_path': path,
+        'to_path': '$inboxFolder/failed/${path.split('/').last}',
+        'autorename': true,
+      }, notFoundOk: true);
+
+  Future<Map<String, dynamic>?> _rpc(String endpoint, Map<String, dynamic> body, {bool notFoundOk = false}) async {
+    final res = await http.post(Uri.https('api.dropboxapi.com', endpoint),
+        headers: {'Authorization': 'Bearer ${await _token()}', 'Content-Type': 'application/json'},
+        body: jsonEncode(body));
+    if (notFoundOk && res.statusCode == 409 && res.body.contains('not_found')) return null;
+    _checkOk(res);
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   /// The inbox file, or null when it is missing or empty.
   Future<String?> downloadInbox() async {
     final text = await _download(inboxPath);

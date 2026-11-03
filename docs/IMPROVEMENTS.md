@@ -338,7 +338,7 @@ reboot or update); on a crossing, `PlaceReceiver.kt` reads the saved `tasks.json
 day per task (once in all for tasks without a date), skipping snoozed tasks. The opt-in summary lists what is
 due today or overdue, once per place per day.
 
-## 34. Label an email to make a task ☐ (moved to phase 5, 2026-11-01)
+## 34. Label an email to make a task ☑ (folded into item 54, version 1.7.1)
 
 **Feedback (2026-10-29):** "Could Google emails on my phone turn into tasks?"
 
@@ -656,4 +656,26 @@ didn't know when it saved, and that loss then synced to every device.
 
 - Tasks CSV gains an Emails column (count). `task_emails_<date>.csv`: one row per email kept on a task; importing
   it puts the emails back on their tasks (matched by name and created time), skipping ones already there.
+
+## 48A. Dropbox inbox folder and sourceRef ☑ (version 1.7.1; design in docs/PUSH_TASKS.md)
+
+- Each `.json` file in `Apps/<app>/inbox/` (one task or a list) becomes tasks on sync: title, notes, due (plain
+  date = 9am), category (made if missing), starred, steps, source, ref, url. Files are checked whole first, so a
+  bad entry adds nothing; added files are deleted, unreadable ones go to `inbox/failed/`.
+- `Task.sourceRef` keeps the tool's id; a known `source` + `ref` is skipped, and two devices that both added it
+  before syncing are merged to the first.
+- Needs `files.metadata.read` on the Dropbox app; without it Settings says so and sync carries on.
+- Settings → Dropbox describes the folder and copies an example file.
+
+## 54. Tasks from emails, only from addresses you allow ☑ (version 1.7.1; replaces 34)
+
+- Settings → Google → Email to tasks (off by default) and Allowed senders (exact addresses; `@domain` only when
+  written so). Synced.
+- Trigger (decided 2026-11-03): allowed sender **and** subject starting with "Task", or the Gmail label "Task".
+  Gmail's SPF or DKIM must pass for the sender's domain (emails sent from the signed-in account count as
+  checked).
+- Task: subject without "Task", read for dates and #category; source Email; the email in its Emails section;
+  `sourceRef` = Gmail id. Gmail label swaps to "Tasked".
+- Checked on open, resume (without Dropbox) and every sync, at most every 2 minutes, last 14 days.
+- Settings lists the emails ignored this week and why, with Allow this sender.
 

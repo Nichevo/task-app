@@ -27,6 +27,9 @@ class FakeDropbox extends DropboxClient {
 
   @override
   Future<void> backup(String contents, DateTime now) async => backups.add(contents);
+
+  @override
+  Future<List<String>> inboxFiles() async => const [];
 }
 
 /// A tasks.json as a future version might write it: every level has fields this version

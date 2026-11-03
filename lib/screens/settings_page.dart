@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../dropbox.dart';
 import '../google.dart';
+import '../inbox_files.dart';
 import '../location.dart';
 import '../models.dart';
 import '../native.dart';
@@ -209,6 +211,7 @@ class _SettingsPageState extends State<SettingsPage> {
         OutlinedButton(onPressed: store.disconnectGoogle, child: const Text('Sign out')),
       ],
       const SizedBox(height: 8),
+      ..._emailTasksSection(data, hint),
       ListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Starred emails: look back'),
@@ -239,6 +242,73 @@ class _SettingsPageState extends State<SettingsPage> {
         onChanged: (v) => _set(() => data.starredLine = v),
       ),
     ]);
+  }
+
+  /// Item 54: emails from allowed senders become tasks.
+  List<Widget> _emailTasksSection(AppData data, TextStyle hint) {
+    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+    final ignored = [for (final i in store.ignoredEmails) if (i.message.date == null || i.message.date!.isAfter(weekAgo)) i];
+    return [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Email to tasks'),
+        subtitle: const Text('An email from an allowed sender whose subject starts with "Task" (or that has the '
+            'label "Task") becomes a task, for example "Task: Pay council tax friday #Home". Checked when the app '
+            'opens and on each sync; the email is then labelled "Tasked".'),
+        value: data.emailTasks,
+        onChanged: (v) {
+          _set(() => data.emailTasks = v);
+          if (v) store.checkEmailTasks(force: true);
+        },
+      ),
+      if (data.emailTasks) ...[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Allowed senders'),
+          subtitle: Text(data.allowedSenders.isEmpty
+              ? 'None yet: no email can become a task'
+              : data.allowedSenders.join(', ')),
+          trailing: const Icon(Icons.edit_outlined),
+          onTap: () async {
+            final lines = await askLines(context, 'Allowed senders',
+                initial: data.allowedSenders,
+                hint: 'One address per line. Write @example.com to allow a whole domain.');
+            if (lines == null) return;
+            _set(() => data.allowedSenders
+              ..clear()
+              ..addAll({for (final l in lines) if (l.trim().isNotEmpty) l.trim().toLowerCase()}));
+          },
+        ),
+        Text('Emails from anyone else are never added. Gmail\'s own sender check (SPF or DKIM) must pass too, '
+            'because the From line of an email can be faked.', style: hint),
+        if (store.emailTasksNote != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(store.emailTasksNote!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ),
+        if (ignored.isNotEmpty)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text('${ignored.length} ignored this week'),
+            children: [
+              for (final i in ignored)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(i.message.subject),
+                  subtitle: Text('${i.message.from}\n${i.reason}'),
+                  isThreeLine: true,
+                  trailing: i.reason.startsWith('Not on')
+                      ? TextButton(
+                          onPressed: () => store.allowSender(i.message.address),
+                          child: const Text('Allow this sender'))
+                      : null,
+                ),
+            ],
+          ),
+        const SizedBox(height: 8),
+      ],
+    ];
   }
 
   Future<void> _editCategory(TaskCategory c) async {
@@ -717,7 +787,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const Text(
                 'One-time setup: at dropbox.com/developers/apps create an app with '
                 '"Scoped access" and "App folder". On its Permissions tab tick '
-                'files.content.read and files.content.write, then copy the App key here.',
+                'files.content.read, files.content.write and files.metadata.read, then copy the App key here.',
               ),
               const SizedBox(height: 12),
               TextField(
@@ -739,12 +809,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 OutlinedButton(onPressed: store.disconnectDropbox, child: const Text('Disconnect')),
               ]),
+            if (store.inboxFolderNote != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(store.inboxFolderNote!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
+            if (connected)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(const ClipboardData(text: inboxExample));
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('Example inbox file copied')));
+                  },
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: const Text('Copy an example inbox file'),
+                ),
+              ),
             const SizedBox(height: 8),
             Text(
               'Your tasks are saved to Apps/<your app name>/tasks.json in Dropbox. '
               'Connect the same app key on your phone and PC to share one list.\n\n'
               'Inbox: any line written to Apps/<your app name>/inbox.txt becomes a task on the next sync '
-              '(handy with email-to-Dropbox, IFTTT or Zapier). Dates and #categories in the line are read too.',
+              '(handy with email-to-Dropbox, IFTTT or Zapier). Dates and #categories in the line are read too.\n\n'
+              'Inbox folder: tools can also drop one .json file per task into Apps/<your app name>/inbox/ '
+              '(title, notes, due, category, steps, source, ref; format in docs/PUSH_TASKS.md). Each file is '
+              'deleted once added; one that can\'t be read goes to inbox/failed. A repeated "ref" is never '
+              'added twice.',
               style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
             ),
             const Divider(height: 40),

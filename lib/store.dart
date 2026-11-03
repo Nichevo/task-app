@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dropbox.dart';
 import 'google.dart';
 import 'home_widgets.dart';
+import 'inbox_files.dart';
 import 'input_parse.dart';
 import 'location.dart';
 import 'models.dart';
@@ -268,6 +269,7 @@ class AppStore extends ChangeNotifier {
         final remoteText = await db.download();
         final remote = remoteText == null ? null : AppData.fromJson(jsonDecode(remoteText));
         final merged = remote == null ? data : mergeData(data, remote);
+        // Item 54: the merge first, so a task another device already made from an email is known.
         final mergedText = jsonEncode(merged.toJson());
         if (mergedText != jsonEncode(data.toJson())) {
           data = merged;
@@ -278,6 +280,8 @@ class AppStore extends ChangeNotifier {
           unawaited(widgets?.push(data));
         }
         if (await _takeInbox(db)) await _writeData();
+        if (await _takeInboxFolder(db)) await _writeData();
+        if (await checkEmailTasks() > 0) await _writeData();
         final mine = jsonEncode(data.toJson());
         if (remoteText == null || mine != jsonEncode(remote!.toJson())) {
           // Item 62: a newer version wrote the Dropbox copy; keep it before this one saves over it.
@@ -293,6 +297,46 @@ class AppStore extends ChangeNotifier {
       syncing = false;
       notifyListeners();
     }
+  }
+
+  /// Item 48A: why the inbox folder can't be read (a Dropbox permission missing), or null.
+  String? inboxFolderNote;
+
+  /// Adds the tasks in each .json file in Dropbox's inbox/ folder, then deletes just those files.
+  /// A file that isn't a task file goes to inbox/failed. Returns whether anything was added.
+  Future<bool> _takeInboxFolder(DropboxClient db) async {
+    List<String> files;
+    try {
+      files = await db.inboxFiles();
+      inboxFolderNote = null;
+    } on DropboxException catch (e) {
+      if (!'$e'.contains('missing_scope')) rethrow;
+      inboxFolderNote = 'To use the inbox folder, tick files.metadata.read on the Dropbox app\'s Permissions tab, '
+          'then disconnect and connect Dropbox again.';
+      return false;
+    }
+    var any = false;
+    for (final path in files) {
+      final text = await db.downloadPath(path);
+      if (text == null) continue;
+      List<Task> added;
+      try {
+        added = addInboxFile(data, text, DateTime.now());
+      } catch (e) {
+        // Not a task file (bad JSON, no title, wrong types): set it aside, don't retry forever.
+        debugPrint('inbox $path: $e');
+        await db.moveToFailed(path);
+        continue;
+      }
+      any = any || added.isNotEmpty;
+      await db.delete(path);
+    }
+    if (any) {
+      notifyListeners();
+      unawaited(reminders?.schedule(data));
+      unawaited(widgets?.push(data));
+    }
+    return any;
   }
 
   /// Adds any lines written to the inbox file in Dropbox as tasks, then empties it.
@@ -958,6 +1002,93 @@ class AppStore extends ChangeNotifier {
 
   // --- Calendar events ---
 
+  // --- Email to tasks (item 54) ---
+
+  /// Emails that asked to be tasks but were left out (sender not allowed, or failed Gmail's
+  /// sender check), from the last check. Device-only; rebuilt on each check.
+  final ignoredEmails = <IgnoredEmail>[];
+
+  /// Why the last email check didn't work, or null.
+  String? emailTasksNote;
+
+  DateTime? _emailCheckedAt;
+  bool _checkingEmail = false;
+
+  /// "Task" at the start of a subject, with an optional ":" or "-" after it.
+  static final _taskPrefix = RegExp(r'^\s*task\b\s*[:\-–—]?\s*', caseSensitive: false);
+
+  /// Looks in Gmail for emails that should become tasks: from an allowed sender, passing
+  /// Gmail's sender check, and with a subject starting "Task" or the label "Task". Each becomes a
+  /// task (source Email) and is labelled "Tasked" (the "Task" label comes off). Checked at most
+  /// every 2 minutes unless [force]. Returns how many tasks were added.
+  Future<int> checkEmailTasks({bool force = false}) async {
+    final g = google;
+    if (g == null || !data.emailTasks || _checkingEmail) return 0;
+    final last = _emailCheckedAt;
+    if (!force && last != null && DateTime.now().difference(last) < const Duration(minutes: 2)) return 0;
+    _checkingEmail = true;
+    _emailCheckedAt = DateTime.now();
+    var added = 0;
+    try {
+      final tasked = await g.labelId('Tasked');
+      final taskLabel = await g.labelId('Task');
+      final ids = await g.search('newer_than:14d -label:tasked (subject:task OR label:task)', max: 50);
+      final ignored = <IgnoredEmail>[];
+      for (final id in ids) {
+        if (data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
+        final m = await g.message(id, checkSender: true);
+        final bySubject = _taskPrefix.hasMatch(m.subject);
+        if (!bySubject && !m.labels.contains(taskLabel)) continue;
+        // Sent from this very account (it's in Sent): Gmail itself is the check.
+        final own = m.labels.contains('SENT') && m.address == g.email?.toLowerCase();
+        String? why;
+        if (!data.senderAllowed(m.address)) {
+          why = 'Not on your allowed list';
+        } else if (!own && !m.senderVerified) {
+          why = "Failed Gmail's sender check";
+        }
+        if (why != null) {
+          ignored.add(IgnoredEmail(m, why));
+          continue;
+        }
+        final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
+        final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
+        final t = addTask(p.title, due: p.due, categoryId: p.categoryId, source: TaskSource.email)
+          ..sourceRef = id;
+        t.emails.add(emailOf(m));
+        changed(task: t);
+        added++;
+        try {
+          await g.modify(id, add: [tasked], remove: [if (m.labels.contains(taskLabel)) taskLabel]);
+        } catch (e) {
+          debugPrint('label swap: $e');
+        }
+      }
+      ignoredEmails
+        ..clear()
+        ..addAll(ignored);
+      emailTasksNote = null;
+    } on GoogleException catch (e) {
+      emailTasksNote = '$e';
+      if (e.signedOut) await googleSignedOut();
+    } catch (e) {
+      emailTasksNote = 'Could not check Gmail: $e';
+    } finally {
+      _checkingEmail = false;
+      notifyListeners();
+    }
+    return added;
+  }
+
+  /// "Allow this sender" on an ignored email: adds the address and checks again.
+  Future<void> allowSender(String address) async {
+    final a = address.trim().toLowerCase();
+    if (a.isEmpty || data.senderAllowed(a)) return;
+    data.allowedSenders.add(a);
+    changed(settings: true);
+    await checkEmailTasks(force: true);
+  }
+
   // --- Starred emails (item 55) ---
 
   /// A new task made from a starred email, with the email kept on it.
@@ -1066,4 +1197,12 @@ class AppStore extends ChangeNotifier {
     if (!data.collapsed.remove(categoryKey)) data.collapsed.add(categoryKey);
     changed(settings: true);
   }
+}
+
+/// Item 54: an email that asked to be a task but wasn't made one, and why.
+class IgnoredEmail {
+  IgnoredEmail(this.message, this.reason);
+
+  final GmailMessage message;
+  final String reason;
 }
