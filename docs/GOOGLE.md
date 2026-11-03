@@ -4,8 +4,10 @@ Task Blocks reads your Gmail straight from the app. There is no server in betwee
 devices except what already syncs through Dropbox (a task's emails: subject, sender, date, a short snippet and
 the Gmail id). Sign-in works on the phone, Windows and Mac. The iPad comes later.
 
-The permission asked for is `gmail.modify`. That lets the app read emails and change their labels and stars.
-It can't send or delete mail.
+The permission asked for is `gmail.modify`. The app uses it only to read emails and change their labels and stars.
+Google describes this permission as "Read, compose, and send emails", because `gmail.modify` covers sending too,
+but Task Blocks never sends or deletes mail. There is no narrower Gmail permission that allows changing labels and
+stars.
 
 ## One-time setup (about 10 minutes)
 

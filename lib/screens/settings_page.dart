@@ -251,7 +251,7 @@ class _SettingsPageState extends State<SettingsPage> {
           label: Text(_gBusy ? 'Waiting for the browser…' : 'Sign in with Google'),
         ),
         const SizedBox(height: 8),
-        Text('The app asks to read emails and change their labels and stars. It cannot send or delete mail.',
+        Text('The app reads emails and changes their labels and stars. Google\'s screen says the permission also covers sending, but the app never sends or deletes mail.',
             style: hint),
       ] else ...[
         Text('Signed in as ${g.email ?? 'your Google account'}'),
