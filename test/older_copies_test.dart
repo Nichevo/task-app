@@ -30,6 +30,12 @@ class FakeDropbox extends DropboxClient {
 
   @override
   Future<List<String>> inboxFiles() async => const [];
+
+  @override
+  Future<String?> downloadPath(String path) async => files[path];
+
+  @override
+  Future<void> uploadPath(String path, String contents) async => files[path] = contents;
 }
 
 /// A tasks.json as a future version might write it: every level has fields this version

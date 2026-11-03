@@ -102,6 +102,11 @@ class DropboxClient {
 
   Future<String?> downloadPath(String path) => _download(path);
 
+  Future<void> uploadPath(String path, String contents) => _upload(path, contents);
+
+  /// Item 69: each device's own settings, one file per kind of device.
+  static const devicesFolder = '/devices';
+
   Future<void> delete(String path) => _rpc('/2/files/delete_v2', {'path': path}, notFoundOk: true);
 
   /// Moves a file that couldn't be read to inbox/failed, so it isn't tried again and again.

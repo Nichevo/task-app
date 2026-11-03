@@ -714,8 +714,32 @@ didn't know when it saved, and that loss then synced to every device.
   board too. Applies when a task is added in that category or moved into it; it never takes a task off.
 - Turning it on offers to put the category's open tasks on the board now.
 
-## 69. Device settings backup ○ (planned, next PR)
+## 69. Device settings backup ☑ (version 1.8.1)
 
-- Most settings already sync in tasks.json. The ones kept on each device (places, view choices, location
-  recording, the Google client ID and secret) will be saved to Dropbox per device and offered back after a
-  reinstall. Sign-ins are not copied.
+- Most settings already sync in tasks.json. The ones kept on each device (places, list and board view choices,
+  location recording, the Google client ID and secret) are saved on each sync, when they changed, to
+  `Apps/<app>/devices/<kind>.json` (android, iphone-or-ipad, mac, windows). Sign-ins are never copied.
+- After connecting Dropbox, the first sync looks for this kind of device's file. If it holds something different,
+  a line at the top of the list offers Restore or Not now; nothing is saved over it until answered.
+- Settings → Dropbox → Restore settings from a device lists every device's file, newest first, so an iPad can
+  take the Mac's Google client too. A Google client already on the device is never replaced.
+
+## 71. Battery and speed review ☑ (version 1.8.2)
+
+Review of the whole app (2026-11-03) for battery use, speed and general bugs. Fixed:
+
+- Reminders: every save cancelled and re-set every notification (up to a few hundred system calls). Now skipped
+  unless something a reminder depends on changed, and at least once a day.
+- Widgets: every save redrew all eight widgets. Now only when the data they show changed.
+- Email to tasks: each check (every sync, at most every 2 minutes) downloaded every matching email from the last
+  14 days again, including ones already found not to be tasks, and listed the Gmail labels twice. These are now
+  remembered while the app runs.
+- The minute tick that re-colours the list kept running in the background; now only while on screen.
+- Two saves at the same moment (a sync and an edit) shared one temporary file, so one could fail. Saves now
+  take turns.
+
+Looked at and fine: place reminders use Android geofencing (no constant GPS), location is only read when adding or
+ticking off (a recent fix is reused), widget refresh is one 15-minute job only while a widget exists, reminders
+use inexact alarms, and edits are batched (0.4 s save, 2 s upload). Each sync is still about four small Dropbox
+calls; checking the file's revision first would save one download but needs the files.metadata.read permission,
+so it is left for now.

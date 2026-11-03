@@ -93,8 +93,13 @@ class HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     // Re-colour the blocks as they age, and bring back snoozed tasks.
-    _tick = Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}));
+    // Only while the app is on screen: in the background there is nothing to redraw.
+    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) setState(() {});
+    });
     _lifecycle = AppLifecycleListener(onResume: () {
+      setState(() {}); // Colours and snoozes may have moved on while it was hidden.
       store.syncIfStale();
       _checkStarred();
       if (store.dropbox == null) store.checkEmailTasks();
@@ -483,6 +488,17 @@ class HomePageState extends State<HomePage> {
             content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
                 'Everything keeps working, and nothing the newer version added is lost.'),
             actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
+          ),
+        if (store.restoreOffer case final b?)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.settings_backup_restore),
+            content: Text('Dropbox has settings saved from your ${b.device} '
+                'on ${DateFormat('d MMM').format(b.savedAt.toLocal())}: ${b.describe()}. Restore them here?'),
+            actions: [
+              TextButton(onPressed: store.dismissRestoreOffer, child: const Text('Not now')),
+              TextButton(onPressed: () => store.restoreDeviceSettings(b), child: const Text('Restore')),
+            ],
           ),
         if (_starredCount > 0 && data.starredLine && !_starredHidden)
           MaterialBanner(
