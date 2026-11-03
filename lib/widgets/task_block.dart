@@ -34,6 +34,7 @@ class TaskBlock extends StatelessWidget {
     this.onStep,
     this.onSkip,
     this.stageName,
+    this.boxName,
     this.onBoard,
   });
 
@@ -63,6 +64,9 @@ class TaskBlock extends StatelessWidget {
 
   /// The Kanban stage it is in, shown as a small label; null when not on the board.
   final String? stageName;
+
+  /// Item 60: the matrix box it is in, shown as a small label; null when not on the matrix.
+  final String? boxName;
 
   /// Puts it on the Kanban board (offered in the expanded block).
   final VoidCallback? onBoard;
@@ -170,6 +174,18 @@ class TaskBlock extends StatelessWidget {
                                     ),
                                   ),
                                 ),
+                              if (boxName != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Tooltip(
+                                    message: 'On the matrix',
+                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                      const Icon(Icons.grid_view, size: 12, color: ink),
+                                      const SizedBox(width: 2),
+                                      Text(boxName!, style: const TextStyle(fontSize: 11, color: ink)),
+                                    ]),
+                                  ),
+                                ),
                               if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
                               if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
                             ]),
@@ -211,6 +227,8 @@ class TaskBlock extends StatelessWidget {
         if (task.repeat != null) _line('Repeats', task.repeat!.describe()),
         if (task.estimate != null) _line('Takes', 'about ${describeMinutes(task.estimate!)}'),
         if (stageName != null) _line('Board', stageName!),
+        if (boxName != null) _line('Matrix', boxName!),
+        if ((task.waitingOn ?? '').isNotEmpty) _line('Waiting on', task.waitingOn!),
         if (task.place != null) _line('Place', '${task.placeLeave ? 'Leaving' : 'Arriving at'} ${task.place}'),
         if (lockedBy != null) _line('After', lockedBy!),
         if (task.isSnoozed(DateTime.now())) _line('Snoozed', 'until ${dateTimeFmt.format(task.snoozedUntil!)}'),

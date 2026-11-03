@@ -93,7 +93,13 @@ class _StarredPageState extends State<StarredPage> {
               Navigator.pop(
                   c,
                   store.addTaskFromEmail(m,
-                      title: p.title, due: p.due, categoryId: p.categoryId, notes: notes.text.trim()));
+                      title: p.title,
+                      due: p.due,
+                      categoryId: p.categoryId,
+                      notes: notes.text.trim(),
+                      box: p.box,
+                      board: p.board,
+                      star: p.star));
             },
             child: const Text('Add'),
           ),

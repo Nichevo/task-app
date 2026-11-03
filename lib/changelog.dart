@@ -9,6 +9,14 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.0', 'November 2026', [
+    'Matrix (menu): put a task in Do, Decide, Delegate or Delete from its page, then drag tasks between the boxes. Only tasks you put there show. Category, date and search filters like the Kanban board.',
+    'Decide asks when you\'ll do it, Delegate asks who it\'s waiting on, and Delete offers to tick it off. Rename the boxes in Settings, and turn on an "Urgent?" hint for tasks due soon.',
+    'Quick-add words: !do, !decide, !delegate, !delete, !board and !star when typing a task. Settings has a new Quick-add words section listing everything the add box reads, where you can rename or switch them off.',
+    'Search everything (menu): open tasks, steps, emails on tasks and the archive, grouped, with the matches highlighted and filters. Accents don\'t matter, and "quoted words" stay together.',
+    'Categories can put new tasks on the Kanban board (Settings, Categories), for example Work, in the stage you pick.',
+    'CSV export adds Matrix box and Waiting on columns.',
+  ]),
   Release('1.7.1', 'November 2026', [
     'Email to tasks (Settings, Google): an email from one of your allowed senders whose subject starts with "Task" (or that has the Gmail label "Task") becomes a task. "Task: Pay council tax friday #Home" reads the date and category.',
     'Only addresses you allow, and only when Gmail\'s own sender check passes, so a faked From line is ignored. Settings lists what was ignored this week, with "Allow this sender".',

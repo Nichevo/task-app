@@ -21,6 +21,8 @@ class Task {
     List<TaskStep>? steps,
     this.eventId,
     this.sourceRef,
+    this.matrixBox,
+    this.waitingOn,
     this.source,
     this.addedWhere,
     this.doneWhere,
@@ -49,7 +51,7 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails', 'ref',
+    'stepsBoard', 'emails', 'ref', 'box', 'waiting',
   };
 
   final String id;
@@ -89,6 +91,13 @@ class Task {
   /// Item 48: the sending tool's own id for it (an email's Gmail id, a Zapier item...), so the
   /// same thing is never added twice, even by two devices at once. See [mergeData].
   String? sourceRef;
+
+  /// Item 60: the urgent / important box it is in ([MatrixBox] id), or null when it isn't on
+  /// the matrix. Only tasks put there show on it.
+  String? matrixBox;
+
+  /// Item 60: who or what a Delegate task is waiting on.
+  String? waitingOn;
 
   /// How the task got into the app: one of the [TaskSource] names, or another name sent by an
   /// outside tool. Null for tasks made before sources were recorded ("Unknown").
@@ -169,6 +178,7 @@ class Task {
       ..placeLeave = placeLeave
       ..seriesId = series
       ..stepsOnBoard = stepsOnBoard
+      ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
     // Each repeat starts with the checklist unticked.
     next.steps.addAll([for (final st in steps) TaskStep.create(st.title)]);
@@ -202,6 +212,8 @@ class Task {
         if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
         if (eventId != null) 'eventId': eventId,
         if (sourceRef != null) 'ref': sourceRef,
+        if (matrixBox != null) 'box': matrixBox,
+        if (waitingOn != null && waitingOn!.isNotEmpty) 'waiting': waitingOn,
         if (source != null) 'source': source,
         if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
@@ -234,6 +246,8 @@ class Task {
         steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
         eventId: j['eventId'] as String?,
         sourceRef: j['ref'] as String?,
+        matrixBox: MatrixBox.byId(j['box'] as String?)?.id,
+        waitingOn: j['waiting'] as String?,
         // Older calendar tasks are known to be from the calendar even without a source.
         source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
         addedWhere: GeoPoint.tryParse(j['addedWhere']),
@@ -950,15 +964,28 @@ class Repeat {
 }
 
 class TaskCategory {
-  TaskCategory({required this.id, required this.name, List<String>? keywords, Map<String, dynamic>? extra})
+  TaskCategory(
+      {required this.id,
+      required this.name,
+      List<String>? keywords,
+      this.boardByDefault = false,
+      this.boardStage,
+      this.stepsOnBoard = false,
+      Map<String, dynamic>? extra})
       : keywords = keywords ?? [],
         extra = extra ?? {};
+
+  /// Item 67: tasks that get this category go on the Kanban board, in [boardStage] (the first
+  /// stage when null), with their steps on it too when [stepsOnBoard].
+  bool boardByDefault;
+  String? boardStage;
+  bool stepsOnBoard;
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'name', 'keywords'};
+  static const _known = {'id', 'name', 'keywords', 'board', 'boardStage', 'boardSteps'};
 
   final String id;
   String name;
@@ -969,12 +996,23 @@ class TaskCategory {
   factory TaskCategory.create(String name) =>
       TaskCategory(id: 'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name);
 
-  Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, if (keywords.isNotEmpty) 'keywords': keywords};
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'id': id,
+        'name': name,
+        if (keywords.isNotEmpty) 'keywords': keywords,
+        if (boardByDefault) 'board': true,
+        if (boardStage != null) 'boardStage': boardStage,
+        if (stepsOnBoard) 'boardSteps': true,
+      };
 
   factory TaskCategory.fromJson(Map<String, dynamic> j) => TaskCategory(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         keywords: [for (final k in j['keywords'] as List? ?? []) k as String],
+        boardByDefault: j['board'] as bool? ?? false,
+        boardStage: j['boardStage'] as String?,
+        stepsOnBoard: j['boardSteps'] as bool? ?? false,
         extra: unknownFields(j, _known),
       );
 }
@@ -1026,9 +1064,14 @@ class AppData {
     this.starredLine = false,
     this.emailTasks = false,
     List<String>? allowedSenders,
+    Map<String, String>? matrixNames,
+    this.urgentDays = 0,
+    Map<String, String>? quickWords,
   })  : active = active ?? [],
         hiddenEmails = hiddenEmails ?? {},
         allowedSenders = allowedSenders ?? [],
+        matrixNames = matrixNames ?? {},
+        quickWords = quickWords ?? {},
         extra = extra ?? {},
         archived = archived ?? [],
         deleted = deleted ?? {},
@@ -1172,6 +1215,26 @@ class AppData {
   /// Exact addresses ("me@work.example"), or a whole domain when written "@work.example".
   final List<String> allowedSenders;
 
+  /// Item 60: names given to the matrix boxes in Settings, by [MatrixBox] id.
+  final Map<String, String> matrixNames;
+
+  /// Item 60: show "Urgent?" on a task in a not-urgent box when it is due within this many
+  /// days; 0 for off.
+  int urgentDays;
+
+  /// Item 64: the quick-add words changed in Settings, by [QuickWord] id. An empty string turns
+  /// that word off; a missing entry means its usual word.
+  final Map<String, String> quickWords;
+
+  /// The name of a matrix box, as renamed in Settings.
+  String boxName(MatrixBox b) {
+    final n = matrixNames[b.id]?.trim();
+    return n == null || n.isEmpty ? b.label : n;
+  }
+
+  /// Open tasks on the matrix.
+  Iterable<Task> get matrixTasks => active.where((t) => t.matrixBox != null);
+
   /// Whether [address] is on the allowed list.
   bool senderAllowed(String address) {
     final a = address.trim().toLowerCase();
@@ -1203,6 +1266,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
+    'matrixNames', 'urgentDays', 'quickWords',
   };
 
   Map<String, dynamic> toJson() => {
@@ -1245,6 +1309,9 @@ class AppData {
         if (starredLine) 'starredLine': true,
         if (emailTasks) 'emailTasks': true,
         if (allowedSenders.isNotEmpty) 'allowedSenders': allowedSenders,
+        if (matrixNames.isNotEmpty) 'matrixNames': matrixNames,
+        if (urgentDays > 0) 'urgentDays': urgentDays,
+        if (quickWords.isNotEmpty) 'quickWords': quickWords,
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
@@ -1327,6 +1394,9 @@ class AppData {
         starredLine: j['starredLine'] as bool? ?? false,
         emailTasks: j['emailTasks'] as bool? ?? false,
         allowedSenders: [for (final a in j['allowedSenders'] as List? ?? []) a as String],
+        matrixNames: {for (final e in (j['matrixNames'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
+        urgentDays: (j['urgentDays'] as num?)?.toInt() ?? 0,
+        quickWords: {for (final e in (j['quickWords'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
         extra: unknownFields(j, _known),
       );
 }
@@ -1500,6 +1570,9 @@ AppData mergeData(AppData a, AppData b) {
     starredLine: settingsFrom.starredLine,
     emailTasks: settingsFrom.emailTasks,
     allowedSenders: settingsFrom.allowedSenders,
+    matrixNames: settingsFrom.matrixNames,
+    urgentDays: settingsFrom.urgentDays,
+    quickWords: settingsFrom.quickWords,
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},
   );
@@ -1513,4 +1586,23 @@ enum StarredAfter {
 
   const StarredAfter(this.label);
   final String label;
+}
+
+/// Item 60: the four boxes of the urgent / important matrix.
+enum MatrixBox {
+  doNow('do', 'Do', 'Urgent and important', true, true),
+  decide('decide', 'Decide', 'Important, not urgent', false, true),
+  delegate('delegate', 'Delegate', 'Urgent, not important', true, false),
+  delete('delete', 'Delete', 'Neither urgent nor important', false, false);
+
+  const MatrixBox(this.id, this.label, this.meaning, this.urgent, this.important);
+
+  /// Saved on the task; never changes, whatever the box is called.
+  final String id;
+  final String label;
+  final String meaning;
+  final bool urgent;
+  final bool important;
+
+  static MatrixBox? byId(String? id) => values.where((b) => b.id == id).firstOrNull;
 }

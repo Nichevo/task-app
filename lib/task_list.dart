@@ -53,11 +53,92 @@ bool passesFilter(Task t, QuickFilter f, DateTime now) {
 
 /// Whether [t] matches what was typed in the search box: every word must appear somewhere in
 /// its name, notes or checklist, ignoring case.
-bool matchesSearch(Task t, String query) {
-  final words = query.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
-  if (words.isEmpty) return true;
-  final text = [t.title, t.notes, for (final s in t.steps) s.title].join('\n').toLowerCase();
-  return words.every(text.contains);
+bool matchesSearch(Task t, String query, [AppData? data]) {
+  final terms = searchTerms(query);
+  if (terms.isEmpty) return true;
+  final text = foldText(searchText(t, data));
+  return terms.every(text.contains);
+}
+
+/// Item 65: the words of a search, lower case without accents. "Quoted phrases" stay whole.
+List<String> searchTerms(String query) {
+  final out = <String>[];
+  for (final m in RegExp(r'"([^"]*)"|(\S+)').allMatches(query)) {
+    final w = foldText((m.group(1) ?? m.group(2) ?? '').trim());
+    if (w.isNotEmpty && w != '"') out.add(w);
+  }
+  return out;
+}
+
+/// Everything about a task that search looks in: title, notes, steps, category, waiting on,
+/// place, and its emails (subject, sender, snippet).
+String searchText(Task t, [AppData? data]) => [
+      t.title,
+      t.notes,
+      for (final s in t.steps) s.title,
+      if (data?.category(t.categoryId) case final c?) c.name,
+      t.waitingOn ?? '',
+      t.place ?? '',
+      for (final e in t.emails) ...[e.subject, e.from, e.snippet],
+    ].join('\n');
+
+const _accents = {
+  'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'æ': 'ae', 'ç': 'c',
+  'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', 'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
+  'ñ': 'n', 'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o', 'ø': 'o', 'œ': 'oe',
+  'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ý': 'y', 'ÿ': 'y', 'ß': 'ss',
+  '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"',
+};
+
+/// Lower case with common accents taken off, so "cafe" finds "Café". Each character maps to
+/// one or more, so use [foldMap] to find where a match sits in the original text.
+String foldText(String s) {
+  final lower = s.toLowerCase();
+  if (!lower.runes.any((r) => r > 127)) return lower;
+  final b = StringBuffer();
+  for (final ch in lower.split('')) {
+    b.write(_accents[ch] ?? ch);
+  }
+  return b.toString();
+}
+
+/// Where each search term sits in [text], as (start, end) ranges of the original text, merged
+/// and in order. Used to highlight matches.
+List<(int, int)> matchRanges(String text, List<String> terms) {
+  if (terms.isEmpty || text.isEmpty) return const [];
+  // Folded text and a map from each folded character back to its original index.
+  final folded = StringBuffer();
+  final back = <int>[];
+  final lower = text.toLowerCase();
+  // toLowerCase can change length for a few characters; fall back to no highlight then.
+  if (lower.length != text.length) return const [];
+  for (var i = 0; i < lower.length; i++) {
+    final f = _accents[lower[i]] ?? lower[i];
+    folded.write(f);
+    for (var k = 0; k < f.length; k++) {
+      back.add(i);
+    }
+  }
+  final fs = folded.toString();
+  final raw = <(int, int)>[];
+  for (final term in terms) {
+    var at = fs.indexOf(term);
+    while (at >= 0) {
+      raw.add((back[at], back[at + term.length - 1] + 1));
+      at = fs.indexOf(term, at + term.length);
+    }
+  }
+  raw.sort((a, b) => a.$1.compareTo(b.$1));
+  final out = <(int, int)>[];
+  for (final r in raw) {
+    if (out.isNotEmpty && r.$1 <= out.last.$2) {
+      final last = out.removeLast();
+      out.add((last.$1, r.$2 > last.$2 ? r.$2 : last.$2));
+    } else {
+      out.add(r);
+    }
+  }
+  return out;
 }
 
 /// [tasks] in the order chosen in Settings. Sorting keeps the hand-made order between equals,

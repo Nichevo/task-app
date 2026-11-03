@@ -8,17 +8,74 @@ enum CategorySource { none, tag, keyword, learned }
 
 /// What the app read out of a typed line: the words, a due date and a category.
 class ParsedInput {
-  const ParsedInput(this.title, {this.due, this.categoryId, this.source = CategorySource.none});
+  const ParsedInput(this.title,
+      {this.due, this.categoryId, this.source = CategorySource.none, this.box, this.board = false, this.star = false});
 
   final String title;
   final DateTime? due;
   final String? categoryId;
   final CategorySource source;
+
+  /// Item 64: quick-add words found ("!do", "!board", "!star").
+  final MatrixBox? box;
+  final bool board;
+  final bool star;
+}
+
+/// Item 64: the "!" words the add box understands.
+enum QuickWord {
+  doBox('do', 'Puts it in the matrix box', MatrixBox.doNow),
+  decide('decide', 'Puts it in the matrix box', MatrixBox.decide),
+  delegate('delegate', 'Puts it in the matrix box', MatrixBox.delegate),
+  delete('delete', 'Puts it in the matrix box', MatrixBox.delete),
+  board('board', 'Puts it on the Kanban board, in the first stage', null),
+  star('star', 'Stars it', null);
+
+  const QuickWord(this.id, this.what, this.box);
+
+  /// Saved in [AppData.quickWords]; never changes.
+  final String id;
+  final String what;
+  final MatrixBox? box;
+}
+
+/// The word that triggers [w] (without the "!"), lower case; null when it is turned off.
+/// A box's word follows the box's name unless it was set by hand.
+String? quickWord(AppData data, QuickWord w) {
+  final set = data.quickWords[w.id];
+  if (set != null) {
+    final x = set.trim().toLowerCase().replaceFirst(RegExp(r'^!+'), '');
+    return x.isEmpty ? null : x;
+  }
+  final b = w.box;
+  if (b != null) return data.boxName(b).toLowerCase().replaceAll(RegExp(r'[^\w-]'), '');
+  return w.id;
+}
+
+/// Takes the "!" words out of [text]: what they asked for, and the text without them.
+({String text, MatrixBox? box, bool board, bool star}) takeQuickWords(String text, AppData data) {
+  final words = <String, QuickWord>{
+    for (final w in QuickWord.values)
+      if (quickWord(data, w) case final x? when x.isNotEmpty) x: w,
+  };
+  MatrixBox? box;
+  var board = false, star = false;
+  final out = text.replaceAllMapped(RegExp(r'(^|\s)!([\w-]+)(?=\s|$)'), (m) {
+    final w = words[m.group(2)!.toLowerCase()];
+    if (w == null) return m.group(0)!;
+    if (w.box != null) box = w.box;
+    if (w == QuickWord.board) board = true;
+    if (w == QuickWord.star) star = true;
+    return m.group(1)!;
+  });
+  return (text: out.replaceAll(RegExp(r'\s+'), ' ').trim(), box: box, board: board, star: star);
 }
 
 /// Reads a due date ("tomorrow 5pm"), a "#category" tag, a category keyword or, failing
 /// those, a category learned from the tasks already filed, out of [text].
 ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify = true}) {
+  final quick = takeQuickWords(text, data);
+  text = quick.text.isEmpty ? text : quick.text;
   final q = QuickDate.parse(text, now);
   var title = q.title;
   String? categoryId;
@@ -52,7 +109,8 @@ ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify =
     if (categoryId != null) source = CategorySource.learned;
   }
 
-  return ParsedInput(title.isEmpty ? text.trim() : title, due: q.due, categoryId: categoryId, source: source);
+  return ParsedInput(title.isEmpty ? text.trim() : title,
+      due: q.due, categoryId: categoryId, source: source, box: quick.box, board: quick.board, star: quick.star);
 }
 
 /// Splits pasted or shared text into one task per line, dropping bullets and numbering.

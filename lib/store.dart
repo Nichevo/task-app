@@ -54,6 +54,10 @@ class AppStore extends ChangeNotifier {
   /// The quick filter chip chosen above the list (device-only).
   QuickFilter quickFilter = QuickFilter.all;
 
+  /// Item 60: the Matrix page's last filter on this device (category null = all, '' = none).
+  QuickFilter matrixFilter = QuickFilter.all;
+  String? matrixCategory;
+
   /// Kanban board on this device (item 56): every task's steps unfolded, and the lanes view.
   bool boardShowSteps = false;
   bool boardLanes = false;
@@ -107,6 +111,8 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
+      matrixCategory = s['matrixCategory'] as String?;
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
@@ -191,6 +197,8 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
+      if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
       if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
@@ -322,6 +330,7 @@ class AppStore extends ChangeNotifier {
       List<Task> added;
       try {
         added = addInboxFile(data, text, DateTime.now());
+        added.forEach(_boardByCategory);
       } catch (e) {
         // Not a task file (bad JSON, no title, wrong types): set it aside, don't retry forever.
         debugPrint('inbox $path: $e');
@@ -347,9 +356,11 @@ class AppStore extends ChangeNotifier {
     if (lines.isEmpty) return false;
     for (final line in lines) {
       final p = parseInput(line, data, DateTime.now());
-      data.active.add(Task.create(p.title, source: TaskSource.inbox)
+      final t = Task.create(p.title, source: TaskSource.inbox)
         ..dueAt = p.due
-        ..categoryId = p.categoryId);
+        ..categoryId = p.categoryId;
+      data.active.add(t);
+      _applyNew(t, box: p.box, board: p.board, star: p.star);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
     await db.clearInbox();
@@ -408,16 +419,63 @@ class AppStore extends ChangeNotifier {
 
   /// [source] says how it got here (a [TaskSource] name).
   Task addTask(String title,
-      {DateTime? due, String? categoryId, String notes = '', String? eventId, String source = TaskSource.typed}) {
+      {DateTime? due,
+      String? categoryId,
+      String notes = '',
+      String? eventId,
+      String source = TaskSource.typed,
+      MatrixBox? box,
+      bool board = false,
+      bool star = false,
+      KanbanStage? stage}) {
     final t = Task.create(title.trim(), source: source)
       ..dueAt = due
       ..categoryId = categoryId
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
+    _applyNew(t, box: box, board: board, star: star, stage: stage);
     changed(order: true);
     _locate([t]);
     return t;
+  }
+
+  /// A new task from a typed or sent line: what the quick-add words asked for (item 64), and the
+  /// board if its category goes there by default (item 67).
+  /// [stage] puts it straight into that stage (the + on a board column).
+  void _applyNew(Task t, {MatrixBox? box, bool board = false, bool star = false, KanbanStage? stage}) {
+    if (box != null) t.matrixBox = box.id;
+    if (star) t.starred = true;
+    if (stage != null || board) {
+      setOnBoard(t, true, stage: stage ?? data.stages.firstOrNull);
+    } else {
+      _boardByCategory(t);
+    }
+  }
+
+  /// Item 67: puts [t] on the board when its category says so (it never takes it off).
+  void _boardByCategory(Task t) {
+    final c = data.category(t.categoryId);
+    if (c == null || !c.boardByDefault || t.kanban || t.closedAt != null) return;
+    if (c.stepsOnBoard) t.stepsOnBoard = true;
+    setOnBoard(t, true, stage: data.stage(c.boardStage) ?? data.stages.firstOrNull);
+  }
+
+  /// Changes a task's category, putting it on the board if the new category goes there (item 67).
+  void setCategory(Task t, String? categoryId) {
+    t.categoryId = categoryId;
+    _boardByCategory(t);
+    changed(task: t);
+  }
+
+  /// Item 67: the open tasks in [c] not on the board yet, for "Put them on the board now?".
+  List<Task> offBoardIn(TaskCategory c) => [for (final t in data.active) if (t.categoryId == c.id && !t.kanban) t];
+
+  /// Puts every open task in [c] on the board (when its default is first turned on).
+  void boardAllIn(TaskCategory c) {
+    for (final t in offBoardIn(c)) {
+      _boardByCategory(t);
+    }
   }
 
   /// Adds one task per line, reading dates and categories out of each line.
@@ -426,11 +484,13 @@ class AppStore extends ChangeNotifier {
     for (final line in lines) {
       final p = parseInput(line, data, DateTime.now());
       if (p.title.isEmpty) continue;
-      added.add(Task.create(p.title, source: source)
+      final t = Task.create(p.title, source: source)
         ..dueAt = p.due
-        ..categoryId = p.categoryId);
+        ..categoryId = p.categoryId;
+      data.active.add(t);
+      _applyNew(t, box: p.box, board: p.board, star: p.star);
+      added.add(t);
     }
-    data.active.addAll(added);
     changed(order: true);
     _locate(added);
     return added;
@@ -808,9 +868,8 @@ class AppStore extends ChangeNotifier {
   /// A new task straight into [stage] from the + on a board column.
   Task addToStage(String title, KanbanStage stage) {
     final p = parseInput(title, data, DateTime.now());
-    final t = addTask(p.title, due: p.due, categoryId: p.categoryId, source: TaskSource.kanban);
-    setOnBoard(t, true, stage: stage);
-    return t;
+    return addTask(p.title,
+        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, stage: stage);
   }
 
   KanbanStage addStage(String name) {
@@ -1002,6 +1061,26 @@ class AppStore extends ChangeNotifier {
 
   // --- Calendar events ---
 
+  // --- Matrix (item 60) ---
+
+  /// Puts [t] in box [b], or takes it off the matrix when null.
+  void setBox(Task t, MatrixBox? b) {
+    t.matrixBox = b?.id;
+    changed(task: t);
+  }
+
+  void setWaitingOn(Task t, String? text) {
+    t.waitingOn = text == null || text.trim().isEmpty ? null : text.trim();
+    changed(task: t);
+  }
+
+  /// Item 60 hint: in a not-urgent box but due within the days set in Settings.
+  bool looksUrgent(Task t, DateTime now) {
+    final b = MatrixBox.byId(t.matrixBox), due = t.dueAt;
+    if (b == null || b.urgent || due == null || data.urgentDays <= 0) return false;
+    return due.isBefore(DateTime(now.year, now.month, now.day + data.urgentDays + 1));
+  }
+
   // --- Email to tasks (item 54) ---
 
   /// Emails that asked to be tasks but were left out (sender not allowed, or failed Gmail's
@@ -1053,7 +1132,8 @@ class AppStore extends ChangeNotifier {
         }
         final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
         final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
-        final t = addTask(p.title, due: p.due, categoryId: p.categoryId, source: TaskSource.email)
+        final t = addTask(p.title,
+            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star)
           ..sourceRef = id;
         t.emails.add(emailOf(m));
         changed(task: t);
@@ -1093,8 +1173,15 @@ class AppStore extends ChangeNotifier {
 
   /// A new task made from a starred email, with the email kept on it.
   Task addTaskFromEmail(GmailMessage m,
-      {required String title, DateTime? due, String? categoryId, String notes = '', String source = TaskSource.starredEmail}) {
-    final t = addTask(title, due: due, categoryId: categoryId, notes: notes, source: source);
+      {required String title,
+      DateTime? due,
+      String? categoryId,
+      String notes = '',
+      String source = TaskSource.starredEmail,
+      MatrixBox? box,
+      bool board = false,
+      bool star = false}) {
+    final t = addTask(title, due: due, categoryId: categoryId, notes: notes, source: source, box: box, board: board, star: star);
     t.emails.add(emailOf(m));
     changed(task: t);
     unawaited(_afterStarUse(m));
@@ -1168,6 +1255,42 @@ class AppStore extends ChangeNotifier {
 
   void renameCategory(TaskCategory c, String name) {
     c.name = name.trim();
+    changed(settings: true);
+  }
+
+  /// Item 67: whether new tasks in [c] go on the board, which stage, and steps too.
+  void setCategoryBoard(TaskCategory c, {required bool on, String? stageId, bool steps = false}) {
+    c
+      ..boardByDefault = on
+      ..boardStage = on ? stageId : null
+      ..stepsOnBoard = on && steps;
+    changed(settings: true);
+  }
+
+  /// Item 60: renames a matrix box; an empty name goes back to the standard one.
+  void setBoxName(MatrixBox b, String name) {
+    final n = name.trim();
+    if (n.isEmpty || n == b.label) {
+      data.matrixNames.remove(b.id);
+    } else {
+      data.matrixNames[b.id] = n;
+    }
+    changed(settings: true);
+  }
+
+  void setUrgentDays(int days) {
+    data.urgentDays = days;
+    changed(settings: true);
+  }
+
+  /// Item 64: sets the word for a quick-add action; null goes back to the standard word and
+  /// '' turns it off.
+  void setQuickWord(String id, String? word) {
+    if (word == null) {
+      data.quickWords.remove(id);
+    } else {
+      data.quickWords[id] = word.trim().toLowerCase().replaceFirst(RegExp(r'^!+'), '');
+    }
     changed(settings: true);
   }
 

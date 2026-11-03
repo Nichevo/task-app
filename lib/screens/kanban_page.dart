@@ -210,7 +210,7 @@ class _KanbanPageState extends State<KanbanPage> {
     final shown = data.boardTasks.where((t) =>
         _columnOf(t) == s.id &&
         (q.isNotEmpty
-            ? matchesSearch(t, q) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
+            ? matchesSearch(t, q, store.data) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
             : passesFilter(t, _filter, now) &&
                 (_category == null ||
                     (_category!.isEmpty ? data.category(t.categoryId) == null : t.categoryId == _category))));

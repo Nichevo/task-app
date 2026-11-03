@@ -47,8 +47,8 @@ Map<String, dynamic> futureFile() {
 
   final j = jsonDecode(jsonEncode(d.toJson())) as Map<String, dynamic>;
   j['newestApp'] = '9.0.0';
-  j['matrixNames'] = {'do': 'Do', 'decide': 'Decide'};
-  (j['categories'] as List).first['boardByDefault'] = true;
+  j['focusMode'] = {'on': true, 'until': '18:00'};
+  (j['categories'] as List).first['icon'] = true;
   (j['stages'] as List).first['wip'] = {'warn': 3};
   (j['templates'] as List).first['icon'] = 'plane';
   ((j['done'] as Map)['old'] as Map)['box'] = 'do';
@@ -69,8 +69,8 @@ Map<String, dynamic> written(AppData d) => jsonDecode(jsonEncode(d.toJson())) as
 void main() {
   test('fields from a newer version survive a read and write at every level', () {
     final out = written(read(futureFile()));
-    expect(out['matrixNames'], {'do': 'Do', 'decide': 'Decide'});
-    expect((out['categories'] as List).first['boardByDefault'], isTrue);
+    expect(out['focusMode'], {'on': true, 'until': '18:00'});
+    expect((out['categories'] as List).first['icon'], isTrue);
     expect((out['stages'] as List).first['wip'], {'warn': 3});
     expect((out['templates'] as List).first['icon'], 'plane');
     expect(((out['done'] as Map)['old'] as Map)['box'], 'do');
@@ -103,23 +103,23 @@ void main() {
 
   test('known fields never end up in the kept extras', () {
     final d = read(futureFile());
-    expect(d.extra.keys, ['matrixNames']);
+    expect(d.extra.keys, ['focusMode']);
     expect(d.active.first.extra.keys.toSet(), {'matrix', 'attachments'});
     expect(d.active.first.steps.first.extra.keys, ['due']);
-    expect(d.categories.first.extra.keys, ['boardByDefault']);
+    expect(d.categories.first.extra.keys, ['icon']);
   });
 
   test('a merge keeps newer fields from either copy', () {
     final newer = read(futureFile());
     final older = AppData.fromJson(jsonDecode(jsonEncode(newer.toJson()))
-      ..remove('matrixNames'))
+      ..remove('focusMode'))
       ..updatedAt = DateTime.utc(2000);
     // This device changed the task more recently, still keeping the newer version's fields.
     older.active.first
       ..title = 'Changed here'
       ..touch();
     final m = mergeData(older, newer);
-    expect(m.extra['matrixNames'], isNotNull);
+    expect(m.extra['focusMode'], isNotNull);
     expect(m.active.first.title, 'Changed here');
     expect(m.active.first.extra['matrix'], 'decide');
     expect(m.newestApp, '9.0.0');
@@ -152,9 +152,9 @@ void main() {
     s.addTask('Added on the old device');
     await s.sync();
     expect(db.backups, hasLength(1));
-    expect(jsonDecode(db.backups.single)['matrixNames'], isNotNull);
+    expect(jsonDecode(db.backups.single)['focusMode'], isNotNull);
     final up = jsonDecode(files[DropboxClient.filePath]!) as Map;
-    expect(up['matrixNames'], {'do': 'Do', 'decide': 'Decide'});
+    expect(up['focusMode'], {'on': true, 'until': '18:00'});
     expect(up['newestApp'], '9.0.0');
     final titles = [for (final t in up['active'] as List) t['title']];
     expect(titles, containsAll(['Renew insurance', 'Added on the old device']));
