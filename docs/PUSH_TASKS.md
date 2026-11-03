@@ -4,8 +4,8 @@ Status: design only (2026-11-01). Nothing here is built yet except what is marke
 
 ## Goal
 
-Other tools (Zapier, IFTTT, Tasker, iOS Shortcuts, a script, an email rule, another app of Jeff's) should be
-able to add tasks to Task Blocks without Jeff typing them, and each task should say where it came from.
+Other tools (Zapier, IFTTT, Tasker, iOS Shortcuts, a script, an email rule, another app of the owner's) should be
+able to add tasks to Task Blocks without anyone typing them, and each task should say where it came from.
 
 ## What is already in place
 
@@ -91,7 +91,7 @@ the first version.
   rotating the secret only needs a change in the worker and in the tools that call it.
 - Pushed text is only ever shown as text (never run), and links in notes open in the browser.
 
-## Open questions for Jeff
+## Open questions for the owner
 
 1. Which tools do you want to push from first? (That decides whether A alone is enough.)
 2. Should pushed tasks be added straight away, or wait in a "Suggestions" list like calendar events?

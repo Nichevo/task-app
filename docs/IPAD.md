@@ -23,7 +23,7 @@ Android-only for now (they are written in Kotlin): home screen widgets, calendar
 a list, Share to Task Blocks and voice add. Each could be added for iPad later (WidgetKit widgets, a share
 extension, EventKit for the calendar); widgets and share need a paid Apple developer account (app groups).
 
-## What needs Jeff's Apple account
+## What needs the owner's Apple account
 
 The CI build is **not signed**, because signing needs an Apple account. iPads only run signed apps. Pick one:
 
