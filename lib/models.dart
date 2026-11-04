@@ -5,6 +5,16 @@ import 'changelog.dart';
 /// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
 enum GanttPush { ask, always, never }
 
+/// Item 78: how often a habit is meant to happen.
+enum HabitGoal {
+  daily('Every day'),
+  perWeek('Times a week'),
+  weekdays('On chosen days');
+
+  const HabitGoal(this.label);
+  final String label;
+}
+
 /// A day as yyyy-MM-dd (item 75's worked days).
 String dayKey(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -54,11 +64,20 @@ class Task {
     this.planStart,
     this.planDue,
     Set<String>? worked,
+    this.habit = false,
+    this.habitGoal = HabitGoal.daily,
+    this.habitTimes = 3,
+    Set<int>? habitDays,
+    this.habitFreeMiss = true,
+    this.habitRemind,
+    List<String>? habitPauses,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
         alsoAfter = alsoAfter ?? [],
         worked = worked ?? {},
+        habitDays = habitDays ?? {1, 2, 3, 4, 5},
+        habitPauses = habitPauses ?? [],
         moves = moves ?? [],
         emails = emails ?? [],
         extra = extra ?? {},
@@ -74,6 +93,7 @@ class Task {
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked',
+    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses',
   };
 
   final String id;
@@ -195,6 +215,27 @@ class Task {
 
   /// Item 75: the days (yyyy-MM-dd) it was worked on, ticked without finishing it.
   final Set<String> worked;
+
+  /// Item 78: a habit is never ticked off; its days are ticked instead (in [worked]).
+  bool habit;
+  HabitGoal habitGoal;
+
+  /// For [HabitGoal.perWeek]: how many days a week.
+  int habitTimes;
+
+  /// For [HabitGoal.weekdays]: which days (DateTime.monday..sunday).
+  final Set<int> habitDays;
+
+  /// One missed day a week doesn't break an every-day streak.
+  bool habitFreeMiss;
+
+  /// Minutes after midnight for a reminder on days it isn't ticked yet; null = none.
+  int? habitRemind;
+
+  /// Paused spells as "yyyy-MM-dd/yyyy-MM-dd"; the last one has no end while paused.
+  final List<String> habitPauses;
+
+  bool get habitPaused => habitPauses.isNotEmpty && habitPauses.last.endsWith('/');
 
   /// Item 75: whether [day] is ticked as worked.
   bool workedOn(DateTime day) => worked.contains(dayKey(day));
@@ -328,6 +369,13 @@ class Task {
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
         if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
+        if (habit) 'habit': true,
+        if (habit) 'hGoal': habitGoal.name,
+        if (habit && habitGoal == HabitGoal.perWeek) 'hTimes': habitTimes,
+        if (habit && habitGoal == HabitGoal.weekdays) 'hDays': habitDays.toList()..sort(),
+        if (habit && !habitFreeMiss) 'hFree': false,
+        if (habitRemind != null) 'hRemind': habitRemind,
+        if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -375,6 +423,13 @@ class Task {
         planStart: _date(j['planStart']),
         planDue: _date(j['planDue']),
         worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
+        habit: j['habit'] as bool? ?? false,
+        habitGoal: HabitGoal.values.where((g) => g.name == j['hGoal']).firstOrNull ?? HabitGoal.daily,
+        habitTimes: (j['hTimes'] as num?)?.toInt() ?? 3,
+        habitDays: j['hDays'] is List ? {for (final d in j['hDays'] as List) (d as num).toInt()} : null,
+        habitFreeMiss: j['hFree'] as bool? ?? true,
+        habitRemind: (j['hRemind'] as num?)?.toInt(),
+        habitPauses: [for (final p in j['hPauses'] as List? ?? []) ?p as String?],
         extra: unknownFields(j, _known),
       );
 
@@ -1336,6 +1391,12 @@ class AppData {
 
   /// Item 72: tasks on the Gantt chart.
   Iterable<Task> get ganttTasks => active.where((t) => t.gantt);
+
+  /// Item 78: habits, which live with the open tasks but stay out of the list.
+  Iterable<Task> get habits => active.where((t) => t.habit);
+
+  /// Open tasks that aren't habits.
+  Iterable<Task> get tasksNotHabits => active.where((t) => !t.habit);
 
   KanbanStage? stage(String? id) => stages.where((s) => s.id == id).firstOrNull;
 

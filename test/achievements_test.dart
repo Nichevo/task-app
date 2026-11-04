@@ -177,10 +177,12 @@ void main() {
     final t = s.addTask('Slides');
     await tester.pumpWidget(MaterialApp(home: TaskPage(store: s, task: t)));
     await tester.scrollUntilVisible(find.text('Days worked on it'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.ensureVisible(find.byType(WorkedWeek));
+    await tester.pumpAndSettle();
     final todayLetter = ['M', 'T', 'W', 'T', 'F', 'S', 'S'][DateTime.now().weekday - 1];
     // T and S come twice in the week: pick the right one.
     final before = WorkedWeek.letters.sublist(0, DateTime.now().weekday - 1).where((l) => l == todayLetter).length;
-    await tester.tap(find.text(todayLetter).at(before));
+    await tester.tap(find.descendant(of: find.byType(WorkedWeek), matching: find.text(todayLetter)).at(before));
     await tester.pumpAndSettle();
     expect(t.workedOn(DateTime.now()), isTrue);
     expect(find.textContaining('1 day this week'), findsOneWidget);

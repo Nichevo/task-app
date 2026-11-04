@@ -62,7 +62,7 @@ class Stats {
     return Duration(minutes: took[took.length ~/ 2]);
   }
 
-  int get openCount => data.active.length;
+  int get openCount => data.tasksNotHabits.length;
 
   int get overdueCount => data.active.where((t) => t.dueAt != null && t.dueAt!.isBefore(now)).length;
 

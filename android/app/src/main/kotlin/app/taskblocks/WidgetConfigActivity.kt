@@ -29,11 +29,11 @@ class WidgetConfigActivity : Activity() {
       provider.endsWith("ChecklistWidget") -> pickTask(snap)
       provider.endsWith("QuickAddWidget") -> pickCategory(snap)
       provider.endsWith("NowDoingWidget") -> pickNow(snap)
+      provider.endsWith("WorkedTodayWidget") -> pickWorked(snap)
       provider.endsWith("BoardSummaryWidget") ||
           provider.endsWith("StageListWidget") ||
           provider.endsWith("BoardStepsWidget") ||
           provider.endsWith("MatrixWidget") ||
-          provider.endsWith("WorkedTodayWidget") ||
           provider.endsWith("AddedDoneWidget") ||
           provider.endsWith("BurnDownWidget") -> pickCategoryFilter(snap)
       provider.endsWith("TodayWidget") || provider.endsWith("StatsWidget") || provider.endsWith("MonthWidget") ->
@@ -118,6 +118,24 @@ class WidgetConfigActivity : Activity() {
     for ((id, name) in snap.categories) {
       keys.add("cat:$id")
       labels.add("Only $name")
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Show in this widget")
+        .setItems(labels.toTypedArray()) { _, which ->
+          WidgetData.setFilter(this, widgetId, keys[which])
+          pickLook(showRows = false)
+        }
+        .setOnCancelListener { done() }
+        .show()
+  }
+
+  /** Worked today (items 75 and 78): one category, everything, or the habits. */
+  private fun pickWorked(snap: Snapshot) {
+    val keys = mutableListOf("habits", "all")
+    val labels = mutableListOf("Habits", "All open tasks")
+    for ((id, name) in snap.categories) {
+      keys.add("cat:$id")
+      labels.add("Tasks in $name")
     }
     AlertDialog.Builder(this)
         .setTitle("Show in this widget")

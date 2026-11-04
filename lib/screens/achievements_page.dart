@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -145,6 +147,18 @@ class _AchievementsViewState extends State<AchievementsView> {
               ].join(' · ')),
               onTap: () => _open(w.task),
             ),
+          if (a.habits.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Habits', style: theme.textTheme.titleSmall),
+            for (final (t, done, due) in a.habits)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.repeat_on_outlined),
+                title: Text(t.title),
+                subtitle: Text('$done of $due${due == 0 ? '' : ' (${(min(done / due, 1.0) * 100).round()}%)'}'),
+                onTap: () => _open(t),
+              ),
+          ],
         ]);
       },
     );

@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.2', 'November 2026', [
+    'Habit tracker. Turn on "Habit" on a task (or tap + on the new Habits page): it is never ticked off, you tick the days you do it. Every day, a number of times a week, or chosen days. A repeating task keeps its history when it becomes a habit.',
+    'The Habits page shows each habit\'s week to tick, its streak and this month\'s score. Tap one for a month calendar (tap any day so far to change it), the last 12 months as a strip, the best streak, and Pause, which keeps the streak while you are away.',
+    'Every-day habits forgive one missed day a week (switch it off per habit). An optional reminder comes only on days it isn\'t ticked yet.',
+    'Habits stay out of the list apart from one "Habits today: 2 of 5" line, and off the board, matrix and Gantt chart. Achievements has a Habits section, and the Worked today widget can show your habits instead of a category.',
+  ]),
   Release('1.9.1', 'November 2026', [
     'Tick the days you worked on a task without finishing it: "Worked on it today" on an opened block, or the week of dots on the task page (tap any day so far this week). Ticks show under the Gantt bar, and a board card says "3 days this week" once any are ticked. Ticking never moves a card.',
     'New Achievements page (⋮ menu, and a view in the right-hand panel): for a category and a period (last week, Monday to Sunday, unless you pick another), tasks done, steps ticked and days worked, each finished task\'s due date against when it was done, and what you worked on but didn\'t finish. Copy as text pastes it into a message.',
