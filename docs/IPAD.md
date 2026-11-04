@@ -41,8 +41,11 @@ From version 1.9.5 the iPad has ten home screen widgets. Press and hold the home
 | Quick add | Opens the app ready to type a task | Small |
 
 Press and hold a widget, then **Edit Widget**, to choose its category, stage, task or "Show" option.
-Tapping a task opens it in the app; tapping a widget's title opens that page. Ticking things off on
-the widget itself comes in the next version.
+Tapping a task opens it in the app; tapping a widget's title opens that page. From 1.9.6 the widgets
+have buttons too: the circle before a task ticks it off (the moon snoozes it until tomorrow, on large
+widgets), Done on Focus, tap a step to tick it, the arrow or Next moves a board card or step on, and
+the circle on Worked today ticks today. The widget changes at once; the app applies it when you next
+open it.
 
 The widgets redraw when you change something in the app, and every hour by themselves (iPadOS limits
 how often). A change synced from another device shows after you next open the app on the iPad.
