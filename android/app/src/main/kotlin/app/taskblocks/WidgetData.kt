@@ -45,15 +45,19 @@ data class WidgetTask(
     /** Matrix box id: do, decide, delegate, delete. */
     val box: String? = null,
     val snoozed: Boolean = false,
+    /** Item 75: days (yyyy-MM-dd) ticked as worked on, in the last fortnight. */
+    val worked: Set<String> = emptySet(),
 )
 
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
 class Snapshot(
-    root: JSONObject,
+    val root: JSONObject,
     done: Set<String>,
     snoozed: Set<String>,
     steps: Set<String>,
     moves: Map<String, Pair<String, Long>> = emptyMap(),
+    /** Item 75: "taskId/yyyy-MM-dd" -> ticked or unticked on the widget, not yet seen by the app. */
+    workedTicks: Map<String, Boolean> = emptyMap(),
 ) {
   val hoursToRed = root.optDouble("hoursToRed", 72.0)
   val byDue = root.optBoolean("colourByDue", true)
@@ -100,6 +104,13 @@ class Snapshot(
             )
           }
       val moved = moves[id]
+      val wArr = o.optJSONArray("worked") ?: JSONArray()
+      val worked = (0 until wArr.length()).map { wArr.getString(it) }.toMutableSet()
+      for ((k, on) in workedTicks) {
+        if (!k.startsWith("$id/")) continue
+        val day = k.removePrefix("$id/")
+        if (on) worked.add(day) else worked.remove(day)
+      }
       out.add(
           WidgetTask(
               id,
@@ -114,6 +125,7 @@ class Snapshot(
               since = moved?.second ?: if (o.has("since")) o.optLong("since") else null,
               box = o.optString("box").ifEmpty { null },
               snoozed = o.optBoolean("snoozed"),
+              worked = worked,
           ))
     }
     all = out
@@ -229,7 +241,13 @@ object WidgetData {
       val key = if (o.has("step")) o.optString("task") + "/" + o.optString("step") else o.optString("task")
       moves[key] = o.optString("stage") to o.optLong("at")
     }
-    return Snapshot(root, ids(c, "widget_done", "id"), ids(c, "widget_snoozed", "id"), steps, moves)
+    val workedArr = array(c, "widget_worked")
+    val worked = LinkedHashMap<String, Boolean>()
+    for (i in 0 until workedArr.length()) {
+      val o = workedArr.getJSONObject(i)
+      worked[o.optString("id") + "/" + o.optString("day")] = o.optBoolean("on", true)
+    }
+    return Snapshot(root, ids(c, "widget_done", "id"), ids(c, "widget_snoozed", "id"), steps, moves, worked)
   }
 
   /** For the board and matrix widgets, whose filter is "all" or "cat:<id>". */
@@ -394,6 +412,13 @@ object WidgetData {
     }
   }
 
+  /** Item 75: ticks (or unticks) [day] as a day [taskId] was worked on. */
+  fun markWorked(c: Context, taskId: String, day: String, on: Boolean) =
+      append(c, "widget_worked", JSONObject().put("id", taskId).put("day", day).put("on", on))
+
+  /** Today as yyyy-MM-dd, the way the app writes days. */
+  fun todayKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
   /** Ticks a checklist step on a widget. */
   fun markStep(c: Context, taskId: String, stepId: String) =
       append(c, "widget_steps", JSONObject().put("task", taskId).put("step", stepId))
@@ -415,6 +440,9 @@ object WidgetData {
           NowDoingWidget::class.java,
           BoardStepsWidget::class.java,
           MatrixWidget::class.java,
+          WorkedTodayWidget::class.java,
+          AddedDoneWidget::class.java,
+          BurnDownWidget::class.java,
       )
 
   fun refreshAll(c: Context) {

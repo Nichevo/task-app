@@ -104,6 +104,10 @@ class _TaskAppState extends State<TaskApp> {
           home.openBoard(stageId: q['stage']);
         case 'matrix':
           home.openMatrix(box: MatrixBox.byId(q['box']));
+        case 'gantt':
+          home.openGantt(categoryId: q['cat']);
+        case 'achievements':
+          home.openAchievements();
       }
     });
   }

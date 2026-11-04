@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:intl/intl.dart';
+
 import 'models.dart';
 
 /// Item 72: the Gantt chart's arithmetic, kept apart from the screens so it can be tested.
@@ -229,4 +231,113 @@ bool wouldLoop(Task t, Task other, AppData data) =>
   last = addDays(last, 7);
   if (daysBetween(first, last) < 20) last = addDays(first, 20);
   return (first, last);
+}
+
+// --- Burn-down (item 77) ---
+
+/// What a burn-down counts: tasks and steps left, or days of work left.
+enum BurnUnit { items, days }
+
+/// A burn-down of a set of chart tasks: work left each day from [start] to today, the ideal line
+/// from [total] at [start] to nothing at [end], and when it would finish at the pace of the last
+/// two weeks ([projected], null when nothing was done lately).
+class BurnDown {
+  const BurnDown(this.start, this.end, this.total, this.left, this.projected, this.unit);
+
+  final DateTime start;
+
+  /// The planned finish: the latest bar end.
+  final DateTime end;
+  final double total;
+
+  /// Work left at the end of each day from [start] to today.
+  final List<double> left;
+  final DateTime? projected;
+  final BurnUnit unit;
+
+  double get now => left.isEmpty ? total : left.last;
+
+  /// The ideal amount left on [d].
+  double idealOn(DateTime d) {
+    final span = max(daysBetween(start, end), 1);
+    return (total * (1 - daysBetween(start, d) / span)).clamp(0, total).toDouble();
+  }
+
+  /// Days the projected finish is after the plan (negative when early); null without a projection.
+  int? get daysLate => projected == null ? null : daysBetween(end, projected!);
+}
+
+/// Every chart task in [categoryId] (null = all, '' = no category), open or ticked off.
+List<Task> burnTasks(AppData data, String? categoryId) {
+  bool inCat(Task t) => categoryId == null ||
+      (categoryId.isEmpty ? data.category(t.categoryId) == null : t.categoryId == categoryId);
+  return [
+    for (final t in data.active)
+      if (t.gantt && inCat(t)) t,
+    for (final t in data.archived)
+      if (t.gantt && inCat(t)) t,
+  ];
+}
+
+/// The burn-down for [tasks] (see [burnTasks]), or null when none has dates.
+BurnDown? burnDown(List<Task> tasks, AppData data, DateTime now, {BurnUnit unit = BurnUnit.items}) {
+  // Each piece of work: how much it is worth and when it was done (null = not yet).
+  final pieces = <(double, DateTime?)>[];
+  DateTime? start, end;
+  for (final t in tasks) {
+    final bar = barFor(t, data);
+    if (bar == null) continue;
+    final s = t.planStart != null ? dayOf(t.planStart!) : bar.start;
+    if (start == null || s.isBefore(start)) start = s;
+    if (end == null || bar.end.isAfter(end)) end = bar.end;
+    final weight = unit == BurnUnit.items ? null : workDays(bar.start, bar.end, weekends: weekendsFor(t, data)).toDouble();
+    if (t.steps.isEmpty) {
+      pieces.add((weight ?? 1, t.closedAt));
+    } else {
+      final each = weight == null ? 1.0 : weight / t.steps.length;
+      for (final st in t.steps) {
+        // A step ticked before tick times were kept (1.8.6) counts as done from the start.
+        pieces.add((each, st.done ? (st.doneAt ?? t.closedAt ?? DateTime(2000)) : t.closedAt));
+      }
+    }
+  }
+  if (start == null || end == null) return null;
+  final today = dayOf(now);
+  if (start.isAfter(today)) start = today;
+  final total = pieces.fold(0.0, (a, p) => a + p.$1);
+  final left = <double>[];
+  for (var d = start; !d.isAfter(today); d = addDays(d, 1)) {
+    final next = addDays(d, 1);
+    left.add(total - pieces.where((p) => p.$2 != null && p.$2!.isBefore(next)).fold(0.0, (a, p) => a + p.$1));
+  }
+  // Pace over the last 14 days (or since the start, if sooner).
+  final from = addDays(today, -13).isBefore(start) ? start : addDays(today, -13);
+  final days = daysBetween(from, today) + 1;
+  final doneLately =
+      pieces.where((p) => p.$2 != null && !p.$2!.isBefore(from)).fold(0.0, (a, p) => a + p.$1);
+  final remaining = left.last;
+  DateTime? projected;
+  if (remaining <= 0) {
+    projected = today;
+  } else if (doneLately > 0) {
+    projected = addDays(today, (remaining / (doneLately / days)).ceil());
+  }
+  return BurnDown(start, end, total, left, projected, unit);
+}
+
+/// One line about a burn-down, for the chart's caption and for sharing.
+String burnSummary(BurnDown b) {
+  final left = b.now == b.now.roundToDouble() ? b.now.toInt().toString() : b.now.toStringAsFixed(1);
+  final unit = b.unit == BurnUnit.items
+      ? (left == '1' ? 'task or step' : 'tasks and steps')
+      : (left == '1' ? 'day of work' : 'days of work');
+  final fmt = DateFormat('EEE d MMM');
+  final late = b.daysLate;
+  final pace = b.projected == null
+      ? 'nothing done in the last two weeks'
+      : b.now <= 0
+          ? 'all done'
+          : 'at this pace done ${fmt.format(b.projected!)}'
+              '${late == null || late == 0 ? ', on plan' : late > 0 ? ', $late day${late == 1 ? '' : 's'} after the plan' : ', ${-late} day${late == -1 ? '' : 's'} early'}';
+  return '$left $unit left, planned to finish ${fmt.format(b.end)}; $pace';
 }

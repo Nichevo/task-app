@@ -23,6 +23,7 @@ import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
+import 'achievements_page.dart';
 import 'gantt_page.dart';
 import 'matrix_page.dart';
 import 'search_page.dart';
@@ -195,7 +196,10 @@ class HomePageState extends State<HomePage> {
     _select(null);
   }
 
-  void openGantt() => _open(context, GanttPage(store: store));
+  void openGantt({String? categoryId}) =>
+      _open(context, GanttPage(store: store, initialCategory: categoryId == null || categoryId.isEmpty ? null : categoryId));
+
+  void openAchievements() => _open(context, AchievementsPage(store: store));
 
   void openMatrix({MatrixBox? box}) => _open(context, MatrixPage(store: store, initialBox: box));
 
@@ -474,6 +478,7 @@ class HomePageState extends State<HomePage> {
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'stats' => openStats(),
+              'achievements' => openAchievements(),
               'board' => openBoard(),
               'matrix' => _open(context, MatrixPage(store: store)),
               'gantt' => openGantt(),
@@ -497,6 +502,7 @@ class HomePageState extends State<HomePage> {
                 child: Text(data.archived.isEmpty ? 'Archive' : 'Archive (${data.archived.length})'),
               ),
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
+              const PopupMenuItem(value: 'achievements', child: Text('Achievements')),
               if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
               if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
@@ -675,6 +681,7 @@ class HomePageState extends State<HomePage> {
           onCheck: () => _complete(t),
           onStep: (s) => _toggleStep(t, s),
           onSkip: () => _skip(t),
+          onWorked: () => store.toggleWorked(t),
           stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
           boxName: MatrixBox.byId(t.matrixBox) == null ? null : data.boxName(MatrixBox.byId(t.matrixBox)!),
           onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),

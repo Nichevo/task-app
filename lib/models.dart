@@ -5,6 +5,10 @@ import 'changelog.dart';
 /// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
 enum GanttPush { ask, always, never }
 
+/// A day as yyyy-MM-dd (item 75's worked days).
+String dayKey(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 /// A single task. Active tasks have [closedAt] == null.
 class Task {
   Task({
@@ -49,10 +53,12 @@ class Task {
     this.progress,
     this.planStart,
     this.planDue,
+    Set<String>? worked,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
         alsoAfter = alsoAfter ?? [],
+        worked = worked ?? {},
         moves = moves ?? [],
         emails = emails ?? [],
         extra = extra ?? {},
@@ -67,7 +73,7 @@ class Task {
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
-    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue',
+    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked',
   };
 
   final String id;
@@ -186,6 +192,18 @@ class Task {
   /// Item 72: the dates when it first went on the chart, kept to show slips.
   DateTime? planStart;
   DateTime? planDue;
+
+  /// Item 75: the days (yyyy-MM-dd) it was worked on, ticked without finishing it.
+  final Set<String> worked;
+
+  /// Item 75: whether [day] is ticked as worked.
+  bool workedOn(DateTime day) => worked.contains(dayKey(day));
+
+  /// Item 75: days ticked in the week (Monday to Sunday) holding [day].
+  int workedInWeek(DateTime day) {
+    final monday = DateTime(day.year, day.month, day.day - (day.weekday - 1));
+    return [for (var i = 0; i < 7; i++) DateTime(monday.year, monday.month, monday.day + i)].where(workedOn).length;
+  }
 
   /// Every task this one comes after: [afterTaskId] first, then [alsoAfter].
   List<String> get afterIds => [?afterTaskId, ...alsoAfter.where((id) => id != afterTaskId)];
@@ -309,6 +327,7 @@ class Task {
         if (progress != null) 'progress': progress,
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
+        if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -355,6 +374,7 @@ class Task {
         progress: (j['progress'] as num?)?.toInt(),
         planStart: _date(j['planStart']),
         planDue: _date(j['planDue']),
+        worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
         extra: unknownFields(j, _known),
       );
 

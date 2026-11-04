@@ -10,6 +10,7 @@ import '../task_list.dart';
 import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
+import '../widgets/worked_week.dart';
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -761,6 +762,7 @@ class _TaskPageState extends State<TaskPage> {
                     }),
                   ),
           ),
+        ..._worked(context),
         ..._board(context),
         ..._matrix(context),
         ..._gantt(context),
@@ -838,6 +840,31 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.
+  /// Item 75: the days worked this week, tapped to tick.
+  List<Widget> _worked(BuildContext context) {
+    if (archived && task.worked.isEmpty) return [];
+    final week = task.workedInWeek(DateTime.now());
+    return [
+      ListTile(
+        leading: const Icon(Icons.event_available_outlined),
+        title: const Text('Days worked on it'),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            WorkedWeek(
+              task: task,
+              onToggle: archived ? null : (d) => setState(() => widget.store.setWorked(task, d, !task.workedOn(d))),
+            ),
+            const SizedBox(height: 4),
+            Text(task.worked.isEmpty
+                ? 'Tick a day you worked on it, even if it isn\'t finished'
+                : '$week ${week == 1 ? 'day' : 'days'} this week, ${task.worked.length} in all'),
+          ]),
+        ),
+      ),
+    ];
+  }
+
   List<Widget> _gantt(BuildContext context) {
     if (archived && !task.gantt) return [];
     final theme = Theme.of(context);

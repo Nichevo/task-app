@@ -1023,6 +1023,9 @@ class _KanbanCard extends StatelessWidget {
                       if (task.steps.isNotEmpty && stepsChip == null)
                         Text('${task.stepsDone}/${task.steps.length}', style: soft),
                       if (task.estimate != null) Text(shortMinutes(task.estimate!), style: soft),
+                      // Item 75: only when any day this week is ticked.
+                      if (task.workedInWeek(now) > 0)
+                        Text('${task.workedInWeek(now)} ${task.workedInWeek(now) == 1 ? 'day' : 'days'} this week', style: soft),
                     ]),
                     if (since != null) Text('${stage.name} for ${describeSpell(now.difference(since))}', style: soft),
                     if (stepOf != null) Text('Step of "$stepOf"', style: soft),

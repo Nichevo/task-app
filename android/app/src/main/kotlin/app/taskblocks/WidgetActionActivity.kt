@@ -40,6 +40,13 @@ class WidgetActionActivity : Activity() {
           WidgetData.refreshAll(this)
         }
       }
+      "worked" -> {
+        val day = intent.getStringExtra("day")
+        if (id != null && day != null) {
+          WidgetData.markWorked(this, id, day, intent.getStringExtra("on") != "false")
+          WidgetData.refreshAll(this)
+        }
+      }
       "showstage" -> {
         val widget = intent.getIntExtra("widget", -1)
         if (id != null && widget != -1) {
