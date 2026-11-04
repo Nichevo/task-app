@@ -187,6 +187,13 @@ class HomePageState extends State<HomePage> {
 
   void openBoard({String? stageId}) => _open(context, KanbanPage(store: store, initialStage: stageId));
 
+  /// The archive: in the right-hand pane on wide screens, its own page otherwise.
+  void openArchive() {
+    if (MediaQuery.sizeOf(context).width < _twoPaneWidth) return _open(context, ArchivePage(store: store));
+    store.showPanel(PanelView.archive);
+    _select(null);
+  }
+
   void openMatrix({MatrixBox? box}) => _open(context, MatrixPage(store: store, initialBox: box));
 
   /// Text shared from another app: one task, or several when it is a list.
@@ -404,6 +411,8 @@ class HomePageState extends State<HomePage> {
         : data.active
             .where((t) => !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
             .length;
+    final showBoardIcon = data.boardTasks.isNotEmpty && store.topIconShown(TopIcon.board);
+    final showMatrixIcon = data.matrixTasks.isNotEmpty && store.topIconShown(TopIcon.matrix);
     final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
     final estimate = describeEstimates(shownTasks);
     return Scaffold(
@@ -433,39 +442,31 @@ class HomePageState extends State<HomePage> {
               icon: const Icon(Icons.clear),
               onPressed: () => setState(_search.clear),
             )
-          else
+          else if (store.topIconShown(TopIcon.search))
             IconButton(
               tooltip: 'Search',
               icon: const Icon(Icons.search),
               onPressed: () => setState(() => _searching = true),
             ),
-          if (data.boardTasks.isNotEmpty)
+          // Item 74: Search, Kanban, Matrix, Calendar; the views only once a task is on them.
+          if (showBoardIcon)
             IconButton(tooltip: 'Kanban board', icon: const Icon(Icons.view_kanban_outlined), onPressed: openBoard),
-          IconButton(
-            tooltip: 'Calendar',
-            icon: const Icon(Icons.calendar_month_outlined),
-            onPressed: () => openCalendar(null),
-          ),
-          IconButton(
-            tooltip: 'Archive',
-            icon: Badge(
-              isLabelVisible: data.archived.isNotEmpty,
-              label: Text('${data.archived.length}'),
-              child: const Icon(Icons.inventory_2_outlined),
+          if (showMatrixIcon)
+            IconButton(tooltip: 'Matrix', icon: const Icon(Icons.grid_view), onPressed: openMatrix),
+          if (store.topIconShown(TopIcon.calendar))
+            IconButton(
+              tooltip: 'Calendar',
+              icon: const Icon(Icons.calendar_month_outlined),
+              onPressed: () => openCalendar(null),
             ),
-            // On wide screens the archive lives in the right-hand pane.
-            onPressed: () {
-              if (!wide) return _open(context, ArchivePage(store: store));
-              store.showPanel(PanelView.archive);
-              _select(null);
-            },
-          ),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
               'group' => () {
                   data.groupByCategory = !data.groupByCategory;
                   store.changed(settings: true);
                 }(),
+              'archive' => openArchive(),
+              'calendar' => openCalendar(null),
               'stats' => openStats(),
               'board' => openBoard(),
               'matrix' => _open(context, MatrixPage(store: store)),
@@ -484,9 +485,14 @@ class HomePageState extends State<HomePage> {
               PopupMenuItem(
                   value: 'group',
                   child: Text(data.groupByCategory ? 'Show as one list' : 'Group by category')),
+              PopupMenuItem(
+                value: 'archive',
+                child: Text(data.archived.isEmpty ? 'Archive' : 'Archive (${data.archived.length})'),
+              ),
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
-              const PopupMenuItem(value: 'board', child: Text('Kanban board')),
-              const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
+              if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
+              if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
+              if (!store.topIconShown(TopIcon.calendar)) const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               const PopupMenuItem(value: 'starred', child: Text('Starred emails')),

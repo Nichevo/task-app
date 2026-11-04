@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.8.6', 'November 2026', [
+    'A task can now become a step of another task: ⋮ on the task page, "Make into a step of…". Nothing is lost. The step keeps the whole task (category, star, repeat, emails, place, board history, its own steps) and "Split out" brings it all back.',
+    'If the task has steps of its own, you choose each time: keep them inside, add them to the new parent, or split them out as tasks of their own. Tasks that came after it now come after the parent. Undo puts everything back.',
+    'Split out on an ordinary step now also keeps its calendar event link and, for a ticked step, the time it was really ticked. "Make into a linked task" now takes the step\'s date, reminder and note.',
+    'New top bar: Search, Kanban, Matrix, Calendar. Kanban and Matrix show once a task is on them. The archive moved into the ⋮ menu (with its count) and Settings, Archive. Settings, Top bar icons switches any icon off on this device.',
+  ]),
   Release('1.8.5', 'November 2026', [
     'Five new home screen widgets (Android). Board summary: how many tasks are in each Kanban stage, amber when over its limit; tap one to open the board there.',
     'Board stage list: the cards in one stage, switched with the arrows or the counts. The arrow on a card moves it to the next stage, saved in its board history as "Widget".',

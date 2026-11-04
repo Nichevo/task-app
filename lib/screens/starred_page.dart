@@ -215,13 +215,15 @@ class _StarredPageState extends State<StarredPage> {
 }
 
 /// Lets the user pick an open task, with search; starred and board tasks first.
-Future<Task?> pickTask(BuildContext context, AppData data, {required String title}) {
+Future<Task?> pickTask(BuildContext context, AppData data, {required String title, Task? exclude}) {
   return showDialog<Task>(
     context: context,
     builder: (c) {
       var q = '';
       return StatefulBuilder(builder: (c, setState) {
-        final tasks = data.active.where((t) => q.isEmpty || t.title.toLowerCase().contains(q.toLowerCase())).toList()
+        final tasks = data.active
+            .where((t) => t != exclude && (q.isEmpty || t.title.toLowerCase().contains(q.toLowerCase())))
+            .toList()
           ..sort((a, b) {
             int rank(Task t) => t.starred ? 0 : t.kanban ? 1 : 2;
             return rank(a).compareTo(rank(b));

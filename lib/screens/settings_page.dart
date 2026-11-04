@@ -14,6 +14,7 @@ import '../store.dart';
 import '../task_list.dart';
 import '../places.dart';
 import 'about_page.dart';
+import 'archive_page.dart';
 import 'backups_page.dart';
 import 'kanban_page.dart';
 import 'places_page.dart';
@@ -647,6 +648,16 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             const Divider(height: 40),
+            _heading('Top bar icons'),
+            const Text('Icons at the top of the task list on this device. Anything switched off is still in the ⋮ menu.'),
+            for (final name in TopIcon.all)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(TopIcon.labels[name]!),
+                value: store.topIconShown(name),
+                onChanged: (v) => setState(() => store.setTopIcon(name, v)),
+              ),
+            const Divider(height: 40),
             _heading('Reminders'),
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -964,6 +975,14 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const Divider(height: 40),
             _heading('Archive'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Open the archive'),
+              subtitle: Text('${data.archived.length} ticked-off task${data.archived.length == 1 ? '' : 's'}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ArchivePage(store: store))),
+            ),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Delete archived tasks after'),

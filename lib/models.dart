@@ -417,7 +417,9 @@ class TaskStep {
   TaskStep(
       {required this.id,
       required this.title,
-      this.done = false,
+      bool done = false,
+      this.doneAt,
+      this.carried,
       this.taskId,
       this.stageId,
       this.dueAt,
@@ -426,19 +428,51 @@ class TaskStep {
       this.eventId,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
-      : moves = moves ?? [],
+      // ignore: prefer_initializing_formals
+      : _done = done,
+        moves = moves ?? [],
         extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'title', 'done', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event'};
+  static const _known = {
+    'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event'
+  };
 
   final String id;
   String title;
-  bool done;
+  bool _done;
   String? taskId;
+
+  bool get done => _done;
+
+  /// Ticking sets [doneAt] to now; unticking clears it.
+  set done(bool v) {
+    if (v && !_done) doneAt = DateTime.now();
+    if (!v) doneAt = null;
+    _done = v;
+  }
+
+  /// Item 73: when it was ticked, so a split-out task and the Achievements page get the real
+  /// time. Null for steps ticked before this was recorded.
+  DateTime? doneAt;
+
+  /// Item 73: the whole task this step was made from ("Make into a step of..."), as that task's
+  /// JSON. Split out rebuilds the task from it, so nothing is lost. Null for an ordinary step.
+  Map<String, dynamic>? carried;
+
+  /// The task this step carries, rebuilt from [carried] (null when it carries none).
+  Task? get carriedTask {
+    final c = carried;
+    if (c == null) return null;
+    try {
+      return Task.fromJson(c);
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Item 61: its own due date, shown in the calendar with the task's name and reminded like a
   /// task's. [remindBefore] is minutes before (null = the default in Settings).
@@ -472,6 +506,8 @@ class TaskStep {
         'id': id,
         'title': title,
         if (done) 'done': true,
+        if (doneAt != null) 'doneAt': doneAt!.toIso8601String(),
+        if (carried != null) 'carried': carried,
         if (taskId != null) 'taskId': taskId,
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
@@ -485,6 +521,8 @@ class TaskStep {
         id: j['id'] as String,
         title: j['title'] as String? ?? '',
         done: j['done'] as bool? ?? false,
+        doneAt: DateTime.tryParse(j['doneAt'] as String? ?? ''),
+        carried: j['carried'] is Map ? Map<String, dynamic>.from(j['carried'] as Map) : null,
         taskId: j['taskId'] as String?,
         stageId: j['stage'] as String?,
         dueAt: DateTime.tryParse(j['due'] as String? ?? ''),

@@ -11,6 +11,7 @@ import '../widgets/repeat_dialog.dart';
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
+import 'starred_page.dart' show pickTask;
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
@@ -81,6 +82,8 @@ class _TaskPageState extends State<TaskPage> {
           if (linked != null)
             SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"'))
           else if (!archived) ...[
+            if (s.carried != null)
+              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'carried'), child: const Text('Show what it carries')),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'due'),
               child: Text(s.dueAt == null ? 'Give it a date and reminder' : 'Change its date or reminder'),
@@ -89,15 +92,18 @@ class _TaskPageState extends State<TaskPage> {
               onPressed: () => Navigator.pop(c, 'note'),
               child: Text(s.note.isEmpty ? 'Add a note' : 'Edit the note'),
             ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(c, 'task'),
-              child: const Text('Make into a linked task (ticks this step when done)'),
-            ),
+            if (s.carried == null)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, 'task'),
+                child: const Text('Make into a linked task (ticks this step when done)'),
+              ),
           ],
           if (!archived)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'split'),
-              child: const Text('Split out into a task of its own (leaves this checklist)'),
+              child: Text(s.carried != null
+                  ? 'Split out into a task of its own (brings back everything it had)'
+                  : 'Split out into a task of its own (leaves this checklist)'),
             ),
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'rename'), child: const Text('Rename')),
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'remove'), child: const Text('Remove step')),
@@ -112,6 +118,19 @@ class _TaskPageState extends State<TaskPage> {
         final t = widget.store.stepToTask(task, s);
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added "${t.title}" as a task after this one')));
+      case 'carried':
+        await showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: Text('"${s.title}" was a task'),
+            content: Text([
+              ...carriedSummary(s, data),
+              '',
+              'All of it comes back when you split it out.',
+            ].join('\n')),
+            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+          ),
+        );
       case 'due':
         await _stepDue(s);
       case 'note':
@@ -378,6 +397,47 @@ class _TaskPageState extends State<TaskPage> {
     _close();
   }
 
+  /// Item 73: turns this task into a step of another one, keeping everything it has.
+  Future<void> _makeStep() async {
+    final parent = await pickTask(context, data, title: 'Make "${task.title}" a step of', exclude: task);
+    if (parent == null || !mounted) return;
+    var own = OwnSteps.keep;
+    if (task.steps.isNotEmpty) {
+      final n = task.steps.length;
+      final picked = await showDialog<OwnSteps>(
+        context: context,
+        builder: (c) => SimpleDialog(
+          title: Text('"${task.title}" has $n step${n == 1 ? '' : 's'} of its own'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, OwnSteps.keep),
+              child: const Text('Keep them inside (back when it is split out)'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, OwnSteps.addToParent),
+              child: Text('Add them to "${parent.title}" as steps'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, OwnSteps.splitOut),
+              child: const Text('Split them out as tasks of their own'),
+            ),
+          ],
+        ),
+      );
+      if (picked == null || !mounted) return;
+      own = picked;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final (_, undo) = widget.store.makeStep(task, parent, own: own);
+    _close();
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('"${task.title}" is now a step of "${parent.title}"'),
+        action: SnackBarAction(label: 'Undo', onPressed: undo),
+      ));
+  }
+
   void _close() {
     if (widget.onClose != null) {
       widget.onClose!();
@@ -402,6 +462,14 @@ class _TaskPageState extends State<TaskPage> {
             onPressed: () => _update(() => task.starred = !task.starred),
           ),
           IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: _delete),
+          if (!archived)
+            PopupMenuButton<String>(
+              onSelected: (v) => switch (v) {
+                'step' => _makeStep(),
+                _ => null,
+              },
+              itemBuilder: (_) => const [PopupMenuItem(value: 'step', child: Text('Make into a step of…'))],
+            ),
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -510,9 +578,14 @@ class _TaskPageState extends State<TaskPage> {
                     style: TextStyle(
                         decoration: s.done ? TextDecoration.lineThrough : null,
                         color: s.done ? Theme.of(context).disabledColor : null)),
-                subtitle: s.taskId == null && !task.boardSteps.contains(s) && s.dueAt == null && s.note.isEmpty
+                subtitle: s.taskId == null &&
+                        !task.boardSteps.contains(s) &&
+                        s.dueAt == null &&
+                        s.note.isEmpty &&
+                        s.carried == null
                     ? null
                     : Text([
+                        if (s.carried != null) 'Was a task: ${carriedSummary(s, data, short: true).join(', ')}',
                         if (s.dueAt != null)
                           'Due ${dateTimeFmt.format(s.dueAt!)}${s.remindBefore != null && s.remindBefore! > 0 ? ' (${remindOptions[s.remindBefore] ?? '${s.remindBefore} min before'})' : ''}',
                         if (s.taskId != null) 'Task: ${data.task(s.taskId)?.title ?? '(deleted)'}',
@@ -903,4 +976,26 @@ class _TaskPageState extends State<TaskPage> {
             mode: LaunchMode.externalApplication,
           ),
         );
+}
+
+/// Item 73: what a step made from a task is carrying, one line each (shorter labels with
+/// [short], for the checklist row).
+List<String> carriedSummary(TaskStep s, AppData data, {bool short = false}) {
+  final t = s.carriedTask;
+  if (t == null) return const ['its saved details'];
+  final cat = data.category(t.categoryId)?.name;
+  final steps = t.steps.length;
+  final out = [
+    if (cat != null) short ? cat : 'Category: $cat',
+    if (t.starred) 'starred',
+    if (steps > 0) '$steps step${steps == 1 ? '' : 's'}${short ? ' inside' : ' of its own'}',
+    if (t.emails.isNotEmpty) '${t.emails.length} email${t.emails.length == 1 ? '' : 's'}',
+    if (t.repeat != null) 'repeats',
+    if (t.place != null) short ? 'place' : 'Place reminder: ${t.place}',
+    if (t.kanban) short ? 'board' : 'On the Kanban board',
+    if (t.matrixBox != null) short ? 'matrix' : 'On the matrix',
+    if (t.notes.trim().length > 200) short ? 'long notes' : 'Full notes (${t.notes.trim().length} characters)',
+    if (!short) 'Added ${dateTimeFmt.format(t.createdAt)}',
+  ];
+  return out.isEmpty ? const ['its saved details'] : out;
 }
