@@ -80,6 +80,18 @@ jobs:
           channel: stable
           cache: true
       - run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+      # Item 79: AltStore and Sideloadly read the entitlements already inside the app to know
+      # which shared group (app group) to set up for the widgets. --no-codesign leaves none, so
+      # the widget and the app are signed here with an ad-hoc signature that only carries them.
+      # The sideloading tool replaces this signature with your Apple ID's.
+      - name: Add entitlements (ad-hoc signature)
+        run: |
+          APP=build/ios/iphoneos/Runner.app
+          for f in "$APP"/Frameworks/*; do codesign --force --sign - "$f"; done
+          codesign --force --sign - --entitlements ios/TaskBlocksWidget/TaskBlocksWidget.entitlements "$APP"/PlugIns/TaskBlocksWidget.appex
+          codesign --force --sign - --entitlements ios/Runner/Runner.entitlements "$APP"
+          codesign -d --entitlements - "$APP"/PlugIns/TaskBlocksWidget.appex
+          codesign -d --entitlements - "$APP"
       - name: Package unsigned .ipa
         run: |
           mkdir -p Payload
