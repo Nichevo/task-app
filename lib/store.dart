@@ -1534,6 +1534,8 @@ class AppStore extends ChangeNotifier {
       ..splitFrom = t.id;
     if (n.notes.trim().isEmpty && s.note.isNotEmpty) n.notes = s.note;
     n.eventId ??= s.eventId;
+    n.startAt ??= s.startAt;
+    n.takesDays ??= s.takesDays;
     if (t.boardSteps.contains(s) && s.placed) {
       // It was a card on the board as a step: it keeps that stage and history.
       n
@@ -1653,6 +1655,14 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
+  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? progress}) {
+    s.startAt = start == null ? null : dayOf(start);
+    s.takesDays = takes == null || takes < 1 ? null : takes;
+    s.progress = progress == null || progress <= 0 ? null : progress.clamp(0, 100);
+    changed(task: t);
+  }
+
   void setStepNote(Task t, TaskStep s, String note) {
     s.note = note.trim();
     changed(task: t);
@@ -1706,6 +1716,8 @@ class AppStore extends ChangeNotifier {
       ..waitingOn = t.waitingOn
       ..notes = s.note
       ..eventId = s.eventId
+      ..startAt = s.startAt
+      ..takesDays = s.takesDays
       ..splitFrom = t.id
       ..dueAt = s.dueAt ?? t.dueAt
       ..remindBefore = s.dueAt != null ? s.remindBefore : t.remindBefore;

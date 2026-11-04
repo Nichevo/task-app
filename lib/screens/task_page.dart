@@ -12,6 +12,7 @@ import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/worked_week.dart';
+import 'gantt_page.dart' show editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -96,6 +97,13 @@ class _TaskPageState extends State<TaskPage> {
               onPressed: () => Navigator.pop(c, 'note'),
               child: Text(s.note.isEmpty ? 'Add a note' : 'Edit the note'),
             ),
+            if (task.gantt)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, 'plan'),
+                child: Text(s.startAt == null && s.takesDays == null && s.progress == null
+                    ? 'Start, days of work and progress (Gantt chart)'
+                    : 'Change its start, days of work or progress'),
+              ),
             if (s.carried == null)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'task'),
@@ -137,6 +145,9 @@ class _TaskPageState extends State<TaskPage> {
         );
       case 'due':
         await _stepDue(s);
+      case 'plan':
+        await editStepPlan(context, widget.store, task, s);
+        if (mounted) setState(() {});
       case 'note':
         final note = await askText(context, 'Note for "${s.title}"', initial: s.note);
         if (note != null) setState(() => widget.store.setStepNote(task, s, note));
@@ -841,7 +852,6 @@ class _TaskPageState extends State<TaskPage> {
     return int.tryParse(v.trim().split(' ').first);
   }
 
-  /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.
   /// Item 78: the Habit switch, and how often once it is one.
   List<Widget> _habit(BuildContext context) {
     if (archived && !task.habit) return [];
@@ -969,6 +979,7 @@ class _TaskPageState extends State<TaskPage> {
     ];
   }
 
+  /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.
   List<Widget> _gantt(BuildContext context) {
     if (task.habit || archived && !task.gantt) return [];
     final theme = Theme.of(context);

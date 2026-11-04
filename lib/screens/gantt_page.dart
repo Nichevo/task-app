@@ -322,7 +322,11 @@ class _GanttPageState extends State<GanttPage> {
 
   Widget _chart(List<Task> tasks, DateTime now) {
     final scheme = Theme.of(context).colorScheme;
-    final bars = [for (final t in tasks) ?barFor(t, data)];
+    final bars = [
+      for (final t in tasks) ?barFor(t, data),
+      for (final t in tasks)
+        for (final s in t.steps) ?stepBar(t, s, data),
+    ];
     final (first, last) = chartRange(bars, now);
     final days = daysBetween(first, last) + 1;
     final width = days * _dayW;
@@ -472,15 +476,22 @@ class _GanttPageState extends State<GanttPage> {
     final t = r.task!;
     if (r.step != null) {
       final s = r.step!;
-      return SizedBox(
-        height: r.height,
-        child: Padding(
-          padding: EdgeInsets.only(left: narrow ? 24 : 40, right: 8),
-          child: Row(children: [
-            Icon(s.done ? Icons.check : Icons.radio_button_unchecked, size: 14),
-            const SizedBox(width: 6),
-            Expanded(child: Text(s.title, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
-          ]),
+      final sb = stepBar(t, s, data);
+      return InkWell(
+        onTap: t.closedAt != null ? null : () => editStepPlan(context, store, t, s),
+        child: SizedBox(
+          height: r.height,
+          child: Padding(
+            padding: EdgeInsets.only(left: narrow ? 24 : 40, right: 8),
+            child: Row(children: [
+              Icon(s.done ? Icons.check : Icons.radio_button_unchecked, size: 14),
+              const SizedBox(width: 6),
+              Expanded(child: Text(s.title, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
+              if (!s.done && s.progress != null) Text('${s.progress}% ', style: theme.textTheme.labelSmall),
+              if (sb != null && !stepIsPoint(s) && !narrow)
+                Text('${workDays(sb.start, sb.end, weekends: weekendsFor(t, data))}d', style: theme.textTheme.labelSmall),
+            ]),
+          ),
         ),
       );
     }
@@ -558,23 +569,75 @@ class _GanttPageState extends State<GanttPage> {
     final colour = ganttColour(data, t.categoryId);
     if (r.step != null) {
       final s = r.step!;
-      final due = s.dueAt;
-      return SizedBox(
-        height: r.height,
-        width: width,
-        child: due == null
-            ? null
-            : Stack(children: [
-                Positioned(
-                  left: xOf(due) + _dayW / 2 - 6,
-                  top: r.height / 2 - 6,
-                  child: Transform.rotate(
-                    angle: pi / 4,
-                    child: Container(width: 12, height: 12, color: s.done ? scheme.outline : colour),
-                  ),
+      final sb = stepBar(t, s, data);
+      final open = t.closedAt != null ? null : () => editStepPlan(context, store, t, s);
+      if (sb == null) {
+        return SizedBox(
+          height: r.height,
+          width: width,
+          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: open),
+        );
+      }
+      final stepColour = s.done ? scheme.outline : colour;
+      final children = <Widget>[];
+      if (stepIsPoint(s)) {
+        // A date only: a diamond on its day.
+        children.add(Positioned(
+          left: xOf(sb.start) + _dayW / 2 - 6,
+          top: r.height / 2 - 6,
+          child: GestureDetector(
+            onTap: open,
+            child: Transform.rotate(
+              angle: pi / 4,
+              child: Container(width: 12, height: 12, color: stepColour),
+            ),
+          ),
+        ));
+      } else {
+        final w = max(sb.length * _dayW, _dayW);
+        children.add(Positioned(
+          left: xOf(sb.start),
+          top: r.height / 2 - 7,
+          width: w,
+          height: 14,
+          child: GestureDetector(
+            onTap: open,
+            child: Tooltip(
+              message: '${s.title}\n${DateFormat('EEE d MMM').format(sb.start)} to '
+                  '${DateFormat('EEE d MMM').format(sb.end)}${s.done ? ', done' : s.progress != null ? ', ${s.progress}% done' : ''}',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: stepColour.withValues(alpha: s.done ? 0.5 : 0.3),
+                  borderRadius: BorderRadius.circular(4),
+                  border: sb.guessedStart ? null : Border.all(color: stepColour),
                 ),
-              ]),
-      );
+                clipBehavior: Clip.antiAlias,
+                child: Stack(children: [
+                  if (!s.done && s.share > 0)
+                    FractionallySizedBox(widthFactor: s.share, heightFactor: 1, child: ColoredBox(color: stepColour)),
+                  if (sb.late && !s.done)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        width: min(w, sb.lateDays * _dayW),
+                        color: scheme.error.withValues(alpha: 0.5),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+          ),
+        ));
+        final due = sb.due;
+        if (due != null && daysBetween(due, sb.end) != 0) {
+          children.add(Positioned(
+            left: xOf(due) + _dayW - 1,
+            top: r.height / 2 - 9,
+            child: Container(width: 2, height: 18, color: sb.late ? scheme.error : scheme.onSurfaceVariant),
+          ));
+        }
+      }
+      return SizedBox(height: r.height, width: width, child: Stack(clipBehavior: Clip.none, children: children));
     }
     final bar = barFor(t, data)!;
     final dragging = _dragId == t.id;
@@ -973,4 +1036,87 @@ class GanttTimeline extends StatelessWidget {
       },
     );
   }
+}
+
+/// Item 72: a step's start day and days of work for the chart, asked in one small dialog. Also
+/// used from the step menu on the task page.
+Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep s) async {
+  final now = DateTime.now();
+  final fmt = DateFormat('EEE d MMM');
+  DateTime? start = s.startAt;
+  int? takes = s.takesDays;
+  var progress = s.done ? 100 : s.progress ?? 0;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (c) => StatefulBuilder(
+      builder: (c, set) {
+        final preview = stepBar(t, TaskStep(id: s.id, title: s.title, dueAt: s.dueAt, startAt: start, takesDays: takes), store.data);
+        return AlertDialog(
+          title: Text(s.title),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.play_arrow_outlined),
+              title: const Text('Starts'),
+              subtitle: Text(start == null ? 'Not set' : fmt.format(start!)),
+              trailing: start == null
+                  ? null
+                  : IconButton(tooltip: 'Clear', icon: const Icon(Icons.clear), onPressed: () => set(() => start = null)),
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: c,
+                  helpText: 'When does "${s.title}" start?',
+                  initialDate: start ?? (t.startAt != null ? dayOf(t.startAt!) : dayOf(now)),
+                  firstDate: DateTime(now.year - 3),
+                  lastDate: DateTime(now.year + 10),
+                );
+                if (picked != null) set(() => start = picked);
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.timelapse),
+              title: Text(takes == null ? 'Takes: not set' : 'Takes $takes day${takes == 1 ? '' : 's'} of work'),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Fewer days',
+                  icon: const Icon(Icons.remove),
+                  onPressed: takes == null ? null : () => set(() => takes = takes! <= 1 ? null : takes! - 1),
+                ),
+                IconButton(
+                  tooltip: 'More days',
+                  icon: const Icon(Icons.add),
+                  onPressed: () => set(() => takes = (takes ?? 0) + 1),
+                ),
+              ]),
+            ),
+            if (!s.done) ...[
+              Text('Progress: $progress%'),
+              Slider(
+                value: progress.toDouble(),
+                max: 100,
+                divisions: 20,
+                label: '$progress%',
+                onChanged: (v) => set(() => progress = v.round()),
+              ),
+            ],
+            if (s.dueAt != null) Text('Due ${fmt.format(s.dueAt!)}'),
+            if (preview != null && (start != null || takes != null))
+              Text(
+                'On the chart: ${fmt.format(preview.start)} to ${fmt.format(preview.end)}'
+                '${preview.late ? ', ${preview.lateDays} day${preview.lateDays == 1 ? '' : 's'} after due' : ''}',
+                style: Theme.of(c).textTheme.bodySmall,
+              ),
+            if (preview == null)
+              Text('Give it a start date (or a due date) to show it on the chart.', style: Theme.of(c).textTheme.bodySmall),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Save')),
+          ],
+        );
+      },
+    ),
+  );
+  if (ok == true) store.setStepPlan(t, s, start: start, takes: takes, progress: s.done ? s.progress : progress);
 }
