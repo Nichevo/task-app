@@ -20,5 +20,15 @@ import flutter_local_notifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // Tells the Dart side which shared group (app group) the home screen widgets read from.
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "TaskBlocksWidgets") {
+      FlutterMethodChannel(name: "app.taskblocks/widgets", binaryMessenger: registrar.messenger())
+        .setMethodCallHandler { call, result in
+          switch call.method {
+          case "appGroup": result(AppGroup.id)
+          default: result(FlutterMethodNotImplemented)
+          }
+        }
+    }
   }
 }

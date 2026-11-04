@@ -19,9 +19,24 @@ calendar view, CSV, Dropbox sync, pasted lists), plus:
   buttons (press and hold the notification).
 - **Location**: the "Record where tasks are added and done" switch in Settings.
 
-Android-only for now (they are written in Kotlin): home screen widgets, calendar event suggestions, photo of
-a list, Share to Task Blocks and voice add. Each could be added for iPad later (WidgetKit widgets, a share
-extension, EventKit for the calendar); widgets and share need a paid Apple developer account (app groups).
+Android-only for now (they are written in Kotlin): calendar event suggestions, photo of a list, Share to
+Task Blocks and voice add. Each could be added for iPad later (a share extension, EventKit for the calendar).
+
+## Home screen widgets (being added, item 79)
+
+Version 1.9.4 adds one **test widget**, "Task Blocks test", to check that widgets can see your tasks when
+the app is installed with a free Apple ID. After installing:
+
+1. Open Task Blocks once, so it shares your tasks.
+2. Press and hold the home screen, tap **Edit** → **Add Widget**, search for Task Blocks, and add the
+   test widget (medium size shows the most).
+3. It should say "N open tasks" with the first few, and "Shared group: group.app.taskblocks…" at the
+   bottom. "No shared storage" means the sideloading tool did not set up the app group.
+
+The widget is a small extra app inside Task Blocks, so with a free Apple ID it may count as one of the
+3 apps AltStore can keep active (AltStore itself is one). If AltStore says it can't activate more than 3
+apps, deactivate another sideloaded app in AltStore's My Apps tab. A paid developer account has no
+such limit.
 
 ## What needs the owner's Apple account
 

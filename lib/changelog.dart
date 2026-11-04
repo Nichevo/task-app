@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.4', 'November 2026', [
+    'iPad: a first test home screen widget, "Task Blocks test". It shows how many tasks are open and the first few, to check that widgets can see your tasks when the app is installed with AltStore. The full set of iPad widgets comes next.',
+  ]),
   Release('1.9.3', 'November 2026', [
     'Steps on the Gantt chart can now have their own start day, days of work and progress, shown as a thin bar under their task, filled as far as it has got (red past their due date when they will finish late). Their progress counts toward the task\'s. Tap a step row on the chart, or use "Start, days of work and progress" in the step\'s menu on the task page. A step with only a date still shows as a diamond. Split out keeps the start and days of work.',
   ]),

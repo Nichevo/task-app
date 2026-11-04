@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'gantt.dart';
@@ -11,10 +12,35 @@ import 'stats.dart';
 
 typedef WidgetMove = ({String task, String? step, String stage, DateTime at});
 
-/// Shares the task list with the Android home screen widgets, and picks up what was done
-/// on them (ticks, step ticks, snoozes). Does nothing on other platforms.
+/// Shares the task list with the home screen widgets (Android, and iPad/iPhone from item 79),
+/// and picks up what was done on them (ticks, step ticks, snoozes). Does nothing on other platforms.
 class HomeWidgets {
-  static bool get supported => !kIsWeb && Platform.isAndroid;
+  static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  /// Item 79: the iPad widget kinds (WidgetKit `kind` strings in ios/TaskBlocksWidget).
+  static const _iosKinds = ['TaskBlocksWidget'];
+
+  static const _channel = MethodChannel('app.taskblocks/widgets');
+
+  /// On iOS the widgets read from a shared app group whose name can change when the app is
+  /// sideloaded (AltStore adds the team id), so the native side looks it up. False when the
+  /// build has no shared group, in which case nothing is sent.
+  Future<bool>? _ready;
+
+  Future<bool> _setUp() async {
+    if (!Platform.isIOS) return true;
+    try {
+      final group = await _channel.invokeMethod<String>('appGroup');
+      if (group == null) return false;
+      await HomeWidget.setAppGroupId(group);
+      return true;
+    } catch (e) {
+      debugPrint('No widget app group: $e');
+      return false;
+    }
+  }
+
+  Future<bool> get _ok => _ready ??= _setUp();
 
   static const _providers = [
     'app.taskblocks.TaskListWidget',
@@ -41,15 +67,21 @@ class HomeWidgets {
   String? _lastJson;
 
   Future<void> push(AppData data) async {
-    if (!supported) return;
+    if (!supported || !await _ok) return;
     final json = widgetJson(data, DateTime.now());
     // Each update redraws every widget, so skip it when nothing they show has changed.
     if (json == _lastJson) return;
     try {
       await HomeWidget.saveWidgetData<String>('widget_data', json);
       _lastJson = json;
-      for (final p in _providers) {
-        await HomeWidget.updateWidget(qualifiedAndroidName: p);
+      if (Platform.isIOS) {
+        for (final k in _iosKinds) {
+          await HomeWidget.updateWidget(iOSName: k);
+        }
+      } else {
+        for (final p in _providers) {
+          await HomeWidget.updateWidget(qualifiedAndroidName: p);
+        }
       }
     } catch (e) {
       debugPrint('Could not update widgets: $e');
@@ -149,7 +181,7 @@ class HomeWidgets {
       };
 
   Future<List<dynamic>> _take(String key) async {
-    if (!supported) return const [];
+    if (!supported || !await _ok) return const [];
     try {
       final raw = await HomeWidget.getWidgetData<String>(key);
       if (raw == null || raw.isEmpty || raw == '[]') return const [];
