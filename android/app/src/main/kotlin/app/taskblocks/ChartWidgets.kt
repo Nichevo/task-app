@@ -72,7 +72,10 @@ class WorkedTodayWidget : BaseWidget() {
   override val listId: Int = R.id.widget_list
 
   companion object {
-    fun tasks(snap: Snapshot, f: String): List<WidgetTask> = snap.tasks.filter { WidgetData.inCategory(it, f) && !it.locked }
+    /** Open tasks in the category, or with the "habits" choice, the habits (due today first). */
+    fun tasks(snap: Snapshot, f: String): List<WidgetTask> =
+        if (f == "habits") snap.habits.sortedBy { if (it.locked) 1 else 0 }
+        else snap.tasks.filter { WidgetData.inCategory(it, f) && !it.locked }
   }
 
   override fun draw(c: Context, m: AppWidgetManager, id: Int, snap: Snapshot) {
@@ -83,9 +86,17 @@ class WorkedTodayWidget : BaseWidget() {
     val list = tasks(snap, f)
     val today = WidgetData.todayKey()
     val n = list.count { it.worked.contains(today) }
-    views.setTextViewText(R.id.widget_title, BoardLook.categoryTitle(snap, "Worked today", f) + " · $n of ${list.size}")
-    views.setTextViewText(R.id.widget_empty, "No open tasks here.")
-    views.setOnClickPendingIntent(R.id.widget_title, BoardLook.launch(c, "taskblocks://achievements"))
+    if (f == "habits") {
+      // Habits not due today (enough this week already) don't count against today.
+      val due = list.count { !it.locked || it.worked.contains(today) }
+      views.setTextViewText(R.id.widget_title, "Habits today · $n of $due")
+      views.setTextViewText(R.id.widget_empty, "No habits yet. Turn on \"Habit\" on a task in the app.")
+      views.setOnClickPendingIntent(R.id.widget_title, BoardLook.launch(c, "taskblocks://habits"))
+    } else {
+      views.setTextViewText(R.id.widget_title, BoardLook.categoryTitle(snap, "Worked today", f) + " · $n of ${list.size}")
+      views.setTextViewText(R.id.widget_empty, "No open tasks here.")
+      views.setOnClickPendingIntent(R.id.widget_title, BoardLook.launch(c, "taskblocks://achievements"))
+    }
     val service =
         Intent(c, WorkedTodayService::class.java).apply {
           putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
@@ -130,7 +141,11 @@ class WorkedTodayService : RemoteViewsService() {
       v.setTextViewText(R.id.row_title, t.title)
       val dots = week.joinToString("") { d -> if (t.worked.contains(d)) "●" else if (d > today) "·" else "○" }
       val count = week.count { t.worked.contains(it) }
-      v.setTextViewText(R.id.row_meta, if (count == 0) dots else "$dots  $count this week")
+      val extra =
+          if (filter == "habits") {
+            if (t.streak > 0) "streak ${t.streak} ${t.streakUnit}${if (t.streak == 1) "" else "s"}" else ""
+          } else if (count > 0) "$count this week" else ""
+      v.setTextViewText(R.id.row_meta, if (extra.isEmpty()) dots else "$dots  $extra")
       v.setOnClickFillInIntent(
           R.id.row_tick, Intent().putExtra("op", "worked").putExtra("id", t.id).putExtra("day", today).putExtra("on", (!on).toString()))
       v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "open").putExtra("id", t.id))

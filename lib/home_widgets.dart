@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'gantt.dart';
+import 'habits.dart';
 import 'models.dart';
 import 'stats.dart';
 
@@ -72,7 +73,7 @@ class HomeWidgets {
       'boxes': {for (final b in MatrixBox.values) b.id: data.boxName(b)},
       'tasks': [
         for (final t in [...data.active.where((t) => t.starred), ...data.active.where((t) => !t.starred)])
-          if (!t.isSnoozed(now) || t.kanban)
+          if (!t.habit && (!t.isSnoozed(now) || t.kanban))
             {
               'id': t.id,
               'title': t.title,
@@ -100,6 +101,19 @@ class HomeWidgets {
                         'since': s.stageSince!.millisecondsSinceEpoch,
                     },
                 ],
+            },
+      ],
+      // Item 78: habits, for the Worked today widget's Habits choice.
+      'habits': [
+        for (final t in data.habits)
+          if (!t.habitPaused)
+            {
+              'id': t.id,
+              'title': t.title,
+              'due': dueToday(t, now),
+              'worked': [for (final k in t.worked) if (k.compareTo(fortnight) >= 0) k],
+              'streak': streak(t, now),
+              'unit': t.habitGoal == HabitGoal.perWeek ? 'week' : 'day',
             },
       ],
       // Days (yyyy-MM-dd) with tasks due, for the mini month widget; repeats faded.

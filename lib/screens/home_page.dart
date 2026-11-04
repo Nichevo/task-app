@@ -23,7 +23,9 @@ import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
+import '../habits.dart';
 import 'achievements_page.dart';
+import 'habits_page.dart';
 import 'gantt_page.dart';
 import 'matrix_page.dart';
 import 'search_page.dart';
@@ -201,6 +203,8 @@ class HomePageState extends State<HomePage> {
 
   void openAchievements() => _open(context, AchievementsPage(store: store));
 
+  void openHabits() => _open(context, HabitsPage(store: store));
+
   void openMatrix({MatrixBox? box}) => _open(context, MatrixPage(store: store, initialBox: box));
 
   /// Text shared from another app: one task, or several when it is a list.
@@ -267,6 +271,7 @@ class HomePageState extends State<HomePage> {
     final shown = q.isNotEmpty
         ? data.active.where((t) => matchesSearch(t, q, data))
         : data.active.where((t) =>
+            !t.habit &&
             (_showSnoozed || !t.isSnoozed(now)) &&
             passesFilter(t, _filter, now) &&
             !(data.kanbanHideFromList && t.kanban));
@@ -412,11 +417,12 @@ class HomePageState extends State<HomePage> {
     final now = DateTime.now();
     final rows = _rows(now);
     final searching = _query.isNotEmpty;
-    final snoozedCount = searching ? 0 : data.active.where((t) => t.isSnoozed(now)).length;
+    final snoozedCount = searching ? 0 : data.active.where((t) => !t.habit && t.isSnoozed(now)).length;
     final hiddenCount = searching || _filter == QuickFilter.all
         ? 0
         : data.active
-            .where((t) => !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
+            .where((t) =>
+                !t.habit && !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
             .length;
     final showBoardIcon = data.boardTasks.isNotEmpty && store.topIconShown(TopIcon.board);
     final showMatrixIcon = data.matrixTasks.isNotEmpty && store.topIconShown(TopIcon.matrix);
@@ -479,6 +485,7 @@ class HomePageState extends State<HomePage> {
               'calendar' => openCalendar(null),
               'stats' => openStats(),
               'achievements' => openAchievements(),
+              'habits' => openHabits(),
               'board' => openBoard(),
               'matrix' => _open(context, MatrixPage(store: store)),
               'gantt' => openGantt(),
@@ -503,6 +510,7 @@ class HomePageState extends State<HomePage> {
               ),
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               const PopupMenuItem(value: 'achievements', child: Text('Achievements')),
+              const PopupMenuItem(value: 'habits', child: Text('Habits')),
               if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
               if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
@@ -576,6 +584,7 @@ class HomePageState extends State<HomePage> {
             ],
           ),
         if (data.showQuickFilters && !_searching) _filterChips(),
+        if (data.habits.isNotEmpty && !_searching) _habitsLine(now),
         if (estimate != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
@@ -627,6 +636,35 @@ class HomePageState extends State<HomePage> {
           ]),
         ),
       );
+
+  /// Item 78: the one line habits take in the list; it opens the Habits page.
+  Widget _habitsLine(DateTime now) {
+    final (done, due) = habitsToday(data, now);
+    final all = due > 0 && done == due;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
+      child: Material(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: openHabits,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(children: [
+              Icon(all ? Icons.check_circle : Icons.repeat_on_outlined, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(due == 0 ? 'Habits: none due today' : 'Habits today: $done of $due',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// All / Today / Next 7 days / ... above the list.
   Widget _filterChips() => SizedBox(

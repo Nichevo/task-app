@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'habits.dart';
 import 'models.dart';
 import 'stats.dart';
 
@@ -180,6 +181,9 @@ class Reminders {
       for (final t in data.active)
         for (final st in t.steps)
           if (st.dueAt != null) [st.id, st.title, st.done, st.dueAt!.toIso8601String(), st.remindBefore, t.title],
+      // Item 78: a habit's reminder moves on once today is ticked.
+      for (final t in data.habits)
+        if (nextHabitReminder(t, now) case final at?) [t.id, t.title, at.toIso8601String()],
     ]);
   }
 
@@ -233,6 +237,12 @@ class Reminders {
             budget--;
           }
         }
+      }
+      // Item 78: each habit's next reminder, only on a day it isn't ticked yet.
+      for (final t in data.habits) {
+        final at = nextHabitReminder(t, now);
+        if (at == null || budget <= 0) continue;
+        if (await _at((t.id.hashCode & 0x0fffffff) * 8 + 7, at, 'Habit', t.title, now, t, step: true)) budget--;
       }
       if (data.overdueMode == OverdueMode.daily) await _dailySummary(data, now);
       if (data.weeklyReview) await _weeklyReview(data, now);

@@ -108,6 +108,8 @@ class _TaskAppState extends State<TaskApp> {
           home.openGantt(categoryId: q['cat']);
         case 'achievements':
           home.openAchievements();
+        case 'habits':
+          home.openHabits();
       }
     });
   }

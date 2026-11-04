@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import 'gantt.dart';
+import 'habits.dart';
 import 'models.dart';
 
 /// Item 76: what was achieved in a category over a period, for the Achievements page.
@@ -101,15 +102,33 @@ class Achievements {
   /// Steps ticked in the period (steps keep their tick time since 1.8.6).
   int get stepsTicked => _all.fold(0, (n, t) => n + _stepsIn(t));
 
-  /// Different days with any task ticked as worked on.
+  /// Different days with any task ticked as worked on (habits are counted apart).
   int get daysWorked => {
-        for (final t in _all)
+        for (final t in _all.where((t) => !t.habit))
           for (final k in t.worked)
             if (_within(DateTime.tryParse(k))) k,
       }.length;
 
   /// Task-days: each day ticked on each task.
-  int get taskDays => _all.fold(0, (n, t) => n + _daysIn(t));
+  int get taskDays => _all.where((t) => !t.habit).fold(0, (n, t) => n + _daysIn(t));
+
+  /// Item 78: each habit with the days ticked in the period and the days it was meant to happen
+  /// (for times a week, its weekly number spread over the period).
+  List<(Task, int, int)> get habits {
+    final last = to.isAfter(addDays(dayOf(now), 1)) ? addDays(dayOf(now), 1) : to;
+    return [
+      for (final t in data.habits)
+        if (_inCat(t.categoryId))
+          () {
+            var due = 0;
+            for (var d = from; d.isBefore(last); d = addDays(d, 1)) {
+              if (scheduledOn(t, d)) due++;
+            }
+            if (t.habitGoal == HabitGoal.perWeek) due = (due * t.habitTimes / 7).round();
+            return (t, _daysIn(t), due);
+          }(),
+    ];
+  }
 
   List<FinishedTask> get finished => [
         for (final t in data.archived)
@@ -118,7 +137,8 @@ class Achievements {
 
   List<WorkedTask> get unfinished => [
         for (final t in data.active)
-          if (_inCat(t.categoryId) && (_daysIn(t) > 0 || _stepsIn(t) > 0)) WorkedTask(t, _daysIn(t), _stepsIn(t)),
+          if (!t.habit && _inCat(t.categoryId) && (_daysIn(t) > 0 || _stepsIn(t) > 0))
+            WorkedTask(t, _daysIn(t), _stepsIn(t)),
       ]..sort((a, b) => b.daysWorked.compareTo(a.daysWorked));
 
   String get categoryName => categoryId == null
@@ -152,6 +172,15 @@ class Achievements {
       for (final x in u) {
         final steps = x.task.steps.isEmpty ? '' : ', ${x.task.stepsDone} of ${x.task.steps.length} steps';
         b.writeln('- ${x.task.title}: ${plural(x.daysWorked, 'day')}$steps');
+      }
+    }
+    final h = habits;
+    if (h.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('Habits');
+      for (final (t, done, due) in h) {
+        b.writeln('- ${t.title}: $done of $due');
       }
     }
     return b.toString().trimRight();

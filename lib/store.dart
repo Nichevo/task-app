@@ -1116,6 +1116,60 @@ class AppStore extends ChangeNotifier {
     return on;
   }
 
+  // --- Habits (item 78) ---
+
+  /// Makes [t] a habit (or an ordinary task again). A habit is never ticked off, so it leaves the
+  /// board, the matrix and the Gantt chart and loses its due date. A repeating task keeps its
+  /// history: each day one of its series was ticked off becomes a ticked day.
+  void setHabit(Task t, bool on) {
+    if (on == t.habit) return;
+    if (on) {
+      if (t.kanban) setOnBoard(t, false);
+      t.matrixBox = null;
+      t.gantt = false;
+      final r = t.repeat;
+      if (r != null) {
+        for (final rec in data.done.values) {
+          if (rec.series == t.series) t.worked.add(dayKey(rec.at));
+        }
+        for (final old in data.archived) {
+          if (old.series == t.series && old.closedAt != null) t.worked.add(dayKey(old.closedAt!));
+        }
+        if (r.unit == RepeatUnit.week && r.every == 1 && r.weekdays.isNotEmpty) {
+          t.habitGoal = HabitGoal.weekdays;
+          t.habitDays
+            ..clear()
+            ..addAll(r.weekdays);
+        } else if (r.unit == RepeatUnit.week) {
+          t.habitGoal = HabitGoal.perWeek;
+          t.habitTimes = 1;
+        } else {
+          t.habitGoal = HabitGoal.daily;
+        }
+        if (t.dueAt != null && (t.dueAt!.hour != 0 || t.dueAt!.minute != 0)) t.habitRemind ??= t.dueAt!.hour * 60 + t.dueAt!.minute;
+        t.repeat = null;
+      }
+      t.dueAt = null;
+      t.snoozedUntil = null;
+    }
+    t.habit = on;
+    changed(task: t, order: true);
+  }
+
+  /// Pauses a habit (its streak is kept and paused days don't count), or carries on.
+  void pauseHabit(Task t, bool pause) {
+    final today = dayKey(DateTime.now());
+    if (pause && !t.habitPaused) {
+      t.habitPauses.add('$today/');
+    } else if (!pause && t.habitPaused) {
+      final last = t.habitPauses.removeLast();
+      final from = last.substring(0, last.length - 1);
+      // Paused and carried on the same day leaves nothing to skip.
+      if (from != today) t.habitPauses.add('$from/${dayKey(DateTime.now().subtract(const Duration(days: 1)))}');
+    }
+    changed(task: t);
+  }
+
   // --- Gantt chart (item 72) ---
 
   /// Puts [t] on the Gantt chart (or takes it off). [start] sets its start day.

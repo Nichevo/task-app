@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../gantt.dart';
+import '../habits.dart';
 import '../models.dart';
 import '../places.dart';
 import '../store.dart';
@@ -762,6 +763,7 @@ class _TaskPageState extends State<TaskPage> {
                     }),
                   ),
           ),
+        ..._habit(context),
         ..._worked(context),
         ..._board(context),
         ..._matrix(context),
@@ -840,6 +842,108 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.
+  /// Item 78: the Habit switch, and how often once it is one.
+  List<Widget> _habit(BuildContext context) {
+    if (archived && !task.habit) return [];
+    final now = DateTime.now();
+    final n = streak(task, now);
+    void edit(VoidCallback f) => _update(f);
+    return [
+      if (!archived)
+        SwitchListTile(
+          secondary: const Icon(Icons.repeat_on_outlined),
+          title: Text(task.repeat != null && !task.habit ? 'Make into a habit' : 'Habit'),
+          subtitle: Text(task.habit
+              ? '${goalText(task)}${n > 0 ? ' · streak ${streakText(task, n)}' : ''}'
+              : task.repeat != null
+                  ? 'Tick the days instead of ticking it off; the days it was done are kept'
+                  : 'Tick the days you do it instead of ticking it off'),
+          value: task.habit,
+          onChanged: (v) => setState(() => widget.store.setHabit(task, v)),
+        ),
+      if (task.habit && !archived) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(72, 0, 16, 4),
+          child: SegmentedButton<HabitGoal>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [for (final g in HabitGoal.values) ButtonSegment(value: g, label: Text(g.label))],
+            selected: {task.habitGoal},
+            onSelectionChanged: (v) => edit(() => task.habitGoal = v.first),
+          ),
+        ),
+        if (task.habitGoal == HabitGoal.perWeek)
+          ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(72, 0, 16, 0),
+            title: Text('${task.habitTimes} time${task.habitTimes == 1 ? '' : 's'} a week'),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                tooltip: 'Fewer',
+                icon: const Icon(Icons.remove),
+                onPressed: task.habitTimes <= 1 ? null : () => edit(() => task.habitTimes--),
+              ),
+              IconButton(
+                tooltip: 'More',
+                icon: const Icon(Icons.add),
+                onPressed: task.habitTimes >= 7 ? null : () => edit(() => task.habitTimes++),
+              ),
+            ]),
+          ),
+        if (task.habitGoal == HabitGoal.weekdays)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(72, 0, 16, 4),
+            child: Wrap(spacing: 4, children: [
+              for (var d = 1; d <= 7; d++)
+                FilterChip(
+                  label: Text(const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d - 1]),
+                  selected: task.habitDays.contains(d),
+                  onSelected: (on) => edit(() {
+                    if (on) {
+                      task.habitDays.add(d);
+                    } else if (task.habitDays.length > 1) {
+                      task.habitDays.remove(d);
+                    }
+                  }),
+                ),
+            ]),
+          ),
+        if (task.habitGoal == HabitGoal.daily)
+          SwitchListTile(
+            contentPadding: const EdgeInsets.fromLTRB(72, 0, 16, 0),
+            title: const Text('One free missed day a week'),
+            subtitle: const Text('Missing one day doesn\'t break the streak'),
+            value: task.habitFreeMiss,
+            onChanged: (v) => edit(() => task.habitFreeMiss = v),
+          ),
+        ListTile(
+          contentPadding: const EdgeInsets.fromLTRB(72, 0, 16, 0),
+          title: const Text('Remind me if not done'),
+          subtitle: Text(task.habitRemind == null
+              ? 'Off'
+              : 'At ${TimeOfDay(hour: task.habitRemind! ~/ 60, minute: task.habitRemind! % 60).format(context)}, only on days it isn\'t ticked'),
+          trailing: task.habitRemind == null
+              ? null
+              : IconButton(
+                  tooltip: 'No reminder',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => edit(() => task.habitRemind = null),
+                ),
+          onTap: () async {
+            final r = task.habitRemind ?? 20 * 60;
+            final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: r ~/ 60, minute: r % 60));
+            if (picked != null) edit(() => task.habitRemind = picked.hour * 60 + picked.minute);
+          },
+        ),
+        ListTile(
+          contentPadding: const EdgeInsets.fromLTRB(72, 0, 16, 0),
+          title: Text(task.habitPaused ? 'Paused' : 'Pause'),
+          subtitle: Text(task.habitPaused ? 'Tap to carry on; the streak was kept' : 'Away or ill? Paused days don\'t count'),
+          trailing: Switch(value: task.habitPaused, onChanged: (v) => setState(() => widget.store.pauseHabit(task, v))),
+        ),
+      ],
+    ];
+  }
+
   /// Item 75: the days worked this week, tapped to tick.
   List<Widget> _worked(BuildContext context) {
     if (archived && task.worked.isEmpty) return [];
@@ -847,7 +951,7 @@ class _TaskPageState extends State<TaskPage> {
     return [
       ListTile(
         leading: const Icon(Icons.event_available_outlined),
-        title: const Text('Days worked on it'),
+        title: Text(task.habit ? 'Days done' : 'Days worked on it'),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -866,7 +970,7 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   List<Widget> _gantt(BuildContext context) {
-    if (archived && !task.gantt) return [];
+    if (task.habit || archived && !task.gantt) return [];
     final theme = Theme.of(context);
     final fmt = DateFormat('EEE d MMM');
     final bar = barFor(task, data);
@@ -1029,7 +1133,7 @@ class _TaskPageState extends State<TaskPage> {
   /// Item 60: the On the matrix switch, the box, and "Waiting on" for Delegate.
   List<Widget> _matrix(BuildContext context) {
     final box = MatrixBox.byId(task.matrixBox);
-    if (archived && box == null) return [];
+    if (task.habit || archived && box == null) return [];
     final urgent = widget.store.looksUrgent(task, DateTime.now());
     return [
       if (!archived)
@@ -1104,7 +1208,7 @@ class _TaskPageState extends State<TaskPage> {
   /// Item 52: the On the Kanban board switch, the stage, and the board history.
   List<Widget> _board(BuildContext context) {
     final stages = data.stages;
-    if (stages.isEmpty && task.moves.isEmpty) return [];
+    if (task.habit || stages.isEmpty && task.moves.isEmpty) return [];
     final current = data.stage(task.stageId) ?? stages.firstOrNull;
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return [

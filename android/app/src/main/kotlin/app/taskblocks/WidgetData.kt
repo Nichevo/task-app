@@ -47,6 +47,9 @@ data class WidgetTask(
     val snoozed: Boolean = false,
     /** Item 75: days (yyyy-MM-dd) ticked as worked on, in the last fortnight. */
     val worked: Set<String> = emptySet(),
+    /** Item 78, habits only: the streak and its unit (day or week). */
+    val streak: Int = 0,
+    val streakUnit: String = "day",
 )
 
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
@@ -70,6 +73,9 @@ class Snapshot(
   val all: List<WidgetTask>
   val stages: List<WidgetStage>
   val boxes: Map<String, String>
+
+  /** Item 78: habits that aren't paused, for the Worked today widget's Habits choice. */
+  val habits: List<WidgetTask>
 
   /** yyyy-MM-dd -> (tasks due, only future repeats). */
   val dueDays: Map<String, Pair<Int, Boolean>>
@@ -130,6 +136,31 @@ class Snapshot(
     }
     all = out
     tasks = out.filter { !it.snoozed }
+    val hArr = root.optJSONArray("habits") ?: JSONArray()
+    habits =
+        (0 until hArr.length()).map {
+          val o = hArr.getJSONObject(it)
+          val id = o.optString("id")
+          val wArr = o.optJSONArray("worked") ?: JSONArray()
+          val worked = (0 until wArr.length()).map { i -> wArr.getString(i) }.toMutableSet()
+          for ((k, on) in workedTicks) {
+            if (!k.startsWith("$id/")) continue
+            val day = k.removePrefix("$id/")
+            if (on) worked.add(day) else worked.remove(day)
+          }
+          WidgetTask(
+              id,
+              o.optString("title"),
+              null,
+              0L,
+              null,
+              locked = !o.optBoolean("due", true),
+              star = false,
+              worked = worked,
+              streak = o.optInt("streak"),
+              streakUnit = o.optString("unit", "day"),
+          )
+        }
     val stageArr = root.optJSONArray("stages") ?: JSONArray()
     stages =
         (0 until stageArr.length()).map {

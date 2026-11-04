@@ -877,7 +877,7 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
 - "Added vs done" widget for one category (4×3). Burn-down on the Gantt page (ideal, actual, "at this
   pace" finish) and as a 4×3 widget for one category.
 
-## 78. Habit tracker ◐ (planned for 1.9.2)
+## 78. Habit tracker ☑ (version 1.9.2)
 
 - A "Habit" switch: never ticked off, you tick the days. Goal every day, N times a week or chosen
   weekdays; optional reminder only if not ticked; pause. Habits page with week dots and streaks, a month
