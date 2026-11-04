@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.3', 'November 2026', [
+    'Steps on the Gantt chart can now have their own start day and days of work, shown as a thin bar under their task (red past their due date when they will finish late). Tap a step row on the chart, or use "Start and days of work" in the step\'s menu on the task page. A step with only a date still shows as a diamond. Split out keeps the start and days of work.',
+  ]),
   Release('1.9.2', 'November 2026', [
     'Habit tracker. Turn on "Habit" on a task (or tap + on the new Habits page): it is never ticked off, you tick the days you do it. Every day, a number of times a week, or chosen days. A repeating task keeps its history when it becomes a habit.',
     'The Habits page shows each habit\'s week to tick, its streak and this month\'s score. Tap one for a month calendar (tap any day so far to change it), the last 12 months as a strip, the best streak, and Pause, which keeps the streak while you are away.',

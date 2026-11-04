@@ -581,6 +581,8 @@ class TaskStep {
       this.remindBefore,
       this.note = '',
       this.eventId,
+      this.startAt,
+      this.takesDays,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
       // ignore: prefer_initializing_formals
@@ -593,7 +595,8 @@ class TaskStep {
   final Map<String, dynamic> extra;
 
   static const _known = {
-    'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event'
+    'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
+    'start', 'takes',
   };
 
   final String id;
@@ -640,6 +643,11 @@ class TaskStep {
   /// Item 58: the calendar event it was added from, so the event isn't offered again.
   String? eventId;
 
+  /// Item 72: its own start day and days of work on the Gantt chart, like a task's. With only
+  /// a due date it shows as a diamond.
+  DateTime? startAt;
+  int? takesDays;
+
   /// Item 56: the Kanban stage it is in when its task has steps on the board. Kept while they
   /// are off the board, so it goes back there.
   String? stageId;
@@ -670,6 +678,8 @@ class TaskStep {
         if (remindBefore != null) 'remind': remindBefore,
         if (note.isNotEmpty) 'note': note,
         if (eventId != null) 'event': eventId,
+        if (startAt != null) 'start': startAt!.toIso8601String(),
+        if (takesDays != null) 'takes': takesDays,
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -685,6 +695,8 @@ class TaskStep {
         note: j['note'] as String? ?? '',
         eventId: j['event'] as String?,
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
+        startAt: DateTime.tryParse(j['start'] as String? ?? ''),
+        takesDays: (j['takes'] as num?)?.toInt(),
         extra: unknownFields(j, _known),
       );
 }

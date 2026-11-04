@@ -80,6 +80,65 @@ void main() {
     });
   });
 
+  group('steps on the chart', () {
+    test('a step can have a start and days of work, or just a date (a diamond)', () {
+      final s = AppStore();
+      final t = s.addTask('Paint spare room')
+        ..gantt = true
+        ..startAt = mon
+        ..takesDays = 8;
+      final prep = s.addStep(t, 'Prep walls');
+      final dry = s.addStep(t, 'Let it dry');
+      s.setStepDue(t, dry, DateTime(2026, 11, 13, 17));
+      expect(stepBar(t, prep, s.data), isNull, reason: 'no dates yet');
+      expect(stepIsPoint(dry), isTrue);
+      expect(stepBar(t, dry, s.data)!.start, DateTime(2026, 11, 13));
+      s.setStepPlan(t, prep, start: DateTime(2026, 11, 12), takes: 3);
+      final b = stepBar(t, prep, s.data)!;
+      expect(b.start, DateTime(2026, 11, 12));
+      expect(b.end, DateTime(2026, 11, 16), reason: 'the weekend is skipped as its task counts it');
+      s.setStepDue(t, prep, DateTime(2026, 11, 13, 17));
+      expect(stepBar(t, prep, s.data)!.lateDays, 3);
+      // Days of work and a due date, no start: counts back from the due date.
+      s.setStepPlan(t, dry, takes: 2);
+      expect(stepIsPoint(dry), isFalse);
+      expect(stepBar(t, dry, s.data)!.start, DateTime(2026, 11, 12));
+      final back = roundTrip(s.data).task(t.id)!.steps.first;
+      expect(back.startAt, DateTime(2026, 11, 12));
+      expect(back.takesDays, 3);
+      final (n, _) = s.splitOut(t, prep);
+      expect(n.startAt, DateTime(2026, 11, 12));
+      expect(n.takesDays, 3);
+    });
+
+    testWidgets('tapping a step row asks for its start and days of work', (tester) async {
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final s = AppStore();
+      final t = s.addTask('Paint spare room')
+        ..gantt = true
+        ..startAt = DateTime.now()
+        ..takesDays = 5;
+      final st = s.addStep(t, 'Prep walls');
+      await tester.pumpWidget(MaterialApp(home: GanttPage(store: s)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Show steps').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Prep walls'));
+      await tester.pumpAndSettle();
+      expect(find.text('Takes: not set'), findsOneWidget);
+      await tester.tap(find.byTooltip('More days'));
+      await tester.tap(find.byTooltip('More days'));
+      await tester.pumpAndSettle();
+      expect(find.text('Takes 2 days of work'), findsOneWidget);
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(st.takesDays, 2);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('comes after', () {
     test('several tasks, a wait, and a clash when it starts too early', () {
       final s = AppStore();

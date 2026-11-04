@@ -106,6 +106,31 @@ GanttBar? barFor(Task t, AppData data) {
   return null;
 }
 
+/// Item 72: where a step's bar sits, worked out like a task's (weekends as its task counts
+/// them). Null without a start or due date. A step with only a due date is one day (a diamond).
+GanttBar? stepBar(Task t, TaskStep s, AppData data) {
+  final due = s.dueAt == null ? null : dayOf(s.dueAt!);
+  final weekends = weekendsFor(t, data);
+  final start = s.startAt == null ? null : dayOf(s.startAt!);
+  final takes = s.takesDays;
+  if (start != null) {
+    final end = takes != null
+        ? workEnd(start, takes, weekends: weekends)
+        : due != null && !due.isBefore(start)
+            ? due
+            : start;
+    return GanttBar(t, start, end, due: due);
+  }
+  if (due != null) {
+    return GanttBar(t, takes == null ? due : workStart(due, takes, weekends: weekends), due,
+        due: due, guessedStart: takes != null);
+  }
+  return null;
+}
+
+/// Whether a step shows as a diamond (a date only) rather than a bar.
+bool stepIsPoint(TaskStep s) => s.startAt == null && s.takesDays == null;
+
 /// Finds a task by id, open or ticked off.
 Task? anyTask(AppData data, String id) =>
     data.task(id) ?? data.archived.where((t) => t.id == id).firstOrNull;
