@@ -208,7 +208,7 @@ void main() {
       final s = AppStore();
       final t = s.addTask('Renew insurance');
       s.attachEmail(t, msg('a', subject: 'Quote, with "commas"'));
-      expect(buildCsv(s.data).split('\r\n')[1], endsWith(',1,,'));
+      expect(buildCsv(s.data).split('\r\n')[1], contains(',1,,'));
       final csv = buildEmailsCsv(s.data)!;
       expect(csv.split('\r\n').first, emailsHeader.join(','));
       expect(isEmailsCsv(csv), isTrue);

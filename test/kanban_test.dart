@@ -166,7 +166,7 @@ void main() {
     final t = s.addTask('Fence');
     s.setOnBoard(t, true);
     s.moveToStage(t, st(s, 'doing'), how: MoveHow.dragged, note: 'started, see notes');
-    expect(buildCsv(s.data).split('\r\n')[1], endsWith(',In progress,,,'));
+    expect(buildCsv(s.data).split('\r\n')[1], contains(',In progress,,,'));
     final lines = buildMovesCsv(s.data)!.trim().split('\r\n');
     expect(lines.first, 'Task,Step,Moved from,Moved to,When,Minutes in previous stage,How,Where,Device,Note');
     expect(lines.length, 3);

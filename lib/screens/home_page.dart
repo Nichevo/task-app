@@ -23,6 +23,7 @@ import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
+import 'gantt_page.dart';
 import 'matrix_page.dart';
 import 'search_page.dart';
 import 'settings_page.dart';
@@ -193,6 +194,8 @@ class HomePageState extends State<HomePage> {
     store.showPanel(PanelView.archive);
     _select(null);
   }
+
+  void openGantt() => _open(context, GanttPage(store: store));
 
   void openMatrix({MatrixBox? box}) => _open(context, MatrixPage(store: store, initialBox: box));
 
@@ -413,6 +416,7 @@ class HomePageState extends State<HomePage> {
             .length;
     final showBoardIcon = data.boardTasks.isNotEmpty && store.topIconShown(TopIcon.board);
     final showMatrixIcon = data.matrixTasks.isNotEmpty && store.topIconShown(TopIcon.matrix);
+    final showGanttIcon = data.ganttTasks.isNotEmpty && store.topIconShown(TopIcon.gantt);
     final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
     final estimate = describeEstimates(shownTasks);
     return Scaffold(
@@ -453,6 +457,8 @@ class HomePageState extends State<HomePage> {
             IconButton(tooltip: 'Kanban board', icon: const Icon(Icons.view_kanban_outlined), onPressed: openBoard),
           if (showMatrixIcon)
             IconButton(tooltip: 'Matrix', icon: const Icon(Icons.grid_view), onPressed: openMatrix),
+          if (showGanttIcon)
+            IconButton(tooltip: 'Gantt chart', icon: const Icon(Icons.view_timeline_outlined), onPressed: openGantt),
           if (store.topIconShown(TopIcon.calendar))
             IconButton(
               tooltip: 'Calendar',
@@ -470,6 +476,7 @@ class HomePageState extends State<HomePage> {
               'stats' => openStats(),
               'board' => openBoard(),
               'matrix' => _open(context, MatrixPage(store: store)),
+              'gantt' => openGantt(),
               'search' => _open(context, SearchPage(store: store)),
               'events' => _open(context, EventsPage(store: store)),
               'starred' => _open(context, StarredPage(store: store)),
@@ -492,6 +499,7 @@ class HomePageState extends State<HomePage> {
               const PopupMenuItem(value: 'stats', child: Text('Statistics')),
               if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
+              if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
               if (!store.topIconShown(TopIcon.calendar)) const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
@@ -805,6 +813,7 @@ class _AddBarState extends State<_AddBar> {
         source: _source ?? TaskSource.typed,
         box: p.box,
         board: p.board,
+        gantt: p.gantt,
         star: p.star);
     _source = null;
     _input.clear();

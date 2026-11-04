@@ -844,14 +844,14 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
 - Plain Split out also keeps the event link and the tick time (new `TaskStep.doneAt`). "Make into a
   linked task" also copies the step's date, reminder and note.
 
-## 74. Top bar: Search, Kanban, Matrix, Gantt, Calendar ☑ (version 1.8.6; Gantt icon comes with 72)
+## 74. Top bar: Search, Kanban, Matrix, Gantt, Calendar ☑ (version 1.8.6; Gantt icon added in 1.9.0)
 
 - Kanban and Matrix icons show once a task is on them. Archive moved to the ⋮ menu (with its count) and
   to Settings, Archive; on wide screens it still opens in the right-hand pane.
 - Settings, Top bar icons: switch any icon off on this device (saved with the device settings backup).
   Anything hidden stays in the ⋮ menu.
 
-## 72. Gantt chart ◐ (planned for 1.9.0)
+## 72. Gantt chart ☑ (version 1.9.0)
 
 - Opt in per task ("On the Gantt chart", `!gantt`). Bars from start to expected end, due date as a flag,
   arrows for "comes after" (several allowed, optional wait days), red when a task starts before the one it

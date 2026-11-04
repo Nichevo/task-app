@@ -9,6 +9,14 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.0', 'November 2026', [
+    'New Gantt chart. Switch "On the Gantt chart" on in a task (or type !gantt when adding it) and it shows as a bar from its start to its expected finish, grouped by category, with Day, Week and Month zoom.',
+    'Tasks gain a start date and "Takes N days". Weekends are skipped unless you switch Count weekends on (the default is in Settings, Gantt chart). The expected finish is shown apart from the due date, and the bar turns red past the due flag when it will finish late. With no start, the bar counts back from the due date.',
+    'A task can now come after several tasks, with a wait of some days. Arrows join them on the chart and go red when one starts too early. It stays locked until everything it waits for is ticked off.',
+    'Hold a bar to drag it to new dates, or hold its right end to change how long it takes. When that makes later tasks clash, the app asks whether to move them later too (or always, or never, set in Settings). The first plan stays as a faint outline.',
+    'Milestones (one-day diamonds), progress shading (from the steps ticked or set by hand), a Needs dates tray for chart tasks without dates, a Timeline view in the right-hand panel, a Gantt icon in the top bar, and the new fields in CSV export and import.',
+    'Moving a card into In progress fills an empty start date (Settings, Gantt chart can switch this off).',
+  ]),
   Release('1.8.6', 'November 2026', [
     'A task can now become a step of another task: ⋮ on the task page, "Make into a step of…". Nothing is lost. The step keeps the whole task (category, star, repeat, emails, place, board history, its own steps) and "Split out" brings it all back.',
     'If the task has steps of its own, you choose each time: keep them inside, add them to the new parent, or split them out as tasks of their own. Tasks that came after it now come after the parent. Undo puts everything back.',

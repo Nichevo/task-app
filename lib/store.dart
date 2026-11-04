@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'dropbox.dart';
+import 'gantt.dart';
 import 'google.dart';
 import 'home_widgets.dart';
 import 'inbox_files.dart';
@@ -22,12 +23,13 @@ import 'task_list.dart';
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
 /// Item 74: the icons the top bar can show, in order. Each can be switched off in Settings.
 abstract final class TopIcon {
-  static const search = 'search', board = 'board', matrix = 'matrix', calendar = 'calendar';
-  static const all = [search, board, matrix, calendar];
+  static const search = 'search', board = 'board', matrix = 'matrix', gantt = 'gantt', calendar = 'calendar';
+  static const all = [search, board, matrix, gantt, calendar];
   static const labels = {
     search: 'Search',
     board: 'Kanban board (when tasks are on it)',
     matrix: 'Matrix (when tasks are on it)',
+    gantt: 'Gantt chart (when tasks are on it)',
     calendar: 'Calendar',
   };
 }
@@ -641,7 +643,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
     await db.clearInbox();
@@ -711,6 +713,7 @@ class AppStore extends ChangeNotifier {
       MatrixBox? box,
       bool board = false,
       bool star = false,
+      bool gantt = false,
       KanbanStage? stage}) {
     final t = Task.create(title.trim(), source: source)
       ..dueAt = due
@@ -718,7 +721,7 @@ class AppStore extends ChangeNotifier {
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
-    _applyNew(t, box: box, board: board, star: star, stage: stage);
+    _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage);
     changed(order: true);
     _locate([t]);
     return t;
@@ -727,8 +730,9 @@ class AppStore extends ChangeNotifier {
   /// A new task from a typed or sent line: what the quick-add words asked for (item 64), and the
   /// board if its category goes there by default (item 67).
   /// [stage] puts it straight into that stage (the + on a board column).
-  void _applyNew(Task t, {MatrixBox? box, bool board = false, bool star = false, KanbanStage? stage}) {
+  void _applyNew(Task t, {MatrixBox? box, bool board = false, bool star = false, bool gantt = false, KanbanStage? stage}) {
     if (box != null) t.matrixBox = box.id;
+    if (gantt) setOnGantt(t, true);
     if (star) t.starred = true;
     if (stage != null || board) {
       setOnBoard(t, true, stage: stage ?? data.stages.firstOrNull);
@@ -772,7 +776,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
       added.add(t);
     }
     changed(order: true);
@@ -1051,6 +1055,16 @@ class AppStore extends ChangeNotifier {
     t.moves.add(m);
     t.kanban = to != null;
     if (to != null) t.stageId = to.id;
+    // Item 72: starting work on it fills in an empty start date.
+    if (to != null &&
+        how != MoveHow.repeat &&
+        data.ganttStartOnProgress &&
+        t.startAt == null &&
+        t.closedAt == null &&
+        (to.id == 'doing' || to.name.trim().toLowerCase() == 'in progress')) {
+      t.startAt = dayOf(m.at);
+      _notePlan(t);
+    }
     if (locate) unawaited(_locateMove(t, m));
     return m;
   }
@@ -1074,6 +1088,96 @@ class AppStore extends ChangeNotifier {
     } else {
       _move(t, null, MoveHow.removed);
       _stepsOff(t);
+    }
+    changed(task: t);
+  }
+
+  // --- Gantt chart (item 72) ---
+
+  /// Puts [t] on the Gantt chart (or takes it off). [start] sets its start day.
+  void setOnGantt(Task t, bool on, {DateTime? start}) {
+    t.gantt = on;
+    if (on && start != null) t.startAt = dayOf(start);
+    if (on) _notePlan(t);
+    changed(task: t);
+  }
+
+  /// Remembers the first planned dates of a task on the chart, so slips can be shown.
+  void _notePlan(Task t) {
+    if (!t.gantt) return;
+    final bar = barFor(t, data);
+    if (bar == null || bar.guessedStart) return;
+    t.planStart ??= bar.start;
+    t.planDue ??= bar.end;
+  }
+
+  /// Call after the task page changes a Gantt field (start, length, dates).
+  void ganttChanged(Task t) {
+    _notePlan(t);
+    changed(task: t);
+  }
+
+  /// Moves [t] on the chart by [days] (start and due together). Returns the tasks after it that
+  /// would now start too early, with how far each would move; the screen asks, or applies them
+  /// as Settings says.
+  Map<Task, int> moveOnGantt(Task t, int days) {
+    if (days == 0) return const {};
+    if (t.startAt == null) {
+      final bar = barFor(t, data);
+      if (bar != null) t.startAt = bar.start;
+    }
+    shiftDates(t, days);
+    changed(task: t);
+    return pushPlan(t, data);
+  }
+
+  /// Drags [t]'s right end to [end]: changes how long it takes when it has a length, otherwise its
+  /// due date (keeping the time of day, 5 pm when it had none).
+  Map<Task, int> resizeOnGantt(Task t, DateTime end) {
+    final bar = barFor(t, data);
+    if (bar == null) return const {};
+    final day = dayOf(end).isBefore(bar.start) ? bar.start : dayOf(end);
+    t.startAt ??= bar.start;
+    if (t.takesDays != null) {
+      t.takesDays = workDays(bar.start, day, weekends: weekendsFor(t, data));
+    } else {
+      final old = t.dueAt;
+      t.dueAt = DateTime(day.year, day.month, day.day, old?.hour ?? 17, old?.minute ?? 0);
+    }
+    changed(task: t);
+    return pushPlan(t, data);
+  }
+
+  /// Applies a push worked out by [moveOnGantt] or [resizeOnGantt].
+  void pushLater(Map<Task, int> plan) {
+    plan.forEach((f, days) {
+      if (f.startAt == null) {
+        final bar = barFor(f, data);
+        if (bar != null) f.startAt = bar.start;
+      }
+      shiftDates(f, days);
+      changed(task: f);
+    });
+  }
+
+  /// Makes [t] come after [other] too. False (nothing changed) when that would make a loop.
+  bool addAfter(Task t, Task other) {
+    if (wouldLoop(t, other, data) || t.afterIds.contains(other.id)) return false;
+    if (t.afterTaskId == null) {
+      t.afterTaskId = other.id;
+    } else {
+      t.alsoAfter.add(other.id);
+    }
+    changed(task: t);
+    return true;
+  }
+
+  /// Stops [t] coming after the task with [id].
+  void removeAfter(Task t, String id) {
+    if (t.afterTaskId == id) {
+      t.afterTaskId = t.alsoAfter.isEmpty ? null : t.alsoAfter.removeAt(0);
+    } else {
+      t.alsoAfter.remove(id);
     }
     changed(task: t);
   }
@@ -1153,7 +1257,7 @@ class AppStore extends ChangeNotifier {
   Task addToStage(String title, KanbanStage stage) {
     final p = parseInput(title, data, DateTime.now());
     return addTask(p.title,
-        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, stage: stage);
+        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, gantt: p.gantt, stage: stage);
   }
 
   KanbanStage addStage(String name) {
@@ -1234,7 +1338,8 @@ class AppStore extends ChangeNotifier {
   }
 
   void _release(String id, DateTime now) {
-    for (final w in data.active.where((w) => w.afterTaskId == id)) {
+    // Released once nothing else it waits for is still open (item 72 allows several).
+    for (final w in data.active.where((w) => w.afterIds.contains(id) && !data.isLocked(w))) {
       w.readyAt = now;
       w.touch();
     }
@@ -1712,7 +1817,7 @@ class AppStore extends ChangeNotifier {
         final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
         final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
         final t = addTask(p.title,
-            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star)
+            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star, gantt: p.gantt)
           ..sourceRef = id;
         t.emails.add(emailOf(m));
         changed(task: t);
@@ -1760,8 +1865,10 @@ class AppStore extends ChangeNotifier {
       String source = TaskSource.starredEmail,
       MatrixBox? box,
       bool board = false,
-      bool star = false}) {
-    final t = addTask(title, due: due, categoryId: categoryId, notes: notes, source: source, box: box, board: board, star: star);
+      bool star = false,
+      bool gantt = false}) {
+    final t = addTask(title,
+        due: due, categoryId: categoryId, notes: notes, source: source, box: box, board: board, star: star, gantt: gantt);
     t.emails.add(emailOf(m));
     changed(task: t);
     unawaited(_afterStarUse(m));
@@ -1947,6 +2054,7 @@ enum PanelView {
   agenda('Agenda'),
   matrix('Matrix'),
   board('Board'),
+  timeline('Timeline'),
   calendar('Calendar'),
   events('Events'),
   stats('Statistics'),

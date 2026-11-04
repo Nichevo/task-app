@@ -9,7 +9,7 @@ enum CategorySource { none, tag, keyword, learned }
 /// What the app read out of a typed line: the words, a due date and a category.
 class ParsedInput {
   const ParsedInput(this.title,
-      {this.due, this.categoryId, this.source = CategorySource.none, this.box, this.board = false, this.star = false});
+      {this.due, this.categoryId, this.source = CategorySource.none, this.box, this.board = false, this.star = false, this.gantt = false});
 
   final String title;
   final DateTime? due;
@@ -20,6 +20,9 @@ class ParsedInput {
   final MatrixBox? box;
   final bool board;
   final bool star;
+
+  /// Item 72: "!gantt".
+  final bool gantt;
 }
 
 /// Item 64: the "!" words the add box understands.
@@ -29,6 +32,7 @@ enum QuickWord {
   delegate('delegate', 'Puts it in the matrix box', MatrixBox.delegate),
   delete('delete', 'Puts it in the matrix box', MatrixBox.delete),
   board('board', 'Puts it on the Kanban board, in the first stage', null),
+  gantt('gantt', 'Puts it on the Gantt chart', null),
   star('star', 'Stars it', null);
 
   const QuickWord(this.id, this.what, this.box);
@@ -53,22 +57,23 @@ String? quickWord(AppData data, QuickWord w) {
 }
 
 /// Takes the "!" words out of [text]: what they asked for, and the text without them.
-({String text, MatrixBox? box, bool board, bool star}) takeQuickWords(String text, AppData data) {
+({String text, MatrixBox? box, bool board, bool star, bool gantt}) takeQuickWords(String text, AppData data) {
   final words = <String, QuickWord>{
     for (final w in QuickWord.values)
       if (quickWord(data, w) case final x? when x.isNotEmpty) x: w,
   };
   MatrixBox? box;
-  var board = false, star = false;
+  var board = false, star = false, gantt = false;
   final out = text.replaceAllMapped(RegExp(r'(^|\s)!([\w-]+)(?=\s|$)'), (m) {
     final w = words[m.group(2)!.toLowerCase()];
     if (w == null) return m.group(0)!;
     if (w.box != null) box = w.box;
     if (w == QuickWord.board) board = true;
     if (w == QuickWord.star) star = true;
+    if (w == QuickWord.gantt) gantt = true;
     return m.group(1)!;
   });
-  return (text: out.replaceAll(RegExp(r'\s+'), ' ').trim(), box: box, board: board, star: star);
+  return (text: out.replaceAll(RegExp(r'\s+'), ' ').trim(), box: box, board: board, star: star, gantt: gantt);
 }
 
 /// Reads a due date ("tomorrow 5pm"), a "#category" tag, a category keyword or, failing
@@ -110,7 +115,7 @@ ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify =
   }
 
   return ParsedInput(title.isEmpty ? text.trim() : title,
-      due: q.due, categoryId: categoryId, source: source, box: quick.box, board: quick.board, star: quick.star);
+      due: q.due, categoryId: categoryId, source: source, box: quick.box, board: quick.board, star: quick.star, gantt: quick.gantt);
 }
 
 /// Splits pasted or shared text into one task per line, dropping bullets and numbering.

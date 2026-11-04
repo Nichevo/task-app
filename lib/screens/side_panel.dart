@@ -1,3 +1,4 @@
+import 'gantt_page.dart' show GanttTimeline;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -55,6 +56,7 @@ class SidePanel extends StatelessWidget {
           PanelView.agenda => AgendaView(store: store, onOpen: onOpen),
           PanelView.matrix => MatrixPage(store: store),
           PanelView.board => MiniBoard(store: store, onOpen: onOpen),
+          PanelView.timeline => GanttTimeline(store: store, onOpen: onOpen),
           PanelView.calendar => CalendarPage(store: store),
           PanelView.events => EventsPage(store: store),
           PanelView.stats => PanelStats(store: store),

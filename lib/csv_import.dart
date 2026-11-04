@@ -87,6 +87,10 @@ int importCsvText(AppData data, String text) {
   final iDue = col('due'), iClosed = col('closed'), iStatus = col('status'), iStar = col('starred');
   final iSteps = col('steps'), iSource = col('source'), iEst = col('estimate (min)');
   final iBox = col('matrix box'), iWaiting = col('waiting on');
+  final iGantt = col('gantt'), iStart = col('start'), iTakes = col('takes (days)'), iWeekends = col('count weekends');
+  final iMilestone = col('milestone'), iProgress = col('progress (%)'), iAfter = col('comes after');
+  bool yes(String v) => const {'yes', 'true', '1', 'y'}.contains(v.toLowerCase());
+  final afterTitles = <Task, List<String>>{};
   if (iTask < 0) throw const FormatException('The file needs a "Task" column.');
   String cell(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
 
@@ -117,7 +121,13 @@ int importCsvText(AppData data, String text) {
       ..starred = const {'yes', 'true', '1', 'y'}.contains(cell(r, iStar).toLowerCase())
       ..estimate = int.tryParse(cell(r, iEst))
       ..matrixBox = _box(data, cell(r, iBox))?.id
-      ..waitingOn = cell(r, iWaiting).isEmpty ? null : cell(r, iWaiting);
+      ..waitingOn = cell(r, iWaiting).isEmpty ? null : cell(r, iWaiting)
+      ..gantt = yes(cell(r, iGantt))
+      ..startAt = _parseDate(cell(r, iStart))
+      ..takesDays = int.tryParse(cell(r, iTakes))
+      ..countWeekends = cell(r, iWeekends).isEmpty ? null : yes(cell(r, iWeekends))
+      ..milestone = yes(cell(r, iMilestone))
+      ..progress = int.tryParse(cell(r, iProgress));
     for (final part in cell(r, iSteps).split(';')) {
       final m = RegExp(r'^\s*(?:\[([ xX])\])?\s*(.+?)\s*$').firstMatch(part);
       if (m == null || m.group(2)!.isEmpty) continue;
@@ -134,6 +144,8 @@ int importCsvText(AppData data, String text) {
         ..dueAt = due);
     }
     final task = Task.fromJson({...t.toJson(), 'createdAt': created.toIso8601String()});
+    final after = [for (final x in cell(r, iAfter).split(';')) if (x.trim().isNotEmpty) x.trim()];
+    if (after.isNotEmpty) afterTitles[task] = after;
     if (closed == null) {
       data.active.add(task);
     } else {
@@ -141,6 +153,18 @@ int importCsvText(AppData data, String text) {
     }
     added++;
   }
+  // Item 72: "Comes after" by title, once every row is in.
+  afterTitles.forEach((t, titles) {
+    for (final title in titles) {
+      final other = [...data.active, ...data.archived].where((x) => x.title == title && x != t).firstOrNull;
+      if (other == null || t.afterIds.contains(other.id)) continue;
+      if (t.afterTaskId == null) {
+        t.afterTaskId = other.id;
+      } else {
+        t.alsoAfter.add(other.id);
+      }
+    }
+  });
   data.archived.sort((x, y) => y.closedAt!.compareTo(x.closedAt!));
   return added;
 }

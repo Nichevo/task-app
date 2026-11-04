@@ -2,6 +2,9 @@ import 'dart:math';
 
 import 'changelog.dart';
 
+/// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
+enum GanttPush { ask, always, never }
+
 /// A single task. Active tasks have [closedAt] == null.
 class Task {
   Task({
@@ -36,9 +39,20 @@ class Task {
     List<StageMove>? moves,
     this.stepsOnBoard = false,
     List<TaskEmail>? emails,
+    this.gantt = false,
+    this.startAt,
+    this.takesDays,
+    this.countWeekends,
+    List<String>? alsoAfter,
+    this.lagDays,
+    this.milestone = false,
+    this.progress,
+    this.planStart,
+    this.planDue,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
+        alsoAfter = alsoAfter ?? [],
         moves = moves ?? [],
         emails = emails ?? [],
         extra = extra ?? {},
@@ -52,7 +66,8 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom',
+    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
+    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue',
   };
 
   final String id;
@@ -144,6 +159,44 @@ class Task {
   /// Item 55: emails attached to it (or that it was made from), newest last.
   final List<TaskEmail> emails;
 
+  /// Item 72: on the Gantt chart. Only tasks put there show on it.
+  bool gantt;
+
+  /// Item 72: the day work starts (the bar's left end). Whole days; the time is ignored.
+  DateTime? startAt;
+
+  /// Item 72: how many days the work takes, and whether Saturdays and Sundays count ([countWeekends]
+  /// null = the default in Settings). With a start it gives the expected end, which can differ
+  /// from [dueAt].
+  int? takesDays;
+  bool? countWeekends;
+
+  /// Item 72: more tasks this one waits for, besides [afterTaskId] (which older app versions read).
+  final List<String> alsoAfter;
+
+  /// Item 72: days to wait after the task(s) it comes after end.
+  int? lagDays;
+
+  /// Item 72: a one-day marker, drawn as a diamond.
+  bool milestone;
+
+  /// Item 72: 0 to 100 set by hand; null = worked out from the steps.
+  int? progress;
+
+  /// Item 72: the dates when it first went on the chart, kept to show slips.
+  DateTime? planStart;
+  DateTime? planDue;
+
+  /// Every task this one comes after: [afterTaskId] first, then [alsoAfter].
+  List<String> get afterIds => [?afterTaskId, ...alsoAfter.where((id) => id != afterTaskId)];
+
+  /// Done share for the chart: set by hand, else from the steps (0 when it has none).
+  double get progressShare => progress != null
+      ? progress!.clamp(0, 100) / 100
+      : steps.isEmpty
+          ? 0
+          : stepsDone / steps.length;
+
   /// The steps showing on the board: none unless the task is on it with [stepsOnBoard] on.
   List<TaskStep> get boardSteps => kanban && stepsOnBoard ? steps : const [];
 
@@ -188,6 +241,13 @@ class Task {
     // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
     // from the task's due date; without one to measure from they are left off.
     final shift = dueAt == null || next.dueAt == null ? null : next.dueAt!.difference(dueAt!);
+    // Item 72: the next copy stays on the Gantt chart, its start the same distance before its due.
+    next
+      ..gantt = gantt
+      ..takesDays = takesDays
+      ..countWeekends = countWeekends
+      ..milestone = milestone
+      ..startAt = startAt == null || shift == null ? null : startAt!.add(shift);
     next.steps.addAll([
       for (final st in steps)
         TaskStep.create(st.title)
@@ -239,6 +299,16 @@ class Task {
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
         if (stepsOnBoard) 'stepsBoard': true,
         if (emails.isNotEmpty) 'emails': emails.map((e) => e.toJson()).toList(),
+        if (gantt) 'gantt': true,
+        if (startAt != null) 'start': startAt!.toIso8601String(),
+        if (takesDays != null) 'takes': takesDays,
+        if (countWeekends != null) 'weekends': countWeekends,
+        if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
+        if (lagDays != null) 'lag': lagDays,
+        if (milestone) 'milestone': true,
+        if (progress != null) 'progress': progress,
+        if (planStart != null) 'planStart': planStart!.toIso8601String(),
+        if (planDue != null) 'planDue': planDue!.toIso8601String(),
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -275,6 +345,16 @@ class Task {
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         stepsOnBoard: j['stepsBoard'] as bool? ?? false,
         emails: [for (final e in j['emails'] as List? ?? []) TaskEmail.fromJson(e as Map<String, dynamic>)],
+        gantt: j['gantt'] as bool? ?? false,
+        startAt: _date(j['start']),
+        takesDays: (j['takes'] as num?)?.toInt(),
+        countWeekends: j['weekends'] as bool?,
+        alsoAfter: [for (final id in j['alsoAfter'] as List? ?? []) ?id as String?],
+        lagDays: (j['lag'] as num?)?.toInt(),
+        milestone: j['milestone'] as bool? ?? false,
+        progress: (j['progress'] as num?)?.toInt(),
+        planStart: _date(j['planStart']),
+        planDue: _date(j['planDue']),
         extra: unknownFields(j, _known),
       );
 
@@ -1130,6 +1210,9 @@ class AppData {
     List<KanbanStage>? stages,
     this.kanbanDone = KanbanDone.ask,
     this.kanbanHideFromList = false,
+    this.ganttWeekends = false,
+    this.ganttPush = GanttPush.ask,
+    this.ganttStartOnProgress = true,
     Map<String, SkipRecord>? skips,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
@@ -1221,6 +1304,18 @@ class AppData {
 
   /// Leave board tasks out of the main list.
   bool kanbanHideFromList;
+
+  /// Item 72: whether a task's "Takes N days" counts Saturdays and Sundays unless the task says.
+  bool ganttWeekends;
+
+  /// Item 72: when a task on the chart moves later, move the tasks after it too.
+  GanttPush ganttPush;
+
+  /// Item 72: moving a card into In progress fills in its start date when it has none.
+  bool ganttStartOnProgress;
+
+  /// Item 72: tasks on the Gantt chart.
+  Iterable<Task> get ganttTasks => active.where((t) => t.gantt);
 
   KanbanStage? stage(String? id) => stages.where((s) => s.id == id).firstOrNull;
 
@@ -1341,6 +1436,7 @@ class AppData {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
     'starredTop', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
+    'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
@@ -1368,6 +1464,9 @@ class AppData {
         'stages': stages.map((s) => s.toJson()).toList(),
         'kanbanDone': kanbanDone.name,
         if (kanbanHideFromList) 'kanbanHideFromList': true,
+        if (ganttWeekends) 'ganttWeekends': true,
+        if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
+        if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
         if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -1406,7 +1505,7 @@ class AppData {
       : active.where((t) => t.id == id).firstOrNull ?? archived.where((t) => t.id == id).firstOrNull;
 
   /// Waiting for an earlier task that is still open.
-  bool isLocked(Task t) => t.afterTaskId != null && active.any((a) => a.id == t.afterTaskId);
+  bool isLocked(Task t) => t.afterIds.any((id) => active.any((a) => a.id == id));
 
   /// Open and archived tasks together.
   Iterable<Task> get allTasks => active.followedBy(archived);
@@ -1440,6 +1539,9 @@ class AppData {
             : null,
         kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
         kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
+        ganttWeekends: j['ganttWeekends'] as bool? ?? false,
+        ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
+        ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
         skips: {
           for (final e in (j['skips'] as Map? ?? {}).entries)
             e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
@@ -1627,6 +1729,9 @@ AppData mergeData(AppData a, AppData b) {
     stages: settingsFrom.stages,
     kanbanDone: settingsFrom.kanbanDone,
     kanbanHideFromList: settingsFrom.kanbanHideFromList,
+    ganttWeekends: settingsFrom.ganttWeekends,
+    ganttPush: settingsFrom.ganttPush,
+    ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
     skips: skips,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: settingsFrom.templates,
