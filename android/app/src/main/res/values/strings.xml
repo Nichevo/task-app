@@ -29,5 +29,5 @@
     <string name="widget_worked_desc">Worked today: tick the tasks in one category you worked on today</string>
     <string name="widget_worked_tick">Worked on it today</string>
     <string name="widget_added_done_desc">Added vs done: the Statistics chart for the last 4 weeks, for one category</string>
-    <string name="widget_burn_down_desc">Burn-down: the Gantt chart's work left against the plan, for one category</string>
+    <string name="widget_burn_down_desc">Burn-down: work left on the Gantt chart against the plan, for one category</string>
 </resources>
