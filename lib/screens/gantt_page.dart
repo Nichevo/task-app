@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../gantt.dart';
 import '../models.dart';
 import '../store.dart';
+import '../widgets/burn_down_chart.dart';
 import 'task_page.dart';
 
 /// Item 72: the Gantt chart. Only tasks put on it show, as bars from start to expected end with
@@ -78,6 +79,8 @@ class _GanttPageState extends State<GanttPage> {
   GanttZoom _zoom = GanttZoom.week;
   late String? _category = widget.initialCategory;
   bool _showTicked = false;
+  bool _burnOpen = false;
+  BurnUnit _burnUnit = BurnUnit.items;
   final _expanded = <String>{};
 
   // A bar being dragged (after a long press): its task, how far, and whether its end is moving.
@@ -229,10 +232,64 @@ class _GanttPageState extends State<GanttPage> {
                     )
                   : _chart(dated, now),
             ),
+            _burnStrip(now),
             if (undated.isNotEmpty) _needsDates(undated),
           ]),
         );
       },
+    );
+  }
+
+  /// Item 77: the burn-down for what the filter shows, folded away until opened.
+  Widget _burnStrip(DateTime now) {
+    final burn = burnDown(burnTasks(data, _category), data, now, unit: _burnUnit);
+    if (burn == null) return const SizedBox();
+    final late = burn.daysLate;
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Divider(height: 1),
+        InkWell(
+          onTap: () => setState(() => _burnOpen = !_burnOpen),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+            child: Row(children: [
+              const Icon(Icons.trending_down, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _burnOpen ? 'Burn-down' : burnSummary(burn),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: late != null && late > 0 && burn.now > 0 ? Theme.of(context).colorScheme.error : null),
+                ),
+              ),
+              Icon(_burnOpen ? Icons.expand_more : Icons.expand_less),
+            ]),
+          ),
+        ),
+        if (_burnOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SegmentedButton<BurnUnit>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(value: BurnUnit.items, label: Text('Tasks and steps')),
+                  ButtonSegment(value: BurnUnit.days, label: Text('Days of work')),
+                ],
+                selected: {_burnUnit},
+                onSelectionChanged: (v) => setState(() => _burnUnit = v.first),
+              ),
+              const SizedBox(height: 6),
+              BurnDownChart(burn: burn, now: now, height: 110),
+              const SizedBox(height: 4),
+              Text(burnSummary(burn), style: Theme.of(context).textTheme.bodySmall),
+            ]),
+          ),
+      ]),
     );
   }
 
@@ -652,6 +709,22 @@ class _GanttPageState extends State<GanttPage> {
           ),
         ));
       }
+    }
+    // Item 75: a small tick under the bar for each day worked on it.
+    for (final key in t.worked) {
+      final d = DateTime.tryParse(key);
+      if (d == null) continue;
+      final x = xOf(d);
+      if (x < 0 || x > width) continue;
+      children.add(Positioned(
+        left: x + _dayW / 2 - 2,
+        top: 36,
+        child: Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+        ),
+      ));
     }
     // The due date's flag, when it isn't the bar's end.
     final due = bar.due;

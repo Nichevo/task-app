@@ -26,4 +26,8 @@
     <string name="widget_board_steps_desc">Board steps: steps on the board by stage, moved on with an arrow</string>
     <string name="widget_matrix_desc">Matrix: the four boxes and the top tasks in each</string>
     <string name="widget_done">Done</string>
+    <string name="widget_worked_desc">Worked today: tick the tasks in one category you worked on today</string>
+    <string name="widget_worked_tick">Worked on it today</string>
+    <string name="widget_added_done_desc">Added vs done: the Statistics chart for the last 4 weeks, for one category</string>
+    <string name="widget_burn_down_desc">Burn-down: the Gantt chart's work left against the plan, for one category</string>
 </resources>

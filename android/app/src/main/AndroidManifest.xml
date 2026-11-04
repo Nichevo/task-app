@@ -146,12 +146,34 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_matrix" />
         </receiver>
+        <receiver android:name=".WorkedTodayWidget" android:exported="true" android:label="Worked today">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_worked" />
+        </receiver>
+        <receiver android:name=".AddedDoneWidget" android:exported="true" android:label="Added vs done">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_added_done" />
+        </receiver>
+        <receiver android:name=".BurnDownWidget" android:exported="true" android:label="Burn-down">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_burn_down" />
+        </receiver>
         <service
             android:name=".StageListService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
         <service
             android:name=".BoardStepsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WorkedTodayService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
         <service

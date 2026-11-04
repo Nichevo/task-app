@@ -36,6 +36,7 @@ class TaskBlock extends StatelessWidget {
     this.stageName,
     this.boxName,
     this.onBoard,
+    this.onWorked,
   });
 
   final Task task;
@@ -70,6 +71,9 @@ class TaskBlock extends StatelessWidget {
 
   /// Puts it on the Kanban board (offered in the expanded block).
   final VoidCallback? onBoard;
+
+  /// Item 75: ticks today as a day worked on it, without finishing it.
+  final VoidCallback? onWorked;
 
   /// One-line notes preview on the thin block, only when there are notes.
   bool get preview => !expanded && task.notes.trim().isNotEmpty;
@@ -267,6 +271,13 @@ class TaskBlock extends StatelessWidget {
                 onPressed: onSkip,
                 icon: const Icon(Icons.skip_next, size: 18),
                 label: const Text('Skip'),
+              ),
+            if (onWorked != null && !archived)
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: ink),
+                onPressed: onWorked,
+                icon: Icon(task.workedOn(DateTime.now()) ? Icons.check_circle : Icons.radio_button_unchecked, size: 18),
+                label: const Text('Worked on it today'),
               ),
             if (onBoard != null && !archived)
               TextButton.icon(

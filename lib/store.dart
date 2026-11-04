@@ -212,6 +212,12 @@ class AppStore extends ChangeNotifier {
     for (final m in await widgets?.takeMoves() ?? const <WidgetMove>[]) {
       any = applyWidgetMove(m) || any;
     }
+    for (final (id, day, on) in await widgets?.takeWorked() ?? const <(String, DateTime, bool)>[]) {
+      final t = data.task(id);
+      if (t == null || t.workedOn(day) == on) continue;
+      setWorked(t, day, on);
+      any = true;
+    }
     final pushed = await widgets?.takePushed() ?? const [];
     if (pushed.isNotEmpty) any = addPushed(pushed).isNotEmpty || any;
     if (any) notifyListeners();
@@ -1090,6 +1096,24 @@ class AppStore extends ChangeNotifier {
       _stepsOff(t);
     }
     changed(task: t);
+  }
+
+  // --- Days worked (item 75) ---
+
+  /// Ticks (or unticks) [day] as a day [t] was worked on. It doesn't finish the task or move it on
+  /// the board.
+  void setWorked(Task t, DateTime day, bool on) {
+    final key = dayKey(day);
+    if (on ? !t.worked.add(key) : !t.worked.remove(key)) return;
+    changed(task: t);
+  }
+
+  /// Flips today (or [day]) for [t]. Returns whether it is now ticked.
+  bool toggleWorked(Task t, [DateTime? day]) {
+    final d = day ?? DateTime.now();
+    final on = !t.workedOn(d);
+    setWorked(t, d, on);
+    return on;
   }
 
   // --- Gantt chart (item 72) ---
@@ -2058,6 +2082,7 @@ enum PanelView {
   calendar('Calendar'),
   events('Events'),
   stats('Statistics'),
+  achievements('Achievements'),
   archive('Archive');
 
   const PanelView(this.label);

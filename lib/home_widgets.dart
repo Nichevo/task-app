@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
+import 'gantt.dart';
 import 'models.dart';
 import 'stats.dart';
 
@@ -29,6 +30,10 @@ class HomeWidgets {
     'app.taskblocks.NowDoingWidget',
     'app.taskblocks.BoardStepsWidget',
     'app.taskblocks.MatrixWidget',
+    // Items 75 and 77.
+    'app.taskblocks.WorkedTodayWidget',
+    'app.taskblocks.AddedDoneWidget',
+    'app.taskblocks.BurnDownWidget',
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -54,7 +59,9 @@ class HomeWidgets {
   /// the board, marked `snoozed`, so the board widgets count them like the board does.
   static String widgetJson(AppData data, DateTime now) {
     final stats = Stats(data, now);
+    final fortnight = dayKey(now.subtract(const Duration(days: 14)));
     return jsonEncode({
+      'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,
       'categories': [for (final c in data.categories) {'id': c.id, 'name': c.name}],
@@ -78,6 +85,8 @@ class HomeWidgets {
               if (t.kanban) 'stage': (data.stage(t.stageId) ?? data.stages.firstOrNull)?.id,
               if (t.stageSince != null) 'since': t.stageSince!.millisecondsSinceEpoch,
               if (t.matrixBox != null) 'box': t.matrixBox,
+              // Item 75: days worked in the last fortnight, for the Worked today widget.
+              if (t.worked.isNotEmpty) 'worked': [for (final k in t.worked) if (k.compareTo(fortnight) >= 0) k],
               if (t.steps.isNotEmpty)
                 'steps': [
                   for (final s in t.steps)
@@ -96,8 +105,34 @@ class HomeWidgets {
       // Days (yyyy-MM-dd) with tasks due, for the mini month widget; repeats faded.
       'dueDays': stats.dueDays(now, const Duration(days: 62)),
       'stats': {'week': stats.doneThisWeek, 'streak': stats.streak},
+      // Item 77: the Added vs done chart (last 4 weeks, by day) for everything and each category.
+      'addedDone': {
+        for (final id in [null, ...data.categories.map((c) => c.id)])
+          id ?? '': _addedDone(stats.addedVsDone(Stats.dayOf(now).subtract(const Duration(days: 27)), categoryId: id)),
+      },
+      // Item 77: burn-downs of the Gantt chart, for everything and each category with chart tasks.
+      'burn': {
+        for (final id in [null, ...data.categories.map((c) => c.id)])
+          if (burnDown(burnTasks(data, id), data, now) case final b?) id ?? '': _burn(b),
+      },
     });
   }
+
+  static Map<String, Object?> _addedDone(List<Bucket> b) => {
+        'from': b.isEmpty ? null : dayKey(b.first.start),
+        'added': [for (final x in b) x.added],
+        'done': [for (final x in b) x.done],
+        'open': [for (final x in b) x.open],
+      };
+
+  static Map<String, Object?> _burn(BurnDown b) => {
+        'from': dayKey(b.start),
+        'end': dayKey(b.end),
+        'total': b.total,
+        'left': [for (final v in b.left) double.parse(v.toStringAsFixed(2))],
+        if (b.projected != null) 'projected': dayKey(b.projected!),
+        'summary': burnSummary(b),
+      };
 
   Future<List<dynamic>> _take(String key) async {
     if (!supported) return const [];
@@ -130,6 +165,12 @@ class HomeWidgets {
   Future<List<WidgetMove>> takeMoves() async => [
         for (final e in await _take('widget_moves'))
           (task: e['task'] as String, step: e['step'] as String?, stage: e['stage'] as String, at: _ms(e['at'])),
+      ];
+
+  /// Item 75: days ticked or unticked as worked on the Worked today widget: (task id, day, on).
+  Future<List<(String, DateTime, bool)>> takeWorked() async => [
+        for (final e in await _take('widget_worked'))
+          if (DateTime.tryParse(e['day'] as String? ?? '') case final d?) (e['id'] as String, d, e['on'] as bool? ?? true),
       ];
 
   /// Item 48B: tasks sent by other Android apps (Tasker and the like) while the app was closed,

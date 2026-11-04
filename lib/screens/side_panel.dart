@@ -1,3 +1,4 @@
+import 'achievements_page.dart' show AchievementsView;
 import 'gantt_page.dart' show GanttTimeline;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -60,6 +61,7 @@ class SidePanel extends StatelessWidget {
           PanelView.calendar => CalendarPage(store: store),
           PanelView.events => EventsPage(store: store),
           PanelView.stats => PanelStats(store: store),
+          PanelView.achievements => AchievementsView(store: store, onOpen: onOpen),
           PanelView.archive => ArchivePage(store: store, embedded: true, onOpen: onOpen),
         },
       ),

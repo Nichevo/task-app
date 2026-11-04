@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.1', 'November 2026', [
+    'Tick the days you worked on a task without finishing it: "Worked on it today" on an opened block, or the week of dots on the task page (tap any day so far this week). Ticks show under the Gantt bar, and a board card says "3 days this week" once any are ticked. Ticking never moves a card.',
+    'New Achievements page (⋮ menu, and a view in the right-hand panel): for a category and a period (last week, Monday to Sunday, unless you pick another), tasks done, steps ticked and days worked, each finished task\'s due date against when it was done, and what you worked on but didn\'t finish. Copy as text pastes it into a message.',
+    'Burn-down at the foot of the Gantt chart: work left against the plan, and when it would finish at the pace of the last two weeks. It follows the chart\'s category and counts tasks and steps, or days of work.',
+    'Three new 4×3 home screen widgets (Android), each for one category or all: Worked today (tap the circle to tick today, with the week as dots), Added vs done (the Statistics chart for the last 4 weeks) and Burn-down (tap to open the Gantt chart on that category).',
+  ]),
   Release('1.9.0', 'November 2026', [
     'New Gantt chart. Switch "On the Gantt chart" on in a task (or type !gantt when adding it) and it shows as a bar from its start to its expected finish, grouped by category, with Day, Week and Month zoom.',
     'Tasks gain a start date and "Takes N days". Weekends are skipped unless you switch Count weekends on (the default is in Settings, Gantt chart). The expected finish is shown apart from the due date, and the bar turns red past the due flag when it will finish late. With no start, the bar counts back from the due date.',

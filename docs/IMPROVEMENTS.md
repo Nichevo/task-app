@@ -861,18 +861,18 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   unless set), first planned dates. Moving a card to In progress fills an empty start. No start: the bar
   counts back from the due date.
 
-## 75. Days worked ◐ (planned for 1.9.1)
+## 75. Days worked ☑ (version 1.9.1)
 
 - "Worked on it today" on an expanded task; a 7-dot week on the task page; ticks under Gantt bars; "3 days
   this week" on board cards with any. Days only, no hours. Ticking doesn't move a board card.
 - "Worked today" widget (4×3): one category's open tasks, a circle per row to tick today.
 
-## 76. Achievements page ◐ (planned for 1.9.1)
+## 76. Achievements page ☑ (version 1.9.1)
 
 - Per category for a period (last week, Monday to Sunday, by default): tasks done, steps ticked, days
   worked, plan against actual per task, and tasks worked on but not finished.
 
-## 77. Chart widgets and burn-down ◐ (planned for 1.9.1)
+## 77. Chart widgets and burn-down ☑ (version 1.9.1)
 
 - "Added vs done" widget for one category (4×3). Burn-down on the Gantt page (ideal, actual, "at this
   pace" finish) and as a 4×3 widget for one category.
