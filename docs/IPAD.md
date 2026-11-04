@@ -22,21 +22,33 @@ calendar view, CSV, Dropbox sync, pasted lists), plus:
 Android-only for now (they are written in Kotlin): calendar event suggestions, photo of a list, Share to
 Task Blocks and voice add. Each could be added for iPad later (a share extension, EventKit for the calendar).
 
-## Home screen widgets (being added, item 79)
+## Home screen widgets (item 79)
 
-Version 1.9.4 adds one **test widget**, "Task Blocks test", to check that widgets can see your tasks when
-the app is installed with a free Apple ID. After installing:
+From version 1.9.5 the iPad has ten home screen widgets. Press and hold the home screen, tap **Edit** →
+**Add Widget**, search for Task Blocks, and pick one. Open Task Blocks once first so it shares your tasks.
 
-1. Open Task Blocks once, so it shares your tasks.
-2. Press and hold the home screen, tap **Edit** → **Add Widget**, search for Task Blocks, and add the
-   test widget (medium size shows the most).
-3. It should say "N open tasks" with the first few, and "Shared group: group.app.taskblocks…" at the
-   bottom. "No shared storage" means the sideloading tool did not set up the app group.
+| Widget | Shows | Sizes |
+| --- | --- | --- |
+| Task list | Coloured tasks: all, due soon, starred, overdue or today, for one category or all | Medium, Large, Extra large |
+| Summary | Open and overdue counts with the next 3 due, or done this week and your streak | Small, Medium |
+| Focus | Your top task as one big block, or the board task you're doing now with its steps | Small, Medium, Large |
+| Checklist | The steps of one task, or the steps on the board by stage | Medium, Large |
+| Mini month | This month with dots on days with tasks due | Small, Medium, Large |
+| Kanban board | How many tasks in each stage, or the cards in one stage | Small, Medium, Large |
+| Matrix | The four boxes and the top tasks in each | Medium, Large, Extra large |
+| Worked today | A category's tasks, or your habits, with this week's worked days | Medium, Large |
+| Chart | Added vs done for 4 weeks, or the Gantt burn-down | Medium, Large |
+| Quick add | Opens the app ready to type a task | Small |
 
-The widget is a small extra app inside Task Blocks, so with a free Apple ID it may count as one of the
-3 apps AltStore can keep active (AltStore itself is one). If AltStore says it can't activate more than 3
-apps, deactivate another sideloaded app in AltStore's My Apps tab. A paid developer account has no
-such limit.
+Press and hold a widget, then **Edit Widget**, to choose its category, stage, task or "Show" option.
+Tapping a task opens it in the app; tapping a widget's title opens that page. Ticking things off on
+the widget itself comes in the next version.
+
+The widgets redraw when you change something in the app, and every hour by themselves (iPadOS limits
+how often). A change synced from another device shows after you next open the app on the iPad.
+
+With a free Apple ID the widgets need the app group that AltStore sets up when it installs the app; it
+renames it to `group.app.taskblocks.<your team id>` and the app finds the new name by itself.
 
 ## What needs the owner's Apple account
 

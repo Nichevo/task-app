@@ -8,18 +8,20 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		29BB0C044184A724A20C49E2 /* WidgetKinds.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD46C7CFA12CC2021C3D82F3 /* WidgetKinds.swift */; };
 		32FE70055FA5E1A0FBB31684 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBC15C3B9BD8C0C50B84D5A /* AppGroup.swift */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		495235F52AA23362848C3B37 /* TaskBlocksWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E3F0CC4F4940D71C545C09AE /* TaskBlocksWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		57B9B095ED59B7B591EFB1A1 /* TaskBlocksWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991E5467B0F44F89FC2EBA85 /* TaskBlocksWidget.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
+		76F84CC4414DF7E194C1F4E6 /* WidgetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B64679676411A97CA6F78354 /* WidgetStore.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		C098C45DC7DFE7FEA420572C /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCBC15C3B9BD8C0C50B84D5A /* AppGroup.swift */; };
+		D0E0C71F299DDFE138272A46 /* WidgetIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0850FC2C772B8BA048C500BD /* WidgetIntents.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +66,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0850FC2C772B8BA048C500BD /* WidgetIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetIntents.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -83,7 +86,8 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		991E5467B0F44F89FC2EBA85 /* TaskBlocksWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskBlocksWidget.swift; sourceTree = "<group>"; };
+		B64679676411A97CA6F78354 /* WidgetStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetStore.swift; sourceTree = "<group>"; };
+		BD46C7CFA12CC2021C3D82F3 /* WidgetKinds.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WidgetKinds.swift; sourceTree = "<group>"; };
 		CCBC15C3B9BD8C0C50B84D5A /* AppGroup.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		E3F0CC4F4940D71C545C09AE /* TaskBlocksWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TaskBlocksWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F439962434A8A602164CDEFD /* Runner.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
@@ -119,9 +123,11 @@
 		657CD517FFB98C189B5F65F6 /* TaskBlocksWidget */ = {
 			isa = PBXGroup;
 			children = (
-				991E5467B0F44F89FC2EBA85 /* TaskBlocksWidget.swift */,
 				6234E11303CC80B08803D4AB /* Info.plist */,
 				685F73E6AB524E02279F0927 /* TaskBlocksWidget.entitlements */,
+				0850FC2C772B8BA048C500BD /* WidgetIntents.swift */,
+				BD46C7CFA12CC2021C3D82F3 /* WidgetKinds.swift */,
+				B64679676411A97CA6F78354 /* WidgetStore.swift */,
 			);
 			name = TaskBlocksWidget;
 			path = TaskBlocksWidget;
@@ -378,8 +384,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				57B9B095ED59B7B591EFB1A1 /* TaskBlocksWidget.swift in Sources */,
 				32FE70055FA5E1A0FBB31684 /* AppGroup.swift in Sources */,
+				D0E0C71F299DDFE138272A46 /* WidgetIntents.swift in Sources */,
+				29BB0C044184A724A20C49E2 /* WidgetKinds.swift in Sources */,
+				76F84CC4414DF7E194C1F4E6 /* WidgetStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
