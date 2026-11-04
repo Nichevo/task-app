@@ -20,6 +20,30 @@ import 'reminders.dart';
 import 'task_list.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
+/// Item 74: the icons the top bar can show, in order. Each can be switched off in Settings.
+abstract final class TopIcon {
+  static const search = 'search', board = 'board', matrix = 'matrix', calendar = 'calendar';
+  static const all = [search, board, matrix, calendar];
+  static const labels = {
+    search: 'Search',
+    board: 'Kanban board (when tasks are on it)',
+    matrix: 'Matrix (when tasks are on it)',
+    calendar: 'Calendar',
+  };
+}
+
+/// Item 73: what "Make into a step of..." does with the task's own checklist.
+enum OwnSteps {
+  /// Kept inside the new step, and back when it is split out.
+  keep,
+
+  /// Added to the new parent as steps of their own.
+  addToParent,
+
+  /// Each becomes a task of its own first.
+  splitOut,
+}
+
 class AppStore extends ChangeNotifier {
   AppStore({this.reminders, this.widgets, this.location});
 
@@ -64,6 +88,9 @@ class AppStore extends ChangeNotifier {
   /// Kanban board on this device (item 56): every task's steps unfolded, and the lanes view.
   bool boardShowSteps = false;
   bool boardLanes = false;
+
+  /// Item 74: top bar icons switched off on this device ([TopIcon] names).
+  final Set<String> hiddenTopIcons = {};
 
   /// The app version whose "What's new" was last shown (device-only). Null on a fresh install
   /// until the first load, which counts as seen.
@@ -114,6 +141,7 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
@@ -250,6 +278,7 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (deviceBackupChecked) 'deviceBackupChecked': true,
@@ -455,6 +484,7 @@ class AppStore extends ChangeNotifier {
         'arrivalSummary': arrivalSummary,
         'boardShowSteps': boardShowSteps,
         'boardLanes': boardLanes,
+        'hiddenTopIcons': hiddenTopIcons.toList(),
         'matrixFilter': matrixFilter.name,
         if (matrixCategory != null) 'matrixCategory': matrixCategory,
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
@@ -521,6 +551,11 @@ class AppStore extends ChangeNotifier {
     arrivalSummary = s['arrivalSummary'] as bool? ?? arrivalSummary;
     boardShowSteps = s['boardShowSteps'] as bool? ?? boardShowSteps;
     boardLanes = s['boardLanes'] as bool? ?? boardLanes;
+    if (s['hiddenTopIcons'] is List) {
+      hiddenTopIcons
+        ..clear()
+        ..addAll([for (final n in s['hiddenTopIcons'] as List) ?n as String?]);
+    }
     matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? matrixFilter;
     matrixCategory = s['matrixCategory'] as String? ?? matrixCategory;
     emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? emailCheckMinutes;
@@ -1173,6 +1208,15 @@ class AppStore extends ChangeNotifier {
     saveDeviceSettings();
   }
 
+  /// Item 74: shows or hides one top bar icon on this device.
+  void setTopIcon(String name, bool shown) {
+    shown ? hiddenTopIcons.remove(name) : hiddenTopIcons.add(name);
+    notifyListeners();
+    saveDeviceSettings();
+  }
+
+  bool topIconShown(String name) => !hiddenTopIcons.contains(name);
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -1273,12 +1317,150 @@ class AppStore extends ChangeNotifier {
   /// Turns a step into a full task of its own, placed just after [t] in the list. The step
   /// stays, linked to the new task, and ticks itself when that task is ticked off.
   Task stepToTask(Task t, TaskStep s) {
-    final linked = Task.create(s.title, source: TaskSource.step)..categoryId = t.categoryId;
+    final linked = Task.create(s.title, source: TaskSource.step)
+      ..categoryId = t.categoryId
+      ..dueAt = s.dueAt
+      ..remindBefore = s.dueAt == null ? null : s.remindBefore
+      ..notes = s.note;
     final at = data.active.indexOf(t);
     data.active.insert(at < 0 ? data.active.length : at + 1, linked);
     s.taskId = linked.id;
     changed(task: t, order: true);
     return linked;
+  }
+
+  /// Item 73: rebuilds the task [s] carries (it was made into a step) with everything it had,
+  /// plus what changed on the step since: title, date, reminder, note, tick and board stage.
+  /// Null if the saved copy can't be read; the caller then splits it out as a plain step.
+  Task? _restoreCarried(Task t, TaskStep s) {
+    var j = Map<String, dynamic>.from(s.carried!);
+    final id = j['id'];
+    if (id is! String || data.task(id) != null || data.archived.any((a) => a.id == id)) {
+      j = {...j, 'id': Task.create('').id};
+    }
+    final Task n;
+    try {
+      n = Task.fromJson(j);
+    } catch (_) {
+      return null;
+    }
+    n
+      ..title = s.title
+      ..dueAt = s.dueAt
+      ..remindBefore = s.dueAt == null ? null : s.remindBefore
+      ..splitFrom = t.id;
+    if (n.notes.trim().isEmpty && s.note.isNotEmpty) n.notes = s.note;
+    n.eventId ??= s.eventId;
+    if (t.boardSteps.contains(s) && s.placed) {
+      // It was a card on the board as a step: it keeps that stage and history.
+      n
+        ..kanban = true
+        ..stageId = s.stageId
+        ..moves.clear()
+        ..moves.addAll(s.moves);
+    }
+    n.closedAt = s.done ? (s.doneAt ?? DateTime.now()) : null;
+    data.deleted.remove(n.id);
+    t.steps.remove(s);
+    final at = data.active.indexOf(t);
+    if (n.closedAt == null) {
+      data.active.insert(at < 0 ? data.active.length : at + 1, n);
+    } else {
+      data.archived.insert(0, n);
+    }
+    changed(task: t, order: true);
+    changed(task: n);
+    return n;
+  }
+
+  /// Item 73: "Make into a step of...". Turns open task [t] into a step of [parent] without
+  /// losing anything: the step keeps the whole task ([TaskStep.carried]) and Split out brings it
+  /// back. [own] says what happens to [t]'s own steps. Tasks that came after [t] now come after
+  /// [parent]; steps linked to [t] now link to [parent]. Returns the step and how to undo it.
+  (TaskStep, void Function()) makeStep(Task t, Task parent, {OwnSteps own = OwnSteps.keep}) {
+    assert(t != parent);
+    final index = data.active.indexOf(t);
+    final undos = <void Function()>[];
+    final ownSteps = [...t.steps];
+    final added = <TaskStep>[];
+    switch (own) {
+      case OwnSteps.keep:
+        break;
+      case OwnSteps.addToParent:
+        t.steps.clear();
+        for (final st in ownSteps) {
+          parent.steps.add(st);
+          added.add(st);
+          if (parent.kanban && parent.stepsOnBoard && !st.placed && data.stages.isNotEmpty) {
+            _moveStep(parent, st, st.done ? data.stages.last : data.stages.first, MoveHow.added, locate: false);
+          }
+        }
+        undos.add(() {
+          parent.steps.removeWhere(added.contains);
+          t.steps
+            ..clear()
+            ..addAll(ownSteps);
+        });
+      case OwnSteps.splitOut:
+        for (final st in ownSteps.reversed) {
+          undos.add(splitOut(t, st).$2);
+        }
+    }
+    final step = TaskStep.create(t.title)
+      ..dueAt = t.dueAt
+      ..remindBefore = t.dueAt == null ? null : t.remindBefore
+      ..note = t.notes.trim().length > 200 ? '${t.notes.trim().substring(0, 200)}…' : t.notes.trim()
+      ..eventId = t.eventId
+      ..carried = t.toJson();
+    if (parent.kanban && parent.stepsOnBoard && data.stages.isNotEmpty) {
+      if (t.kanban && data.stage(t.stageId) != null) {
+        step
+          ..stageId = t.stageId
+          ..moves.addAll(t.moves);
+      } else {
+        _moveStep(parent, step, data.stages.first, MoveHow.added, locate: false);
+      }
+    }
+    parent.steps.add(step);
+    // Whatever pointed at the task now points at its new parent.
+    final waiting = <Task, String?>{};
+    for (final w in data.active.where((w) => w.afterTaskId == t.id)) {
+      waiting[w] = w.afterTaskId;
+      w.afterTaskId = w == parent ? null : parent.id;
+      w.touch();
+    }
+    final linked = <(Task, TaskStep)>[];
+    for (final x in [...data.active, ...data.archived]) {
+      for (final st in x.steps.where((st) => st.taskId == t.id)) {
+        linked.add((x, st));
+        st.taskId = x == parent ? null : parent.id;
+        x.touch();
+      }
+    }
+    data.active.remove(t);
+    data.deleted[t.id] = DateTime.now().toUtc();
+    changed(task: parent, order: true);
+    return (
+      step,
+      () {
+        parent.steps.remove(step);
+        waiting.forEach((w, id) {
+          w.afterTaskId = id;
+          w.touch();
+        });
+        for (final (x, st) in linked) {
+          st.taskId = t.id;
+          x.touch();
+        }
+        data.deleted.remove(t.id);
+        data.active.insert(index < 0 ? data.active.length : index.clamp(0, data.active.length), t);
+        for (final u in undos.reversed) {
+          u();
+        }
+        changed(task: t, order: true);
+        changed(task: parent);
+      }
+    );
   }
 
   /// Item 61: a step's own due date and reminder (minutes before; null = the default).
@@ -1300,6 +1482,21 @@ class AppStore extends ChangeNotifier {
   /// made into a linked task frees that task instead. Returns the task and how to undo it.
   (Task, void Function()) splitOut(Task t, TaskStep s) {
     final index = t.steps.indexOf(s);
+    if (s.carried != null) {
+      final restored = _restoreCarried(t, s);
+      if (restored != null) {
+        return (
+          restored,
+          () {
+            data.active.remove(restored);
+            data.archived.remove(restored);
+            data.deleted[restored.id] = DateTime.now().toUtc();
+            t.steps.insert(index.clamp(0, t.steps.length), s);
+            changed(task: t, order: true);
+          }
+        );
+      }
+    }
     final linked = data.task(s.taskId);
     if (linked != null) {
       linked.splitFrom = t.id;
@@ -1325,6 +1522,7 @@ class AppStore extends ChangeNotifier {
       ..matrixBox = t.matrixBox
       ..waitingOn = t.waitingOn
       ..notes = s.note
+      ..eventId = s.eventId
       ..splitFrom = t.id
       ..dueAt = s.dueAt ?? t.dueAt
       ..remindBefore = s.dueAt != null ? s.remindBefore : t.remindBefore;
@@ -1338,7 +1536,7 @@ class AppStore extends ChangeNotifier {
     } else if (t.kanban) {
       setOnBoard(n, true, stage: data.stage(t.stageId) ?? data.stages.firstOrNull, how: MoveHow.added);
     }
-    if (s.done) n.closedAt = DateTime.now();
+    if (s.done) n.closedAt = s.doneAt ?? DateTime.now();
     t.steps.remove(s);
     final at = data.active.indexOf(t);
     if (n.closedAt == null) {

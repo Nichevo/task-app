@@ -824,3 +824,63 @@ Five Android home screen widgets, drawn from the mock-ups agreed in round 5:
   same code as the inbox folder (dates in the title, #category, category board defaults, no duplicates for
   the same source + ref). Source "Another Android app" (`intent`) unless one is given.
 - Only "add", as agreed; no complete or update from outside yet.
+
+## Round 6 plan (items 72-78)
+
+Planned in November 2026: a Gantt chart and the things around it. Built in four PRs: 73 + 74 (1.8.6),
+72 (1.9.0), 75 + 76 + 77 (1.9.1), 78 (1.9.2).
+
+## 73. Task to step, and Split out without losing anything ☑ (version 1.8.6)
+
+- Task page ⋮, "Make into a step of…": pick the parent from the task picker. The step takes the title,
+  date, reminder, the first 200 characters of the notes and the event link, and keeps the whole task as
+  JSON (`TaskStep.carried`). Older app versions keep it untouched (item 62).
+- The task's own steps: asked every time (keep inside, add to the parent, or split out as tasks).
+- Tasks that came after it now come after the parent; steps linked to it now link to the parent. The
+  task gets a deletion mark so other devices drop it. Undo restores everything.
+- The step row says "Was a task: Home, 3 steps inside, 1 email…"; its menu has "Show what it carries".
+- Split out on a carrying step rebuilds the task with the same id and every field, plus the step's
+  current title, date, reminder, tick time and board stage. The deletion mark is lifted.
+- Plain Split out also keeps the event link and the tick time (new `TaskStep.doneAt`). "Make into a
+  linked task" also copies the step's date, reminder and note.
+
+## 74. Top bar: Search, Kanban, Matrix, Gantt, Calendar ☑ (version 1.8.6; Gantt icon comes with 72)
+
+- Kanban and Matrix icons show once a task is on them. Archive moved to the ⋮ menu (with its count) and
+  to Settings, Archive; on wide screens it still opens in the right-hand pane.
+- Settings, Top bar icons: switch any icon off on this device (saved with the device settings backup).
+  Anything hidden stays in the ⋮ menu.
+
+## 72. Gantt chart ◐ (planned for 1.9.0)
+
+- Opt in per task ("On the Gantt chart", `!gantt`). Bars from start to expected end, due date as a flag,
+  arrows for "comes after" (several allowed, optional wait days), red when a task starts before the one it
+  waits on ends. Ask before pushing later tasks when one slips. Whole days; Day, Week and Month zoom;
+  "Needs dates" tray; Timeline chip in the right-hand panel.
+- New fields: start, Takes (days) with Count weekends (off by default), milestone, progress (from steps
+  unless set), first planned dates. Moving a card to In progress fills an empty start. No start: the bar
+  counts back from the due date.
+
+## 75. Days worked ◐ (planned for 1.9.1)
+
+- "Worked on it today" on an expanded task; a 7-dot week on the task page; ticks under Gantt bars; "3 days
+  this week" on board cards with any. Days only, no hours. Ticking doesn't move a board card.
+- "Worked today" widget (4×3): one category's open tasks, a circle per row to tick today.
+
+## 76. Achievements page ◐ (planned for 1.9.1)
+
+- Per category for a period (last week, Monday to Sunday, by default): tasks done, steps ticked, days
+  worked, plan against actual per task, and tasks worked on but not finished.
+
+## 77. Chart widgets and burn-down ◐ (planned for 1.9.1)
+
+- "Added vs done" widget for one category (4×3). Burn-down on the Gantt page (ideal, actual, "at this
+  pace" finish) and as a 4×3 widget for one category.
+
+## 78. Habit tracker ◐ (planned for 1.9.2)
+
+- A "Habit" switch: never ticked off, you tick the days. Goal every day, N times a week or chosen
+  weekdays; optional reminder only if not ticked; pause. Habits page with week dots and streaks, a month
+  view, one "Habits today: 2 of 5" line in the main list, the Worked today widget can show habits. One free
+  missed day a week on every-day habits (switchable). "Make into a habit" keeps a repeating task's history.
+
