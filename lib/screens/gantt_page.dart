@@ -487,6 +487,7 @@ class _GanttPageState extends State<GanttPage> {
               Icon(s.done ? Icons.check : Icons.radio_button_unchecked, size: 14),
               const SizedBox(width: 6),
               Expanded(child: Text(s.title, style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis)),
+              if (!s.done && s.progress != null) Text('${s.progress}% ', style: theme.textTheme.labelSmall),
               if (sb != null && !stepIsPoint(s) && !narrow)
                 Text('${workDays(sb.start, sb.end, weekends: weekendsFor(t, data))}d', style: theme.textTheme.labelSmall),
             ]),
@@ -603,23 +604,26 @@ class _GanttPageState extends State<GanttPage> {
             onTap: open,
             child: Tooltip(
               message: '${s.title}\n${DateFormat('EEE d MMM').format(sb.start)} to '
-                  '${DateFormat('EEE d MMM').format(sb.end)}',
+                  '${DateFormat('EEE d MMM').format(sb.end)}${s.done ? ', done' : s.progress != null ? ', ${s.progress}% done' : ''}',
               child: Container(
                 decoration: BoxDecoration(
-                  color: stepColour.withValues(alpha: s.done ? 0.5 : 0.7),
+                  color: stepColour.withValues(alpha: s.done ? 0.5 : 0.3),
                   borderRadius: BorderRadius.circular(4),
                   border: sb.guessedStart ? null : Border.all(color: stepColour),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: sb.late && !s.done
-                    ? Align(
-                        alignment: Alignment.centerRight,
-                        child: Container(
-                          width: min(w, sb.lateDays * _dayW),
-                          color: scheme.error.withValues(alpha: 0.5),
-                        ),
-                      )
-                    : null,
+                child: Stack(children: [
+                  if (!s.done && s.share > 0)
+                    FractionallySizedBox(widthFactor: s.share, heightFactor: 1, child: ColoredBox(color: stepColour)),
+                  if (sb.late && !s.done)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        width: min(w, sb.lateDays * _dayW),
+                        color: scheme.error.withValues(alpha: 0.5),
+                      ),
+                    ),
+                ]),
               ),
             ),
           ),
@@ -1041,6 +1045,7 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
   final fmt = DateFormat('EEE d MMM');
   DateTime? start = s.startAt;
   int? takes = s.takesDays;
+  var progress = s.done ? 100 : s.progress ?? 0;
   final ok = await showDialog<bool>(
     context: context,
     builder: (c) => StatefulBuilder(
@@ -1085,6 +1090,16 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
                 ),
               ]),
             ),
+            if (!s.done) ...[
+              Text('Progress: $progress%'),
+              Slider(
+                value: progress.toDouble(),
+                max: 100,
+                divisions: 20,
+                label: '$progress%',
+                onChanged: (v) => set(() => progress = v.round()),
+              ),
+            ],
             if (s.dueAt != null) Text('Due ${fmt.format(s.dueAt!)}'),
             if (preview != null && (start != null || takes != null))
               Text(
@@ -1103,5 +1118,5 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
       },
     ),
   );
-  if (ok == true) store.setStepPlan(t, s, start: start, takes: takes);
+  if (ok == true) store.setStepPlan(t, s, start: start, takes: takes, progress: s.done ? s.progress : progress);
 }

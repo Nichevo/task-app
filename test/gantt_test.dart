@@ -106,6 +106,13 @@ void main() {
       final back = roundTrip(s.data).task(t.id)!.steps.first;
       expect(back.startAt, DateTime(2026, 11, 12));
       expect(back.takesDays, 3);
+      // Progress on a step fills its bar and counts toward its task's progress.
+      s.setStepPlan(t, prep, start: DateTime(2026, 11, 12), takes: 3, progress: 50);
+      expect(prep.share, 0.5);
+      expect(t.progressShare, 0.25, reason: 'half of one of two steps');
+      dry.done = true;
+      expect(t.progressShare, 0.75);
+      expect(roundTrip(s.data).task(t.id)!.steps.first.progress, 50);
       final (n, _) = s.splitOut(t, prep);
       expect(n.startAt, DateTime(2026, 11, 12));
       expect(n.takesDays, 3);
@@ -132,9 +139,12 @@ void main() {
       await tester.tap(find.byTooltip('More days'));
       await tester.pumpAndSettle();
       expect(find.text('Takes 2 days of work'), findsOneWidget);
+      await tester.drag(find.byType(Slider), const Offset(60, 0));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       expect(st.takesDays, 2);
+      expect(st.progress, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
   });

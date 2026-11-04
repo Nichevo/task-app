@@ -1656,9 +1656,10 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
-  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes}) {
+  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? progress}) {
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
+    s.progress = progress == null || progress <= 0 ? null : progress.clamp(0, 100);
     changed(task: t);
   }
 

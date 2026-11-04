@@ -254,7 +254,7 @@ class Task {
       ? progress!.clamp(0, 100) / 100
       : steps.isEmpty
           ? 0
-          : stepsDone / steps.length;
+          : steps.fold(0.0, (a, s) => a + s.share) / steps.length;
 
   /// The steps showing on the board: none unless the task is on it with [stepsOnBoard] on.
   List<TaskStep> get boardSteps => kanban && stepsOnBoard ? steps : const [];
@@ -583,6 +583,7 @@ class TaskStep {
       this.eventId,
       this.startAt,
       this.takesDays,
+      this.progress,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
       // ignore: prefer_initializing_formals
@@ -596,7 +597,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes',
+    'start', 'takes', 'progress',
   };
 
   final String id;
@@ -648,6 +649,12 @@ class TaskStep {
   DateTime? startAt;
   int? takesDays;
 
+  /// Item 72: how far along it is, 0 to 100, set by hand; ticked counts as 100.
+  int? progress;
+
+  /// Done share for the chart: 1 when ticked, else [progress].
+  double get share => done ? 1 : (progress ?? 0).clamp(0, 100) / 100;
+
   /// Item 56: the Kanban stage it is in when its task has steps on the board. Kept while they
   /// are off the board, so it goes back there.
   String? stageId;
@@ -680,6 +687,7 @@ class TaskStep {
         if (eventId != null) 'event': eventId,
         if (startAt != null) 'start': startAt!.toIso8601String(),
         if (takesDays != null) 'takes': takesDays,
+        if (progress != null) 'progress': progress,
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -697,6 +705,7 @@ class TaskStep {
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         startAt: DateTime.tryParse(j['start'] as String? ?? ''),
         takesDays: (j['takes'] as num?)?.toInt(),
+        progress: (j['progress'] as num?)?.toInt(),
         extra: unknownFields(j, _known),
       );
 }

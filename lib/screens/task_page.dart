@@ -100,9 +100,9 @@ class _TaskPageState extends State<TaskPage> {
             if (task.gantt)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'plan'),
-                child: Text(s.startAt == null && s.takesDays == null
-                    ? 'Start and days of work (Gantt chart)'
-                    : 'Change its start or days of work'),
+                child: Text(s.startAt == null && s.takesDays == null && s.progress == null
+                    ? 'Start, days of work and progress (Gantt chart)'
+                    : 'Change its start, days of work or progress'),
               ),
             if (s.carried == null)
               SimpleDialogOption(
