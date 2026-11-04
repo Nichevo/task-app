@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.6', 'November 2026', [
+    'iPad widgets get buttons: tick a task off (the circle before it) or snooze it until tomorrow on the Task list, Done on Focus, tick steps on Checklist and Now doing, the arrow or Next to move a board card or step on, and the circle on Worked today. The widget changes at once; the app catches up when you next open it.',
+  ]),
   Release('1.9.5', 'November 2026', [
     'iPad home screen widgets: Task list, Summary, Focus, Checklist, Mini month, Kanban board, Matrix, Worked today, Chart and Quick add. Press and hold a widget, then Edit Widget, to pick what it shows (a category, a stage, a task, or one of its "Show" choices). Tapping a task opens it; tapping a title opens that page in the app.',
     'Ticking, snoozing and moving things on straight from an iPad widget come in the next version. The test widget from 1.9.4 is gone; remove it from your home screen.',

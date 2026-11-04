@@ -884,7 +884,7 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   view, one "Habits today: 2 of 5" line in the main list, the Worked today widget can show habits. One free
   missed day a week on every-day habits (switchable). "Make into a habit" keeps a repeating task's history.
 
-## 79. iPad home screen widgets (in progress; test 1.9.4, widgets 1.9.5)
+## 79. iPad home screen widgets ☑ (test 1.9.4, widgets 1.9.5, buttons 1.9.6)
 
 - The Android widgets on iPad, written in Swift (WidgetKit), reading the same `widget_data` the app
   already writes, through a shared app group. Ten widget kinds cover the 16 Android widgets; buttons
@@ -898,5 +898,9 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   WidgetIntents.swift holds the Edit Widget choices, WidgetKinds.swift the views). Taps open the app
   through `taskblocks://…?homeWidget` links, the same routes the Android widgets use. The Today choice
   shows tasks only (Android also adds calendar events).
-- Step B: buttons on the widgets (tick, snooze, step tick, next stage, worked today).
+- Step B (version 1.9.6): buttons (iPadOS 17 interactive widgets, `WidgetActions.swift`): tick and
+  snooze on Task list, Done on Focus, step ticks on Checklist and Now doing, next stage on board cards
+  and steps, the circle on Worked today. They add to the same pending lists as the Android buttons
+  (`widget_done`, `widget_snoozed`, `widget_steps`, `widget_moves`, `widget_worked`), which the app applies
+  when it opens.
 - The widget target is added to the Xcode project by `tool/ios_widget_target.rb`.

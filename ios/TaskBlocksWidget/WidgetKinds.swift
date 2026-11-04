@@ -129,6 +129,35 @@ struct Block: View {
   }
 }
 
+/** A block with a tick button before it, and on big widgets a snooze button after it. */
+struct TaskRow: View {
+  let snap: Snapshot
+  let task: WTask
+  let now: Date
+  var compact = false
+  var snooze = false
+
+  var body: some View {
+    HStack(spacing: 6) {
+      if task.locked {
+        Image(systemName: "lock").font(.caption).foregroundStyle(.secondary).frame(width: 20)
+      } else {
+        Button(intent: TickTaskAction(id: task.id)) {
+          Image(systemName: "circle").font(.body).foregroundStyle(.secondary).frame(width: 20)
+        }
+        .buttonStyle(.plain)
+      }
+      Block(snap: snap, task: task, now: now, compact: compact)
+      if snooze {
+        Button(intent: SnoozeTaskAction(id: task.id)) {
+          Image(systemName: "moon.zzz").font(.caption).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+}
+
 struct EmptyNote: View {
   let text: String
   var body: some View {
@@ -188,7 +217,9 @@ struct TaskListView: View {
         EmptyNote(text: "Nothing to do here")
       } else {
         ForEach(tasks.prefix(rowCount(family)), id: \.id) { t in
-          Block(snap: snap, task: t, now: entry.date, compact: family == .systemMedium)
+          TaskRow(
+            snap: snap, task: t, now: entry.date, compact: family == .systemMedium,
+            snooze: family == .systemLarge || family == .systemExtraLarge)
         }
         if tasks.count > rowCount(family) {
           Text("\(tasks.count - rowCount(family)) more").font(.caption2).foregroundStyle(.secondary)
@@ -299,6 +330,13 @@ struct FocusView: View {
               .font(.caption)
           }
           Spacer(minLength: 0)
+          if !t.locked {
+            Button(intent: TickTaskAction(id: t.id)) {
+              Label("Done", systemImage: "checkmark").font(.caption.bold())
+            }
+            .buttonStyle(.bordered)
+            .tint(.black)
+          }
         }
         .foregroundStyle(Color.black.opacity(0.85))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -325,15 +363,30 @@ struct FocusView: View {
         Text(W.join(snap.categoryName(t.cat) ?? "", W.dueText(t.due, now: now))).font(.caption2)
           .foregroundStyle(.secondary)
         ForEach(open.prefix(shown), id: \.id) { s in
-          Label(s.title, systemImage: "square").font(.caption).lineLimit(1)
+          Button(intent: TickStepAction(task: t.id, step: s.id)) {
+            Label(s.title, systemImage: "square").font(.caption).lineLimit(1)
+          }
+          .buttonStyle(.plain)
         }
         if open.count > shown && shown > 0 {
           Text("\(open.count - shown) more steps").font(.caption2).foregroundStyle(.secondary)
         } else if !t.steps.isEmpty && open.isEmpty {
           Text("All \(t.steps.count) steps ticked").font(.caption2).foregroundStyle(.secondary)
         }
-        if let next = snap.nextStage(t.stage), family != .systemSmall {
-          Text("Next: \(next.name)").font(.caption2).foregroundStyle(W.blue)
+        Spacer(minLength: 0)
+        HStack(spacing: 6) {
+          if let next = snap.nextStage(t.stage), family != .systemSmall {
+            Button(intent: MoveAction(task: t.id, stage: next.id)) {
+              Text("Next: \(next.name)").font(.caption2.bold()).lineLimit(1)
+            }
+            .buttonStyle(.bordered)
+          }
+          if !t.locked {
+            Button(intent: TickTaskAction(id: t.id)) {
+              Label("Done", systemImage: "checkmark").font(.caption2.bold())
+            }
+            .buttonStyle(.bordered)
+          }
         }
       }
       .widgetCard()
@@ -379,13 +432,16 @@ struct ChecklistView: View {
             url: W.open(t.id))
           if t.steps.isEmpty { EmptyNote(text: "No steps") }
           ForEach(t.steps.prefix(rowCount(family) + 1), id: \.id) { s in
-            Link(destination: W.open(t.id)) {
-              Label {
-                Text(s.title).strikethrough(s.done).foregroundStyle(s.done ? Color.secondary : Color.primary)
-              } icon: {
-                Image(systemName: s.done ? "checkmark.square.fill" : "square")
-              }
-              .font(.subheadline).lineLimit(1)
+            let row = Label {
+              Text(s.title).strikethrough(s.done).foregroundStyle(s.done ? Color.secondary : Color.primary)
+            } icon: {
+              Image(systemName: s.done ? "checkmark.square.fill" : "square")
+            }
+            .font(.subheadline).lineLimit(1)
+            if s.done {
+              Link(destination: W.open(t.id)) { row }
+            } else {
+              Button(intent: TickStepAction(task: t.id, step: s.id)) { row }.buttonStyle(.plain)
             }
           }
         } else {
@@ -414,8 +470,17 @@ struct ChecklistView: View {
       ForEach(Array(groups.prefix(4).enumerated()), id: \.offset) { _, g in
         Text(g.0.name).font(.caption.bold()).foregroundStyle(.secondary)
         ForEach(Array(g.1.prefix(family == .systemMedium ? 2 : 4).enumerated()), id: \.offset) { _, p in
-          Link(destination: W.open(p.0.id)) {
-            Text(W.join(p.1.title, p.0.title)).font(.caption).lineLimit(1)
+          HStack(spacing: 4) {
+            Link(destination: W.open(p.0.id)) {
+              Text(W.join(p.1.title, p.0.title)).font(.caption).lineLimit(1)
+            }
+            Spacer(minLength: 2)
+            if let next = snap.nextStage(g.0.id) {
+              Button(intent: MoveAction(task: p.0.id, step: p.1.id, stage: next.id)) {
+                Image(systemName: "arrow.right.circle").font(.caption)
+              }
+              .buttonStyle(.plain)
+            }
           }
         }
       }
@@ -559,6 +624,7 @@ struct BoardView: View {
         Text("\(shown.name) · \(cards.count)").font(.subheadline.bold())
         if cards.isEmpty { EmptyNote(text: "Nothing here") }
         ForEach(cards.prefix(family == .systemMedium ? 1 : 6), id: \.id) { t in
+          HStack(spacing: 4) {
           Link(destination: W.open(t.id)) {
             VStack(alignment: .leading, spacing: 1) {
               Text((t.star ? "★ " : "") + t.title).font(.caption).lineLimit(1)
@@ -567,6 +633,14 @@ struct BoardView: View {
               Text(W.join(W.dueText(t.due, now: now), steps, here.isEmpty ? "" : "\(here) here", t.snoozed ? "snoozed" : ""))
                 .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
+          }
+          Spacer(minLength: 2)
+          if let next = snap.nextStage(shown.id) {
+            Button(intent: MoveAction(task: t.id, stage: next.id)) {
+              Image(systemName: "arrow.right.circle").font(.body)
+            }
+            .buttonStyle(.plain)
+          }
           }
         }
       }
@@ -672,10 +746,14 @@ struct WorkedView: View {
             ? openAppFirst : habits ? "No habits yet. Turn on \"Habit\" on a task in the app." : "No open tasks here.")
       }
       ForEach(list.prefix(rowCount(family)), id: \.id) { t in
-        Link(destination: W.open(t.id)) {
-          HStack(spacing: 6) {
+        HStack(spacing: 6) {
+          Button(intent: WorkedDayAction(id: t.id, day: today, on: !t.worked.contains(today))) {
             Image(systemName: t.worked.contains(today) ? "checkmark.circle.fill" : "circle")
               .foregroundStyle(t.worked.contains(today) ? Color.green : Color.secondary)
+          }
+          .buttonStyle(.plain)
+          Link(destination: W.open(t.id)) {
+          HStack(spacing: 6) {
             Text(t.title).font(.subheadline).lineLimit(1)
             Spacer(minLength: 4)
             Text(week.map { $0 > today ? "·" : t.worked.contains($0) ? "●" : "○" }.joined())
@@ -683,6 +761,7 @@ struct WorkedView: View {
             if habits && t.streak > 0 {
               Text("\(t.streak)").font(.caption2.bold()).foregroundStyle(.orange)
             }
+          }
           }
         }
       }
