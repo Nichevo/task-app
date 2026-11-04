@@ -191,7 +191,7 @@ void main() {
 
   group('40 about', () {
     test('changelog is newest first and matches pubspec', () {
-      expect(releases.first.version, '1.8.6');
+      expect(releases.first.version, '1.9.0');
     });
   });
 }

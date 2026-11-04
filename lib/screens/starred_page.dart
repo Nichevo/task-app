@@ -99,6 +99,7 @@ class _StarredPageState extends State<StarredPage> {
                       notes: notes.text.trim(),
                       box: p.box,
                       board: p.board,
+                      gantt: p.gantt,
                       star: p.star));
             },
             child: const Text('Add'),

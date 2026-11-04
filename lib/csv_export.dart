@@ -4,12 +4,15 @@ import 'models.dart';
 
 final csvDateFormat = DateFormat('yyyy-MM-dd HH:mm');
 
-const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)', 'Stage', 'Emails', 'Matrix box', 'Waiting on'];
+const csvHeader = ['Status', 'Position', 'Task', 'Notes', 'Category', 'Created', 'Due', 'Closed', 'Starred', 'Repeats', 'Steps', 'Source', 'Estimate (min)', 'Stage', 'Emails', 'Matrix box', 'Waiting on', 'Gantt', 'Start', 'Takes (days)', 'Count weekends', 'Milestone', 'Progress (%)', 'Comes after'];
 
 String _cell(String s) =>
     RegExp(r'[",\r\n]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
 
 String _date(DateTime? d) => d == null ? '' : csvDateFormat.format(d);
+
+String? _title(AppData data, String id) =>
+    (data.task(id) ?? data.archived.where((t) => t.id == id).firstOrNull)?.title;
 
 /// All tasks, active (in list order) then archived, with every field.
 String buildCsv(AppData data) {
@@ -33,6 +36,13 @@ String buildCsv(AppData data) {
         t.emails.isEmpty ? '' : '${t.emails.length}',
         MatrixBox.byId(t.matrixBox) == null ? '' : data.boxName(MatrixBox.byId(t.matrixBox)!),
         t.waitingOn ?? '',
+        t.gantt ? 'Yes' : '',
+        _date(t.startAt),
+        t.takesDays?.toString() ?? '',
+        t.countWeekends == null ? '' : (t.countWeekends! ? 'Yes' : 'No'),
+        t.milestone ? 'Yes' : '',
+        t.progress?.toString() ?? '',
+        [for (final id in t.afterIds) ?_title(data, id)].join('; '),
       ];
   final rows = <List<String>>[
     csvHeader,

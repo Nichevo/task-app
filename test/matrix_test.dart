@@ -129,8 +129,9 @@ void main() {
     testWidgets('Settings lists every add-box word in its own section', (tester) async {
       final s = AppStore();
       await tester.pumpWidget(MaterialApp(home: SettingsPage(store: s)));
-      await tester.scrollUntilVisible(find.text('!delegate'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(find.text('Quick-add words'), 300, scrollable: find.byType(Scrollable).first);
       expect(find.text('Quick-add words'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('!delegate'), 100, scrollable: find.byType(Scrollable).first);
       expect(find.text('#category'), findsOneWidget);
       expect(find.text('!do'), findsOneWidget);
       expect(find.text('!decide'), findsOneWidget);
@@ -235,7 +236,7 @@ void main() {
     s.setBoxName(MatrixBox.delegate, 'Hand off');
     s.addTask('Book the venue', box: MatrixBox.delegate).waitingOn = 'Sam';
     final csv = buildCsv(s.data);
-    expect(csv.split('\r\n')[1], endsWith(',Hand off,Sam'));
+    expect(csv.split('\r\n')[1], contains(',Hand off,Sam,'));
     final d = AppData(matrixNames: {'delegate': 'Hand off'});
     importCsvText(d, csv);
     expect(d.active.single.matrixBox, 'delegate');

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../gantt.dart';
 import '../models.dart';
 import '../places.dart';
 import '../store.dart';
@@ -280,18 +282,12 @@ class _TaskPageState extends State<TaskPage> {
     if (d != null) _update(() => task.snoozedUntil = d);
   }
 
-  /// Choose the task this one waits for. Tasks that (directly or not) wait for this one are
-  /// left out, so a chain can't loop.
+  /// Choose another task this one waits for (item 72 allows several). Tasks that (directly or
+  /// not) wait for this one are left out, so a chain can't loop.
   Future<void> _pickAfter() async {
-    bool waitsOnThis(Task t) {
-      final seen = <String>{};
-      for (Task? c = t; c != null && seen.add(c.id); c = data.task(c.afterTaskId)) {
-        if (c.afterTaskId == task.id) return true;
-      }
-      return false;
-    }
-
-    final options = data.active.where((t) => t.id != task.id && !waitsOnThis(t)).toList();
+    final options = data.active
+        .where((t) => t.id != task.id && !task.afterIds.contains(t.id) && !wouldLoop(task, t, data))
+        .toList();
     final picked = await showDialog<Task>(
       context: context,
       builder: (c) => SimpleDialog(
@@ -303,7 +299,42 @@ class _TaskPageState extends State<TaskPage> {
         ],
       ),
     );
-    if (picked != null) _update(() => task.afterTaskId = picked.id);
+    if (picked != null) setState(() => widget.store.addAfter(task, picked));
+  }
+
+  /// The tasks this one comes after, each with a remove button, and "Add another".
+  Future<void> _editAfter() async {
+    if (task.afterIds.isEmpty) return _pickAfter();
+    final add = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, setInner) => AlertDialog(
+          title: const Text('Comes after'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            for (final id in task.afterIds)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(anyTask(data, id)?.title ?? '(deleted task)'),
+                subtitle: anyTask(data, id)?.closedAt != null ? const Text('Ticked off') : null,
+                trailing: IconButton(
+                  tooltip: 'Remove',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    widget.store.removeAfter(task, id);
+                    setInner(() {});
+                    setState(() {});
+                  },
+                ),
+              ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Add another')),
+            FilledButton(onPressed: () => Navigator.pop(c, false), child: const Text('Done')),
+          ],
+        ),
+      ),
+    );
+    if (add == true && mounted) await _pickAfter();
   }
 
   Future<void> _editRepeat() async {
@@ -732,6 +763,7 @@ class _TaskPageState extends State<TaskPage> {
           ),
         ..._board(context),
         ..._matrix(context),
+        ..._gantt(context),
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
@@ -749,14 +781,16 @@ class _TaskPageState extends State<TaskPage> {
           ListTile(
             leading: Icon(data.isLocked(task) ? Icons.lock_outline : Icons.link),
             title: const Text('Comes after'),
-            subtitle: Text(data.task(task.afterTaskId)?.title ?? 'Nothing (can be done any time)'),
-            onTap: _pickAfter,
-            trailing: task.afterTaskId == null
+            subtitle: Text(task.afterIds.isEmpty
+                ? 'Nothing (can be done any time)'
+                : [for (final id in task.afterIds) anyTask(data, id)?.title ?? '(deleted task)'].join(', ')),
+            onTap: _editAfter,
+            trailing: task.afterIds.isEmpty
                 ? null
                 : IconButton(
-                    tooltip: 'Remove link',
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => _update(() => task.afterTaskId = null),
+                    tooltip: 'Add another',
+                    icon: const Icon(Icons.add),
+                    onPressed: _pickAfter,
                   ),
           ),
           ListTile(
@@ -784,6 +818,185 @@ class _TaskPageState extends State<TaskPage> {
           ),
       ]),
     );
+  }
+
+  Future<DateTime?> _pickDay(String help, DateTime initial) {
+    final now = DateTime.now();
+    return showDatePicker(
+      context: context,
+      helpText: help,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 3),
+      lastDate: DateTime(now.year + 10),
+    );
+  }
+
+  Future<int?> _askDays(String title, int? initial) async {
+    final v = await askText(context, title, initial: initial?.toString() ?? '');
+    if (v == null) return null;
+    return int.tryParse(v.trim().split(' ').first);
+  }
+
+  /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.
+  List<Widget> _gantt(BuildContext context) {
+    if (archived && !task.gantt) return [];
+    final theme = Theme.of(context);
+    final fmt = DateFormat('EEE d MMM');
+    final bar = barFor(task, data);
+    final weekends = weekendsFor(task, data);
+    void changedGantt(VoidCallback f) {
+      setState(f);
+      widget.store.ganttChanged(task);
+    }
+
+    return [
+      if (!archived)
+        SwitchListTile(
+          secondary: const Icon(Icons.view_timeline_outlined),
+          title: const Text('On the Gantt chart'),
+          subtitle: Text(!task.gantt
+              ? 'Off'
+              : bar == null
+                  ? 'Needs a start or due date'
+                  : task.milestone
+                      ? 'Milestone on ${fmt.format(bar.start)}'
+                      : '${fmt.format(bar.start)} to ${fmt.format(bar.end)}'),
+          value: task.gantt,
+          onChanged: (on) async {
+            DateTime? start;
+            if (on && task.startAt == null && task.dueAt == null) {
+              start = await _pickDay('When does it start?', earliestStart(task, data) ?? dayOf(DateTime.now()));
+              if (!mounted) return;
+            }
+            setState(() => widget.store.setOnGantt(task, on, start: start));
+          },
+        ),
+      if (task.gantt) ...[
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 72, right: 16),
+          title: const Text('Starts'),
+          subtitle: Text(task.startAt != null
+              ? fmt.format(task.startAt!)
+              : bar != null
+                  ? 'Not set: counted back from the due date (${fmt.format(bar.start)})'
+                  : 'Not set'),
+          onTap: archived
+              ? null
+              : () async {
+                  final d = await _pickDay(
+                      'When does it start?', task.startAt ?? earliestStart(task, data) ?? dayOf(DateTime.now()));
+                  if (d != null) changedGantt(() => task.startAt = d);
+                },
+          trailing: task.startAt == null || archived
+              ? null
+              : IconButton(
+                  tooltip: 'Clear start',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () => changedGantt(() => task.startAt = null),
+                ),
+        ),
+        if (!task.milestone) ...[
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: const Text('Takes'),
+            subtitle: Text(task.takesDays == null
+                ? 'Not set: the bar ends on the due date'
+                : '${task.takesDays} ${weekends ? '' : 'work '}day${task.takesDays == 1 ? '' : 's'}'),
+            onTap: archived
+                ? null
+                : () async {
+                    final n = await _askDays('How many days does it take?', task.takesDays);
+                    if (n != null && n > 0) changedGantt(() => task.takesDays = n);
+                  },
+            trailing: task.takesDays == null || archived
+                ? null
+                : IconButton(
+                    tooltip: 'Clear length',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () => changedGantt(() => task.takesDays = null),
+                  ),
+          ),
+          if (task.takesDays != null)
+            SwitchListTile(
+              contentPadding: const EdgeInsets.only(left: 72, right: 16),
+              title: const Text('Count weekends'),
+              subtitle: const Text('Off: Saturdays and Sundays are skipped'),
+              value: weekends,
+              onChanged: archived ? null : (v) => changedGantt(() => task.countWeekends = v),
+            ),
+          if (bar != null && task.takesDays != null && !archived)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+              child: Text(
+                bar.late
+                    ? 'Expected to finish ${fmt.format(bar.end)}, ${bar.lateDays} day${bar.lateDays == 1 ? '' : 's'} after it\'s due'
+                    : 'Expected to finish ${fmt.format(bar.end)}',
+                style: TextStyle(color: bar.late ? theme.colorScheme.error : null),
+              ),
+            ),
+        ],
+        if (task.afterIds.isNotEmpty)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: const Text('Wait after what it comes after'),
+            subtitle: Text(task.lagDays == null || task.lagDays == 0
+                ? 'No wait'
+                : '${task.lagDays} day${task.lagDays == 1 ? '' : 's'}'),
+            onTap: archived
+                ? null
+                : () async {
+                    final n = await _askDays('Days to wait (paint drying, delivery…)', task.lagDays);
+                    if (n != null && n >= 0) changedGantt(() => task.lagDays = n == 0 ? null : n);
+                  },
+          ),
+        if (clashes(task, data))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+            child: Text('Starts before what it comes after is done (earliest ${fmt.format(earliestStart(task, data)!)})',
+                style: TextStyle(color: theme.colorScheme.error)),
+          ),
+        SwitchListTile(
+          contentPadding: const EdgeInsets.only(left: 72, right: 16),
+          title: const Text('Milestone'),
+          subtitle: const Text('One day, shown as a diamond'),
+          value: task.milestone,
+          onChanged: archived ? null : (v) => changedGantt(() => task.milestone = v),
+        ),
+        if (!task.milestone)
+          task.steps.isNotEmpty && task.progress == null
+              ? ListTile(
+                  contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                  title: const Text('Progress'),
+                  subtitle: Text('${task.stepsDone} of ${task.steps.length} steps (${(task.progressShare * 100).round()}%)'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.only(left: 72, right: 16),
+                  child: Row(children: [
+                    const Text('Progress'),
+                    Expanded(
+                      child: Slider(
+                        value: (task.progress ?? 0).toDouble(),
+                        max: 100,
+                        divisions: 10,
+                        label: '${task.progress ?? 0}%',
+                        onChanged: archived ? null : (v) => setState(() => task.progress = v.round()),
+                        onChangeEnd: archived ? null : (_) => widget.store.ganttChanged(task),
+                      ),
+                    ),
+                    Text('${task.progress ?? 0}%'),
+                  ]),
+                ),
+        if (task.planStart != null && task.planDue != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+            child: Text(
+              'First planned ${DateFormat('d MMM').format(task.planStart!)} to ${DateFormat('d MMM').format(task.planDue!)}'
+              '${bar != null && daysBetween(task.planDue!, bar.end) > 0 ? ' · now ${daysBetween(task.planDue!, bar.end)} day${daysBetween(task.planDue!, bar.end) == 1 ? '' : 's'} later' : ''}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+      ],
+    ];
   }
 
   /// Item 60: the On the matrix switch, the box, and "Waiting on" for Delegate.

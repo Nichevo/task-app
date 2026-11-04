@@ -648,6 +648,38 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             const Divider(height: 40),
+            _heading('Gantt chart'),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Count weekends'),
+              subtitle: const Text('When a task "takes" a number of days, Saturdays and Sundays count. '
+                  'Each task can say otherwise.'),
+              value: data.ganttWeekends,
+              onChanged: (v) => _set(() => data.ganttWeekends = v),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('When a task moves later'),
+              subtitle: const Text('The tasks after it that would start too early'),
+              trailing: DropdownButton<GanttPush>(
+                value: data.ganttPush,
+                items: const [
+                  DropdownMenuItem(value: GanttPush.ask, child: Text('Ask')),
+                  DropdownMenuItem(value: GanttPush.always, child: Text('Move them too')),
+                  DropdownMenuItem(value: GanttPush.never, child: Text('Leave them')),
+                ],
+                onChanged: (v) => _set(() => data.ganttPush = v ?? GanttPush.ask),
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('In progress fills the start date'),
+              subtitle: const Text('Moving a card into In progress on the board sets its start to that day, '
+                  'when it has none.'),
+              value: data.ganttStartOnProgress,
+              onChanged: (v) => _set(() => data.ganttStartOnProgress = v),
+            ),
+            const Divider(height: 40),
             _heading('Top bar icons'),
             const Text('Icons at the top of the task list on this device. Anything switched off is still in the ⋮ menu.'),
             for (final name in TopIcon.all)
