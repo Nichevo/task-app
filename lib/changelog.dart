@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.5', 'November 2026', [
+    'iPad home screen widgets: Task list, Summary, Focus, Checklist, Mini month, Kanban board, Matrix, Worked today, Chart and Quick add. Press and hold a widget, then Edit Widget, to pick what it shows (a category, a stage, a task, or one of its "Show" choices). Tapping a task opens it; tapping a title opens that page in the app.',
+    'Ticking, snoozing and moving things on straight from an iPad widget come in the next version. The test widget from 1.9.4 is gone; remove it from your home screen.',
+  ]),
   Release('1.9.4', 'November 2026', [
     'iPad: a first test home screen widget, "Task Blocks test". It shows how many tasks are open and the first few, to check that widgets can see your tasks when the app is installed with AltStore. The full set of iPad widgets comes next.',
   ]),

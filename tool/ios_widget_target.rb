@@ -1,14 +1,31 @@
 # Adds the iPad/iPhone widget extension (ios/TaskBlocksWidget) to ios/Runner.xcodeproj.
 # Run from the repo root with: ruby tool/ios_widget_target.rb   (needs: gem install xcodeproj)
-# Safe to run again: it does nothing when the target is already there.
+# Safe to run again: when the target is already there it only syncs the widget's .swift files
+# (adds new ones, drops deleted ones), so run it after adding a file to ios/TaskBlocksWidget.
 require 'xcodeproj'
 
 NAME = 'TaskBlocksWidget'
 project = Xcodeproj::Project.open('ios/Runner.xcodeproj')
 runner = project.targets.find { |t| t.name == 'Runner' }
 abort 'Runner target not found' unless runner
-if project.targets.any? { |t| t.name == NAME }
-  puts "#{NAME} is already in the project"
+
+def sync_sources(project, target)
+  group = project.main_group[NAME]
+  on_disk = Dir.children("ios/#{NAME}").select { |f| f.end_with?('.swift') }.sort
+  group.files.select { |f| f.path.end_with?('.swift') && !on_disk.include?(f.path) }.each do |f|
+    target.source_build_phase.remove_file_reference(f)
+    f.remove_from_project
+  end
+  on_disk.each do |name|
+    next if group.files.any? { |f| f.path == name }
+    target.add_file_references([group.new_file(name)])
+  end
+end
+
+if (existing = project.targets.find { |t| t.name == NAME })
+  sync_sources(project, existing)
+  project.save
+  puts "#{NAME} sources synced"
   exit
 end
 
@@ -51,10 +68,9 @@ end
 
 # Source files: the widget's own folder, plus ios/Shared (used by the app and the widget).
 widget_group = project.main_group.new_group(NAME, NAME)
-swift = widget_group.new_file('TaskBlocksWidget.swift')
 widget_group.new_file('Info.plist')
 widget_group.new_file("#{NAME}.entitlements")
-widget.add_file_references([swift])
+sync_sources(project, widget)
 
 shared_group = project.main_group.new_group('Shared', 'Shared')
 app_group = shared_group.new_file('AppGroup.swift')

@@ -18,7 +18,9 @@ class HomeWidgets {
   static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   /// Item 79: the iPad widget kinds (WidgetKit `kind` strings in ios/TaskBlocksWidget).
-  static const _iosKinds = ['TaskBlocksWidget'];
+  static const _iosKinds = [
+    'TaskList', 'Summary', 'Focus', 'Checklist', 'Month', 'Board', 'Matrix', 'Worked', 'Chart', 'QuickAdd',
+  ];
 
   static const _channel = MethodChannel('app.taskblocks/widgets');
 
