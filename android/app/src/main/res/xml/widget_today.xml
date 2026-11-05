@@ -3,6 +3,7 @@
     android:configure="app.taskblocks.WidgetConfigActivity"
     android:description="@string/widget_today_desc"
     android:initialLayout="@layout/widget_list"
+    android:previewImage="@drawable/widget_preview_today"
     android:minWidth="180dp"
     android:minHeight="110dp"
     android:minResizeWidth="180dp"

@@ -935,3 +935,16 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
 - iPad/iOS, macOS, Windows and web icons are all regenerated from the same artwork.
 - To change it, edit the artwork in `tool/app_icon/make_icons.py` and run
   `python3 tool/app_icon/make_icons.py` (needs `pip install cairosvg pillow`).
+
+## 83. Calendar widget and widget pictures ☑ (version 1.10.0)
+
+- New Android **Calendar** widget, 4x3 like the task list: this month on the left (dots on days with
+  tasks due, today ringed, tap a day to open the calendar on it), and on the right what's coming up:
+  overdue, due in the next two weeks and today's calendar events, with tick boxes. Light, dark or
+  see-through. The title opens the calendar, + adds a task.
+- Every Android widget has a sample picture (`android:previewImage`) in the widget picker, drawn
+  with made-up tasks by `tool/widget_previews/make_previews.py` (run `python3 tool/widget_previews/make_previews.py`
+  after changing how a widget looks; needs `pip install pillow`).
+- The statistics chart widget (added and done per day for 4 weeks, open-count line; item 77) already
+  existed as "Added vs done"; its picker name is now "Stats chart: added vs done" so it is easier to find.
+

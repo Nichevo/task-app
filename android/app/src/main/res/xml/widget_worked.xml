@@ -3,6 +3,7 @@
     android:configure="app.taskblocks.WidgetConfigActivity"
     android:description="@string/widget_worked_desc"
     android:initialLayout="@layout/widget_board_steps"
+    android:previewImage="@drawable/widget_preview_worked"
     android:minWidth="180dp"
     android:minHeight="110dp"
     android:minResizeWidth="180dp"

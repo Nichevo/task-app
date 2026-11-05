@@ -28,6 +28,8 @@
     <string name="widget_done">Done</string>
     <string name="widget_worked_desc">Worked today: tick the tasks in one category you worked on today</string>
     <string name="widget_worked_tick">Worked on it today</string>
-    <string name="widget_added_done_desc">Added vs done: the Statistics chart for the last 4 weeks, for one category</string>
+    <string name="widget_added_done_desc">Stats chart: tasks added and done each day for the last 4 weeks, with a line for how many are open, for one category</string>
     <string name="widget_burn_down_desc">Burn-down: work left on the Gantt chart against the plan, for one category</string>
+    <string name="widget_calendar_desc">Calendar: this month with dots on busy days, and what\'s coming up in the next two weeks</string>
+    <string name="widget_cal_empty">Nothing due in the next two weeks</string>
 </resources>
