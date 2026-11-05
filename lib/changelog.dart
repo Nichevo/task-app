@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.9', 'November 2026', [
+    'Task Blocks has its own icon: three task blocks going from green to amber to red, with the top one ticked. It is on Android (including round and themed icons), iPad, Mac, Windows and the web.',
+    'Notifications use a small one-colour version of the new icon in the status bar.',
+  ]),
   Release('1.9.8', 'November 2026', [
     'Edit all steps shows its timeline on the folded screen and on narrower unfolded screens too, under the steps (scroll down to it), with every step in it. It shows for Gantt tasks, or steps that have a start or days of work.',
     'Unfolded, drag the line between the list and the right-hand pane to make the pane wider or narrower. It stays that way on this device; double-tap the line to go back to the usual widths.',

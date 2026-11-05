@@ -122,7 +122,7 @@ class Reminders {
     if (!supported) return;
     tzdata.initializeTimeZones();
     await _plugin.initialize(
-      settings: InitializationSettings(android: const AndroidInitializationSettings('@mipmap/ic_launcher'), iOS: _darwin),
+      settings: InitializationSettings(android: const AndroidInitializationSettings('@drawable/ic_notification'), iOS: _darwin),
       onDidReceiveNotificationResponse: (r) async {
         if (r.actionId == null && _isReview(r.payload)) {
           onOpenReview?.call();
