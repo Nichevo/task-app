@@ -905,7 +905,7 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   when it opens.
 - The widget target is added to the Xcode project by `tool/ios_widget_target.rb`.
 
-## 80. Edit all steps ☑ (version 1.9.7)
+## 80. Edit all steps ☑ (version 1.9.7; preview when folded + narrow header fix 1.9.8)
 
 - An "Edit all" button above a task's checklist (two or more steps) opens one screen with every step.
   Tap a field to change that step, or tick several to change them together: start, due, days of work,

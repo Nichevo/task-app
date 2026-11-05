@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.8', 'November 2026', [
+    'Edit all steps shows its small timeline on the folded screen and on narrower unfolded panes too (for Gantt tasks, or steps that have a start or days of work).',
+    'Fixed: in a narrow task pane, "Checklist 0/3" was squeezed to one letter per line. Edit all and Templates are now icon buttons there.',
+  ]),
   Release('1.9.7', 'November 2026', [
     'Edit all steps: tap "Edit all" above a task\'s checklist to see every step on one screen. Tap any start, days of work, due date, reminder, stage or progress to change that step, or tick several and change them all at once. "Move dates" shifts them a few days earlier or later.',
     '"Line up in order" gives the ticked steps dates one after another: after another step, today or a date you pick, with free days in between if you want, skipping weekends unless the task counts them. It shows where each one lands, and warns when any would end after the task is due. Undo takes back each change.',

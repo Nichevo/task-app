@@ -516,7 +516,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
               itemBuilder: (context, i) => wide ? _row(steps[i], i) : _card(steps[i], i),
             ),
           ),
-          if (wide && task.gantt && steps.isNotEmpty) _preview(),
+          if (_showPlan && steps.isNotEmpty) _preview(wide),
         ]),
       );
     });
@@ -928,7 +928,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
   }
 
   /// A small Gantt chart of the steps that updates as you edit.
-  Widget _preview() {
+  Widget _preview(bool wide) {
     final bars = [for (final s in task.steps) stepBar(task, s, data)];
     final dated = bars.whereType<GanttBar>().toList();
     final needs = bars.where((b) => b == null).length;
@@ -952,8 +952,9 @@ class _StepsEditPageState extends State<StepsEditPage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Expanded(child: Text('How it looks on the Gantt chart', style: TextStyle(fontWeight: FontWeight.w500))),
+        Wrap(spacing: 12, runSpacing: 2, alignment: WrapAlignment.spaceBetween, children: [
+          Text(task.gantt ? 'How it looks on the Gantt chart' : 'Timeline',
+              style: const TextStyle(fontWeight: FontWeight.w500)),
           Text(
             [
               weekendsFor(task, data) ? 'Weekends count' : "Weekends don't count",
@@ -964,11 +965,11 @@ class _StepsEditPageState extends State<StepsEditPage> {
         ]),
         const SizedBox(height: 6),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 12 * rowH + 18),
+          constraints: BoxConstraints(maxHeight: (wide ? 12 : 6) * rowH + 18),
           child: SingleChildScrollView(
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(
-                width: 140,
+                width: wide ? 140 : 96,
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const SizedBox(height: 18),
                   for (final s in task.steps)
@@ -1041,12 +1042,16 @@ class _PreviewPainter extends CustomPainter {
     final w = size.width / max(days, 1);
     double x(DateTime d) => daysBetween(from, d) * w;
     final shade = Paint()..color = scheme.surfaceContainerHighest.withValues(alpha: 0.6);
+    var labelEnd = -1.0;
     for (var d = from; !d.isAfter(to); d = addDays(d, 1)) {
       if (weekends && isWeekend(d)) canvas.drawRect(Rect.fromLTWH(x(d), top, w, size.height - top), shade);
       if (d.weekday == DateTime.monday) {
         final tp = TextPainter(text: TextSpan(text: DateFormat('d MMM').format(d), style: labelStyle), textDirection: TextDirection.ltr)
           ..layout();
-        tp.paint(canvas, Offset(x(d), 0));
+        if (x(d) > labelEnd && x(d) + tp.width <= size.width) {
+          tp.paint(canvas, Offset(x(d), 0));
+          labelEnd = x(d) + tp.width + 6;
+        }
       }
     }
     if (!today.isBefore(from) && !today.isAfter(to)) {
