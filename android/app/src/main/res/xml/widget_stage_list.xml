@@ -3,6 +3,7 @@
     android:configure="app.taskblocks.WidgetConfigActivity"
     android:description="@string/widget_stage_list_desc"
     android:initialLayout="@layout/widget_stage_list"
+    android:previewImage="@drawable/widget_preview_stage_list"
     android:minWidth="180dp"
     android:minHeight="180dp"
     android:minResizeWidth="180dp"

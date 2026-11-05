@@ -117,6 +117,12 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_month" />
         </receiver>
+        <receiver android:name=".CalendarWidget" android:exported="true" android:label="Calendar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_calendar" />
+        </receiver>
         <receiver android:name=".BoardSummaryWidget" android:exported="true" android:label="Board summary">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -153,7 +159,7 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_worked" />
         </receiver>
-        <receiver android:name=".AddedDoneWidget" android:exported="true" android:label="Added vs done">
+        <receiver android:name=".AddedDoneWidget" android:exported="true" android:label="Stats chart: added vs done">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

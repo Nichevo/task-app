@@ -52,6 +52,7 @@ class HomeWidgets {
     'app.taskblocks.ChecklistWidget',
     'app.taskblocks.StatsWidget',
     'app.taskblocks.MonthWidget',
+    'app.taskblocks.CalendarWidget', // Item 83.
     'app.taskblocks.QuickAddWidget',
     // Item 68: board and matrix widgets.
     'app.taskblocks.BoardSummaryWidget',

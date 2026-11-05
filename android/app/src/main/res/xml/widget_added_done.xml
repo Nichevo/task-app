@@ -3,6 +3,7 @@
     android:configure="app.taskblocks.WidgetConfigActivity"
     android:description="@string/widget_added_done_desc"
     android:initialLayout="@layout/widget_chart"
+    android:previewImage="@drawable/widget_preview_added_done"
     android:minWidth="180dp"
     android:minHeight="110dp"
     android:minResizeWidth="180dp"

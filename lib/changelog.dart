@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.0', 'November 2026', [
+    'New Android widget: Calendar (4x3). This month on the left, with a dot on days that have tasks due; tap a day to open it. On the right, what is coming up: overdue tasks, the next two weeks and today\'s calendar events, with a box to tick each off.',
+    'Every Android widget now shows a sample picture in the widget picker, so you can see what each one looks like before you place it.',
+    'The Added vs done widget is now called "Stats chart: added vs done" in the picker: tasks added (blue) and done (green) each day for the last 4 weeks, with a line for how many are open.',
+  ]),
   Release('1.9.9', 'November 2026', [
     'Task Blocks has its own icon: three task blocks going from green to amber to red, with the top one ticked. It is on Android (including round and themed icons), iPad, Mac, Windows and the web.',
     'Notifications use a small one-colour version of the new icon in the status bar.',

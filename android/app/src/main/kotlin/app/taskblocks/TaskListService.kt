@@ -7,7 +7,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 
-/** Supplies the rows of [TaskListWidget] and [TodayWidget]. */
+/** Supplies the rows of [TaskListWidget], [TodayWidget] and the list in [CalendarWidget]. */
 class TaskListService : RemoteViewsService() {
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
       Factory(
@@ -15,6 +15,7 @@ class TaskListService : RemoteViewsService() {
           intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 0),
           intent.getStringExtra("filter") ?: "all",
           intent.getBooleanExtra("compact", false),
+          intent.getBooleanExtra("snooze", true),
       )
 
   class Factory(
@@ -22,6 +23,8 @@ class TaskListService : RemoteViewsService() {
       private val widgetId: Int,
       private val filter: String,
       private val compact: Boolean,
+      /** The Calendar widget's narrow list leaves the snooze button out (item 83). */
+      private val snooze: Boolean = true,
   ) : RemoteViewsFactory {
     private var snap: Snapshot? = null
     private var items: List<WidgetTask> = emptyList()
@@ -47,7 +50,13 @@ class TaskListService : RemoteViewsService() {
       val progress = if (t.steps.isNotEmpty()) "  ${t.steps.count { it.done }}/${t.steps.size}" else ""
       v.setTextViewText(R.id.row_title, prefix + t.title + progress)
       val due = t.due
-      v.setTextViewText(R.id.row_due, if (due == null) "" else WidgetData.dueLabel(due))
+      v.setTextViewText(
+          R.id.row_due,
+          when {
+            due == null -> ""
+            filter == "upcoming" -> WidgetData.shortDue(due)
+            else -> WidgetData.dueLabel(due)
+          })
       v.setTextColor(R.id.row_due, if (due != null && due < System.currentTimeMillis() && !t.event) 0xFF8B0000.toInt() else 0xDD000000.toInt())
       when {
         t.event -> {
@@ -63,7 +72,7 @@ class TaskListService : RemoteViewsService() {
         else -> {
           v.setImageViewResource(R.id.row_tick, R.drawable.ic_widget_box)
           v.setOnClickFillInIntent(R.id.row_tick, Intent().putExtra("op", "done").putExtra("id", t.id))
-          v.setViewVisibility(R.id.row_snooze, View.VISIBLE)
+          v.setViewVisibility(R.id.row_snooze, if (snooze) View.VISIBLE else View.GONE)
           v.setOnClickFillInIntent(R.id.row_snooze, Intent().putExtra("op", "snooze").putExtra("id", t.id))
         }
       }

@@ -124,3 +124,63 @@ class MonthService : RemoteViewsService() {
     override fun hasStableIds(): Boolean = true
   }
 }
+
+/**
+ * Item 83: the 4x3 Calendar widget. This month on the left (dots on days with tasks due, tap a
+ * day to open it), and on the right what's coming up: overdue, the next two weeks and today's events.
+ */
+class CalendarWidget : AppWidgetProvider() {
+  override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
+    for (id in ids) update(context, manager, id)
+    manager.notifyAppWidgetViewDataChanged(ids, R.id.cal_grid)
+    manager.notifyAppWidgetViewDataChanged(ids, R.id.cal_list)
+  }
+
+  override fun onEnabled(context: Context) = WidgetRefreshJob.schedule(context)
+
+  override fun onDisabled(context: Context) = WidgetRefreshJob.cancelIfNoWidgets(context)
+
+  override fun onDeleted(context: Context, ids: IntArray) = WidgetData.forget(context, ids)
+
+  override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, newOptions: android.os.Bundle) =
+      onUpdate(context, manager, intArrayOf(id))
+
+  companion object {
+    fun update(c: Context, m: AppWidgetManager, id: Int) {
+      val views = RemoteViews(c.packageName, R.layout.widget_calendar)
+      val look = WidgetData.look(c, id)
+      val dayNames = intArrayOf(R.id.cal_d1, R.id.cal_d2, R.id.cal_d3, R.id.cal_d4, R.id.cal_d5, R.id.cal_d6, R.id.cal_d7)
+      look.apply(views, R.id.cal_root, intArrayOf(R.id.cal_title), dayNames + R.id.cal_empty)
+      views.setInt(R.id.cal_add, "setColorFilter", look.ink)
+      views.setTextViewText(R.id.cal_title, SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Calendar.getInstance().time))
+      val grid =
+          Intent(c, MonthService::class.java).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            putExtra("theme", look.theme)
+            data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+          }
+      @Suppress("DEPRECATION") views.setRemoteAdapter(R.id.cal_grid, grid)
+      views.setPendingIntentTemplate(R.id.cal_grid, WidgetActionActivity.template(c))
+      val list =
+          Intent(c, TaskListService::class.java).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            putExtra("filter", "upcoming")
+            putExtra("compact", true)
+            putExtra("snooze", false)
+            data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+          }
+      @Suppress("DEPRECATION") views.setRemoteAdapter(R.id.cal_list, list)
+      views.setEmptyView(R.id.cal_list, R.id.cal_empty)
+      views.setPendingIntentTemplate(R.id.cal_list, WidgetActionActivity.template(c))
+      views.setOnClickPendingIntent(
+          R.id.cal_title,
+          HomeWidgetLaunchIntent.getActivity(c, MainActivity::class.java, Uri.parse("taskblocks://day")),
+      )
+      views.setOnClickPendingIntent(
+          R.id.cal_add,
+          HomeWidgetLaunchIntent.getActivity(c, MainActivity::class.java, Uri.parse("taskblocks://add")),
+      )
+      m.updateAppWidget(id, views)
+    }
+  }
+}

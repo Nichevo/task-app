@@ -344,6 +344,7 @@ object WidgetData {
             f == "star" -> t.star
             f == "overdue" -> due != null && due < now
             f == "today" -> due != null && due < endOfToday
+            f == "upcoming" -> due != null && due < endOfToday + 13 * DAY
             f.startsWith("cat:") -> {
               val id = f.removePrefix("cat:").removeSuffix("+soon")
               t.cat == id && (!f.endsWith("+soon") || due == null || due <= now + 30 * DAY)
@@ -355,6 +356,11 @@ object WidgetData {
     if (f == "today") {
       out.sortBy { it.due }
       out.addAll(todayEvents(c))
+    }
+    if (f == "upcoming") {
+      // Item 83, the Calendar widget: overdue first, then by date, with today's events in among them.
+      out.addAll(todayEvents(c))
+      out.sortBy { it.due }
     }
     return out
   }
@@ -401,6 +407,16 @@ object WidgetData {
       due in today until today + DAY -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(due))
       due in today + DAY until today + 2 * DAY -> "Tomorrow"
       else -> SimpleDateFormat("EEE d MMM", Locale.getDefault()).format(Date(due))
+    }
+  }
+
+  /** A shorter [dueLabel] for the Calendar widget's narrow list: "16:00", "Fri", "11 Nov". */
+  fun shortDue(due: Long): String {
+    val today = startOfDay(System.currentTimeMillis())
+    return when {
+      due in today until today + DAY -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(due))
+      due in today + DAY until today + 7 * DAY -> SimpleDateFormat("EEE", Locale.getDefault()).format(Date(due))
+      else -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(due))
     }
   }
 
@@ -465,6 +481,7 @@ object WidgetData {
           ChecklistWidget::class.java,
           StatsWidget::class.java,
           MonthWidget::class.java,
+          CalendarWidget::class.java,
           QuickAddWidget::class.java,
           BoardSummaryWidget::class.java,
           StageListWidget::class.java,
