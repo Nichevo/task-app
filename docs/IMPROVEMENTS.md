@@ -919,3 +919,9 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   dates: fill in missing / set all / leave. Ticked steps are skipped. Preview warns when a step would end
   after the task is due.
 
+## 81. Resizable right-hand pane ☑ (version 1.9.8)
+
+- Unfolded, the divider between the list and the right-hand pane (task, panel views) has a grip and
+  can be dragged: the pane takes 25-70% of the width. Saved per device with the panel settings;
+  double-tap the divider for the default (40%, or half for the matrix, which never gets less than half).
+

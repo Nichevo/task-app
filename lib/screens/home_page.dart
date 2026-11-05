@@ -383,13 +383,19 @@ class HomePageState extends State<HomePage> {
                   : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
             );
           }
-          // Item 59: the matrix needs room for its 2 by 2 grid, so it gets half the screen.
+          // Item 59: the matrix needs room for its 2 by 2 grid, so it gets at least half the screen.
           final half = open == null && store.panelView == PanelView.matrix;
+          // Item 81: the divider can be dragged to make the right-hand pane wider or narrower.
+          final f = store.panelFraction ?? 0.4;
+          final panel = half && f < 0.5 ? 0.5 : f;
           return Row(children: [
-            Expanded(flex: half ? 1 : 3, child: list),
-            const VerticalDivider(width: 1),
+            SizedBox(width: box.maxWidth * (1 - panel) - _PaneDivider.width / 2, child: list),
+            _PaneDivider(
+              onDrag: (dx) => store.setPanelFraction(panel - dx / box.maxWidth),
+              onEnd: () => store.setPanelFraction(store.panelFraction, save: true),
+              onReset: () => store.setPanelFraction(null, save: true),
+            ),
             Expanded(
-              flex: half ? 1 : 2,
               child: open == null
                   ? SidePanel(store: store, onOpen: (t) => _select(t.id))
                   : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
@@ -1041,5 +1047,45 @@ Future<void> _exportEmails(AppStore store, ScaffoldMessengerState messenger) asy
     if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Exported $emailsName')));
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+  }
+}
+
+/// Item 81: the line between the two panes. Drag it sideways to resize them; double-tap to go
+/// back to the usual widths.
+class _PaneDivider extends StatelessWidget {
+  const _PaneDivider({required this.onDrag, required this.onEnd, required this.onReset});
+
+  static const width = 16.0;
+
+  final ValueChanged<double> onDrag;
+  final VoidCallback onEnd;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: Semantics(
+        label: 'Drag to resize the panes',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
+          onHorizontalDragEnd: (_) => onEnd(),
+          onDoubleTap: onReset,
+          child: SizedBox(
+            width: width,
+            child: Stack(alignment: Alignment.center, children: [
+              VerticalDivider(width: 1, color: scheme.outlineVariant),
+              Container(
+                width: 6,
+                height: 40,
+                decoration: BoxDecoration(color: scheme.outline, borderRadius: BorderRadius.circular(3)),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 }
