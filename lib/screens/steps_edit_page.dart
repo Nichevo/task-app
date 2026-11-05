@@ -509,14 +509,15 @@ class _StepsEditPageState extends State<StepsEditPage> {
               padding: EdgeInsets.fromLTRB(wide ? 16 : 12, 4, wide ? 16 : 12, 16),
               itemCount: steps.length,
               onReorderItem: (o, nIndex) => _do(() => task.steps.insert(nIndex, task.steps.removeAt(o))),
-              footer: Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(onPressed: _addStep, icon: const Icon(Icons.add), label: const Text('Add a step')),
-              ),
+              footer: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                TextButton.icon(onPressed: _addStep, icon: const Icon(Icons.add), label: const Text('Add a step')),
+                // Folded, the chart sits under the steps and scrolls with them, showing every row.
+                if (!wide && _showPlan && steps.isNotEmpty) ...[const SizedBox(height: 8), _preview(wide)],
+              ]),
               itemBuilder: (context, i) => wide ? _row(steps[i], i) : _card(steps[i], i),
             ),
           ),
-          if (_showPlan && steps.isNotEmpty) _preview(wide),
+          if (wide && _showPlan && steps.isNotEmpty) _preview(wide),
         ]),
       );
     });
@@ -945,7 +946,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
     final rows = task.steps.length;
     const rowH = 16.0;
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      margin: wide ? const EdgeInsets.fromLTRB(16, 0, 16, 16) : const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
         border: Border.all(color: scheme.outlineVariant),
@@ -965,7 +966,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
         ]),
         const SizedBox(height: 6),
         ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: (wide ? 12 : 6) * rowH + 18),
+          constraints: BoxConstraints(maxHeight: wide ? 12 * rowH + 18 : double.infinity),
           child: SingleChildScrollView(
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               SizedBox(

@@ -10,7 +10,7 @@ class Release {
 
 const releases = [
   Release('1.9.8', 'November 2026', [
-    'Edit all steps shows its small timeline on the folded screen and on narrower unfolded panes too (for Gantt tasks, or steps that have a start or days of work).',
+    'Edit all steps shows its timeline on the folded screen and on narrower unfolded screens too, under the steps (scroll down to it), with every step in it. It shows for Gantt tasks, or steps that have a start or days of work.',
     'Fixed: in a narrow task pane, "Checklist 0/3" was squeezed to one letter per line. Edit all and Templates are now icon buttons there.',
   ]),
   Release('1.9.7', 'November 2026', [
