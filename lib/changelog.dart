@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.9.7', 'November 2026', [
+    'Edit all steps: tap "Edit all" above a task\'s checklist to see every step on one screen. Tap any start, days of work, due date, reminder, stage or progress to change that step, or tick several and change them all at once. "Move dates" shifts them a few days earlier or later.',
+    '"Line up in order" gives the ticked steps dates one after another: after another step, today or a date you pick, with free days in between if you want, skipping weekends unless the task counts them. It shows where each one lands, and warns when any would end after the task is due. Undo takes back each change.',
+    'Unfolded it is a table with a small Gantt chart preview under it (for Gantt tasks); folded it is a list of cards with the buttons along the bottom.',
+  ]),
   Release('1.9.6', 'November 2026', [
     'iPad widgets get buttons: tick a task off (the circle before it) or snooze it until tomorrow on the Task list, Done on Focus, tick steps on Checklist and Now doing, the arrow or Next to move a board card or step on, and the circle on Worked today. The widget changes at once; the app catches up when you next open it.',
   ]),
