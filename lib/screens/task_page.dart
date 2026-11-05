@@ -592,31 +592,46 @@ class _TaskPageState extends State<TaskPage> {
             ),
         ],
         const SizedBox(height: 12),
-        Row(children: [
-          const Icon(Icons.checklist),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              task.steps.isEmpty ? 'Checklist' : 'Checklist  ${task.stepsDone}/${task.steps.length}',
-              style: Theme.of(context).textTheme.titleMedium,
+        LayoutBuilder(builder: (context, box) {
+          // In a narrow pane the buttons shrink to icons so "Checklist 0/3" keeps its room.
+          final narrow = box.maxWidth < 420;
+          Future<void> editAll() async {
+            await Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => StepsEditPage(store: widget.store, task: task)));
+            if (mounted) setState(() {});
+          }
+
+          final canEditAll = task.steps.length >= 2 && !archived;
+          return Row(children: [
+            const Icon(Icons.checklist),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                task.steps.isEmpty ? 'Checklist' : 'Checklist  ${task.stepsDone}/${task.steps.length}',
+                style: Theme.of(context).textTheme.titleMedium,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          if (task.steps.length >= 2 && !archived)
-            TextButton.icon(
-              onPressed: () async {
-                await Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => StepsEditPage(store: widget.store, task: task)));
-                if (mounted) setState(() {});
-              },
-              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
-              label: const Text('Edit all'),
-            ),
-          TextButton.icon(
-            onPressed: _templateMenu,
-            icon: const Icon(Icons.library_add_outlined, size: 18),
-            label: const Text('Templates'),
-          ),
-        ]),
+            if (canEditAll && narrow)
+              IconButton(tooltip: 'Edit all steps', icon: const Icon(Icons.edit_calendar_outlined), onPressed: editAll),
+            if (canEditAll && !narrow)
+              TextButton.icon(
+                onPressed: editAll,
+                icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+                label: const Text('Edit all'),
+              ),
+            if (narrow)
+              IconButton(tooltip: 'Templates', icon: const Icon(Icons.library_add_outlined), onPressed: _templateMenu)
+            else
+              TextButton.icon(
+                onPressed: _templateMenu,
+                icon: const Icon(Icons.library_add_outlined, size: 18),
+                label: const Text('Templates'),
+              ),
+          ]);
+        }),
         ReorderableListView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),

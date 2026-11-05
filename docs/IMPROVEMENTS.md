@@ -905,7 +905,7 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   when it opens.
 - The widget target is added to the Xcode project by `tool/ios_widget_target.rb`.
 
-## 80. Edit all steps ☑ (version 1.9.7)
+## 80. Edit all steps ☑ (version 1.9.7; preview when folded + narrow header fix 1.9.8)
 
 - An "Edit all" button above a task's checklist (two or more steps) opens one screen with every step.
   Tap a field to change that step, or tick several to change them together: start, due, days of work,
@@ -918,4 +918,10 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   gap in working days; days for steps that have none; weekends switch (the task's own setting); due
   dates: fill in missing / set all / leave. Ticked steps are skipped. Preview warns when a step would end
   after the task is due.
+
+## 81. Resizable right-hand pane ☑ (version 1.9.8)
+
+- Unfolded, the divider between the list and the right-hand pane (task, panel views) has a grip and
+  can be dragged: the pane takes 25-70% of the width. Saved per device with the panel settings;
+  double-tap the divider for the default (40%, or half for the matrix, which never gets less than half).
 

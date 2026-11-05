@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/screens/steps_edit_page.dart';
+import 'package:task_blocks/screens/task_page.dart';
 import 'package:task_blocks/step_bulk.dart';
 import 'package:task_blocks/store.dart';
 
@@ -100,6 +101,34 @@ void main() {
       await tester.pump();
       expect(find.text('2 selected'), findsOneWidget);
       expect(find.text('Line up'), findsOneWidget);
+      expect(find.text('Timeline'), findsNothing);
+    });
+
+    testWidgets('a narrow task pane keeps the checklist title on one line', (tester) async {
+      final store = AppStore();
+      final t = store.addTask('CGM: plan test week');
+      store.addStep(t, 'Test 1');
+      store.addStep(t, 'Test 2');
+      tester.view.physicalSize = const Size(300, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: TaskPage(store: store, task: t)));
+      await tester.pump();
+      expect(find.byTooltip('Edit all steps'), findsOneWidget);
+      final title = tester.getSize(find.text('Checklist  0/2'));
+      expect(title.height, lessThan(30));
+    });
+
+    testWidgets('folded: the timeline preview shows for a Gantt task', (tester) async {
+      final store = AppStore();
+      final t = store.addTask('Kitchen')..gantt = true;
+      store.addStep(t, 'Measure up').startAt = DateTime.now();
+      store.addStep(t, 'Order cabinets').takesDays = 2;
+      tester.view.physicalSize = const Size(400, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: StepsEditPage(store: store, task: t)));
+      expect(find.text('How it looks on the Gantt chart'), findsOneWidget);
     });
   });
 }

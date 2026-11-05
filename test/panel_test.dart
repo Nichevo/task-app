@@ -63,7 +63,7 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, 'Matrix'));
     await tester.pumpAndSettle();
     final panel = tester.getRect(find.byType(SidePanel));
-    expect(panel.width, closeTo(450, 2));
+    expect(panel.width, closeTo(442, 2)); // half, less half the 16 px divider
 
     await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'Statistics'));
     await tester.pumpAndSettle();
@@ -71,6 +71,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('This week'), findsOneWidget);
     expect(find.text('All statistics'), findsOneWidget);
+  });
+
+  testWidgets('dragging the divider widens the panel and is remembered; double-tap resets', (tester) async {
+    wide(tester);
+    final s = AppStore();
+    await tester.pumpWidget(TaskApp(store: s));
+    await tester.pumpAndSettle();
+    final before = tester.getRect(find.byType(SidePanel)).width;
+    final grip = tester.getCenter(find.bySemanticsLabel('Drag to resize the panes'));
+    await tester.dragFrom(grip, const Offset(-180, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(SidePanel)).width, greaterThan(before + 150));
+    expect(s.panelFraction, closeTo(0.6, 0.03));
+    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel('Drag to resize the panes')), const Offset(900, 0));
+    await tester.pumpAndSettle();
+    expect(s.panelFraction, AppStore.panelMinFraction);
+    s.setPanelFraction(null);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(SidePanel)).width, closeTo(before, 1));
   });
 
   testWidgets('opening a task from the agenda comes back to it', (tester) async {

@@ -419,6 +419,20 @@ class AppStore extends ChangeNotifier {
   /// What opens when the Fold is unfolded.
   UnfoldOpens unfoldOpens = UnfoldOpens.panel;
 
+  /// Item 81: how much of the width the right-hand pane takes when unfolded, set by dragging the
+  /// divider (null = the default, 40%; half for the matrix).
+  double? panelFraction;
+
+  /// Sets [panelFraction] while dragging; [save] when the drag ends.
+  void setPanelFraction(double? f, {bool save = false}) {
+    panelFraction = f?.clamp(panelMinFraction, panelMaxFraction);
+    notifyListeners();
+    if (save) unawaited(saveDeviceSettings());
+  }
+
+  static const panelMinFraction = 0.25;
+  static const panelMaxFraction = 0.7;
+
   Map<String, dynamic> _panelJson() => {
         if (panelStart != PanelView.agenda) 'panelStart': panelStart.name,
         if (panelRemember) 'panelRemember': true,
@@ -426,6 +440,7 @@ class AppStore extends ChangeNotifier {
         if (panelHidden.isNotEmpty) 'panelHidden': [for (final v in panelHidden) v.name],
         'panelStats': [for (final v in panelStats) v.name],
         if (unfoldOpens != UnfoldOpens.panel) 'unfoldOpens': unfoldOpens.name,
+        if (panelFraction != null) 'panelFraction': panelFraction,
       };
 
   void _readPanel(Map<String, dynamic> s) {
@@ -443,6 +458,8 @@ class AppStore extends ChangeNotifier {
         ..addAll([for (final n in s['panelStats'] as List) ?byName(PanelStat.values, n)]);
     }
     unfoldOpens = byName(UnfoldOpens.values, s['unfoldOpens']) ?? unfoldOpens;
+    final f = s['panelFraction'];
+    if (f is num) panelFraction = f.toDouble().clamp(panelMinFraction, panelMaxFraction);
     panelView = (panelRemember ? byName(PanelView.values, s['panelLast']) : null) ?? panelStart;
     if (panelHidden.contains(panelView)) panelView = shownPanelViews.first;
   }
