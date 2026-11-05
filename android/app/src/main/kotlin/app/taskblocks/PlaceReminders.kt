@@ -189,7 +189,7 @@ class PlaceReceiver : BroadcastReceiver() {
         ctx, id, ctx.packageManager.getLaunchIntentForPackage(ctx.packageName),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     val n = android.app.Notification.Builder(ctx, "places")
-        .setSmallIcon(R.mipmap.ic_launcher)
+        .setSmallIcon(R.drawable.ic_notification)
         .setContentTitle(title)
         .setContentText(text)
         .setStyle(android.app.Notification.BigTextStyle().bigText(text))

@@ -925,3 +925,13 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   can be dragged: the pane takes 25-70% of the width. Saved per device with the panel settings;
   double-tap the divider for the default (40%, or half for the matrix, which never gets less than half).
 
+## 82. App icon ☑ (version 1.9.9)
+
+- An original icon replaces the default Flutter one: three task blocks ageing green → amber → red on
+  the app's teal, the top block ticked. Chosen from four concepts.
+- Android: adaptive icon (separate background and foreground layers, so any launcher shape works,
+  including the Fold), round icon, and a one-colour layer for Android 13+ themed icons. The status-bar
+  notification icon is now a one-colour version too (it was the full app icon, which shows as a blank square).
+- iPad/iOS, macOS, Windows and web icons are all regenerated from the same artwork.
+- To change it, edit the artwork in `tool/app_icon/make_icons.py` and run
+  `python3 tool/app_icon/make_icons.py` (needs `pip install cairosvg pillow`).
