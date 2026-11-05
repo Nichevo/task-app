@@ -904,3 +904,18 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
   (`widget_done`, `widget_snoozed`, `widget_steps`, `widget_moves`, `widget_worked`), which the app applies
   when it opens.
 - The widget target is added to the Xcode project by `tool/ios_widget_target.rb`.
+
+## 80. Edit all steps ☑ (version 1.9.7)
+
+- An "Edit all" button above a task's checklist (two or more steps) opens one screen with every step.
+  Tap a field to change that step, or tick several to change them together: start, due, days of work,
+  move dates ±N days, line up in order, stage (when steps are on the board), reminder, progress, and
+  More (clear dates, tick, untick, remove). Drag to reorder, add a step, Undo per change.
+- Unfolded (760 dp or wider): a table, with a small Gantt preview for Gantt tasks. Folded: cards with
+  chips and a bottom bar. Start, days of work and progress show for Gantt tasks (or steps that already
+  have them).
+- "Line up in order" (`lib/step_bulk.dart`): start after another step, today, the task's start or a date;
+  gap in working days; days for steps that have none; weekends switch (the task's own setting); due
+  dates: fill in missing / set all / leave. Ticked steps are skipped. Preview warns when a step would end
+  after the task is due.
+

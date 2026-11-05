@@ -17,6 +17,7 @@ import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
 import 'starred_page.dart' show pickTask;
+import 'steps_edit_page.dart';
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
@@ -600,6 +601,16 @@ class _TaskPageState extends State<TaskPage> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
+          if (task.steps.length >= 2 && !archived)
+            TextButton.icon(
+              onPressed: () async {
+                await Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => StepsEditPage(store: widget.store, task: task)));
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(Icons.edit_calendar_outlined, size: 18),
+              label: const Text('Edit all'),
+            ),
           TextButton.icon(
             onPressed: _templateMenu,
             icon: const Icon(Icons.library_add_outlined, size: 18),
