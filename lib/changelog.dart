@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.1', 'November 2026', [
+    'Gantt chart: the new Fit button (next to Day, Week, Month) zooms so everything shown fits on the screen. Pick a category from the list, or tap a category\'s heading, and it zooms to just those tasks.',
+    'Zoom to one task: long-press its name on the chart (or tap the target button next to it when unfolded). Its steps open out and it fills the width.',
+    'On a task\'s page, "Show on the Gantt chart" opens the chart zoomed in on that task.',
+    'When nothing on the chart is near today, it now opens zoomed to fit everything instead of on an empty stretch.',
+  ]),
   Release('1.10.0', 'November 2026', [
     'New Android widget: Calendar (4x3). This month on the left, with a dot on days that have tasks due; tap a day to open it. On the right, what is coming up: overdue tasks, the next two weeks and today\'s calendar events, with a box to tick each off.',
     'Every Android widget now shows a sample picture in the widget picker, so you can see what each one looks like before you place it.',
