@@ -16,11 +16,11 @@ void main() {
     return store;
   }
 
-  Future<void> dragFirstDown(WidgetTester tester) async {
+  Future<void> dragFirstDown(WidgetTester tester, {int steps = 20}) async {
     final handle = find.byIcon(Icons.drag_handle).first;
     final gesture = await tester.startGesture(tester.getCenter(handle));
     await tester.pump(const Duration(milliseconds: 50));
-    for (var i = 0; i < 20; i++) {
+    for (var i = 0; i < steps; i++) {
       await gesture.moveBy(const Offset(0, 15));
       await tester.pump(const Duration(milliseconds: 16));
     }
@@ -53,5 +53,52 @@ void main() {
     expect(store.data.sort, ListSort.manual);
     expect(store.data.active.first.title, before[1]);
     expect(find.textContaining('Now in hand-made order'), findsNothing);
+  });
+
+  testWidgets('by default a drag into another category keeps the sort and changes the category', (tester) async {
+    final store = AppStore();
+    store.data.sort = ListSort.due;
+    store.data.groupByCategory = true;
+    final work = store.addCategory('Work');
+    for (final t in ['one', 'two', 'three']) {
+      store.addTask(t);
+    }
+    await tester.pumpWidget(TaskApp(store: store));
+    await tester.pumpAndSettle();
+    final before = store.data.active.map((t) => t.title).toList();
+    final first = store.data.active.firstWhere((t) => t.title == before.first);
+
+    await dragFirstDown(tester, steps: 60);
+    expect(store.data.sort, ListSort.due);
+    expect(first.categoryId, work.id);
+    expect(store.data.active.map((t) => t.title).toList(), before);
+    expect(find.textContaining('Moved to Work'), findsWidgets);
+
+    await tester.tap(find.text('Undo').first);
+    await tester.pumpAndSettle();
+    expect(first.categoryId, isNull);
+    expect(store.data.sort, ListSort.due);
+  });
+
+  testWidgets('"Always keep sort" leaves the order alone when the category is the same', (tester) async {
+    final store = AppStore();
+    store.data.sort = ListSort.due;
+    store.data.dragInSort = DragInSort.keepSort;
+    for (final t in ['one', 'two', 'three']) {
+      store.addTask(t);
+    }
+    await tester.pumpWidget(TaskApp(store: store));
+    await tester.pumpAndSettle();
+    final before = store.data.active.map((t) => t.title).toList();
+    await dragFirstDown(tester);
+    expect(store.data.sort, ListSort.due);
+    expect(store.data.active.map((t) => t.title).toList(), before);
+    expect(find.textContaining('stays where the sort puts it'), findsWidgets);
+  });
+
+  test('the drag setting is saved', () {
+    final data = AppData()..dragInSort = DragInSort.handMade;
+    expect(AppData.fromJson(data.toJson()).dragInSort, DragInSort.handMade);
+    expect(AppData.fromJson(AppData().toJson()).dragInSort, DragInSort.auto);
   });
 }

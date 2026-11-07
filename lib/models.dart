@@ -73,27 +73,71 @@ class Task {
     List<String>? habitPauses,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
-  })  : steps = steps ?? [],
-        alsoAfter = alsoAfter ?? [],
-        worked = worked ?? {},
-        habitDays = habitDays ?? {1, 2, 3, 4, 5},
-        habitPauses = habitPauses ?? [],
-        moves = moves ?? [],
-        emails = emails ?? [],
-        extra = extra ?? {},
-        updatedAt = updatedAt ?? createdAt;
+  }) : steps = steps ?? [],
+       alsoAfter = alsoAfter ?? [],
+       worked = worked ?? {},
+       habitDays = habitDays ?? {1, 2, 3, 4, 5},
+       habitPauses = habitPauses ?? [],
+       moves = moves ?? [],
+       emails = emails ?? [],
+       extra = extra ?? {},
+       updatedAt = updatedAt ?? createdAt;
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
   static const _known = {
-    'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
-    'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
-    'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
-    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked',
-    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses',
+    'id',
+    'title',
+    'notes',
+    'createdAt',
+    'dueAt',
+    'closedAt',
+    'updatedAt',
+    'categoryId',
+    'starred',
+    'snoozedUntil',
+    'afterTaskId',
+    'readyAt',
+    'repeat',
+    'remindBefore',
+    'steps',
+    'eventId',
+    'source',
+    'addedWhere',
+    'doneWhere',
+    'estimate',
+    'series',
+    'place',
+    'placeLeave',
+    'kanban',
+    'stage',
+    'moves',
+    'stepsBoard',
+    'emails',
+    'ref',
+    'box',
+    'waiting',
+    'splitFrom',
+    'gantt',
+    'start',
+    'takes',
+    'weekends',
+    'alsoAfter',
+    'lag',
+    'milestone',
+    'progress',
+    'planStart',
+    'planDue',
+    'worked',
+    'habit',
+    'hGoal',
+    'hTimes',
+    'hDays',
+    'hFree',
+    'hRemind',
+    'hPauses',
   };
 
   final String id;
@@ -253,8 +297,8 @@ class Task {
   double get progressShare => progress != null
       ? progress!.clamp(0, 100) / 100
       : steps.isEmpty
-          ? 0
-          : steps.fold(0.0, (a, s) => a + s.share) / steps.length;
+      ? 0
+      : steps.fold(0.0, (a, s) => a + s.share) / steps.length;
 
   /// The steps showing on the board: none unless the task is on it with [stepsOnBoard] on.
   List<TaskStep> get boardSteps => kanban && stepsOnBoard ? steps : const [];
@@ -318,120 +362,120 @@ class Task {
   }
 
   factory Task.create(String title, {String source = TaskSource.typed}) => Task(
-        id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}',
-        title: title,
-        createdAt: DateTime.now(),
-        source: source,
-      );
+    id: '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}',
+    title: title,
+    createdAt: DateTime.now(),
+    source: source,
+  );
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        'title': title,
-        'notes': notes,
-        'createdAt': createdAt.toIso8601String(),
-        'dueAt': dueAt?.toIso8601String(),
-        'closedAt': closedAt?.toIso8601String(),
-        'updatedAt': updatedAt.toUtc().toIso8601String(),
-        if (categoryId != null) 'categoryId': categoryId,
-        if (starred) 'starred': true,
-        if (snoozedUntil != null) 'snoozedUntil': snoozedUntil!.toIso8601String(),
-        if (afterTaskId != null) 'afterTaskId': afterTaskId,
-        if (readyAt != null) 'readyAt': readyAt!.toIso8601String(),
-        if (repeat != null) 'repeat': repeat!.toJson(),
-        if (remindBefore != null) 'remindBefore': remindBefore,
-        if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
-        if (eventId != null) 'eventId': eventId,
-        if (sourceRef != null) 'ref': sourceRef,
-        if (splitFrom != null) 'splitFrom': splitFrom,
-        if (matrixBox != null) 'box': matrixBox,
-        if (waitingOn != null && waitingOn!.isNotEmpty) 'waiting': waitingOn,
-        if (source != null) 'source': source,
-        if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
-        if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
-        if (estimate != null) 'estimate': estimate,
-        if (seriesId != null) 'series': seriesId,
-        if (place != null) 'place': place,
-        if (placeLeave) 'placeLeave': true,
-        if (kanban) 'kanban': true,
-        if (stageId != null) 'stage': stageId,
-        if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
-        if (stepsOnBoard) 'stepsBoard': true,
-        if (emails.isNotEmpty) 'emails': emails.map((e) => e.toJson()).toList(),
-        if (gantt) 'gantt': true,
-        if (startAt != null) 'start': startAt!.toIso8601String(),
-        if (takesDays != null) 'takes': takesDays,
-        if (countWeekends != null) 'weekends': countWeekends,
-        if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
-        if (lagDays != null) 'lag': lagDays,
-        if (milestone) 'milestone': true,
-        if (progress != null) 'progress': progress,
-        if (planStart != null) 'planStart': planStart!.toIso8601String(),
-        if (planDue != null) 'planDue': planDue!.toIso8601String(),
-        if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
-        if (habit) 'habit': true,
-        if (habit) 'hGoal': habitGoal.name,
-        if (habit && habitGoal == HabitGoal.perWeek) 'hTimes': habitTimes,
-        if (habit && habitGoal == HabitGoal.weekdays) 'hDays': habitDays.toList()..sort(),
-        if (habit && !habitFreeMiss) 'hFree': false,
-        if (habitRemind != null) 'hRemind': habitRemind,
-        if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
-      };
+    ...extra,
+    'id': id,
+    'title': title,
+    'notes': notes,
+    'createdAt': createdAt.toIso8601String(),
+    'dueAt': dueAt?.toIso8601String(),
+    'closedAt': closedAt?.toIso8601String(),
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
+    if (categoryId != null) 'categoryId': categoryId,
+    if (starred) 'starred': true,
+    if (snoozedUntil != null) 'snoozedUntil': snoozedUntil!.toIso8601String(),
+    if (afterTaskId != null) 'afterTaskId': afterTaskId,
+    if (readyAt != null) 'readyAt': readyAt!.toIso8601String(),
+    if (repeat != null) 'repeat': repeat!.toJson(),
+    if (remindBefore != null) 'remindBefore': remindBefore,
+    if (steps.isNotEmpty) 'steps': steps.map((s) => s.toJson()).toList(),
+    if (eventId != null) 'eventId': eventId,
+    if (sourceRef != null) 'ref': sourceRef,
+    if (splitFrom != null) 'splitFrom': splitFrom,
+    if (matrixBox != null) 'box': matrixBox,
+    if (waitingOn != null && waitingOn!.isNotEmpty) 'waiting': waitingOn,
+    if (source != null) 'source': source,
+    if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
+    if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
+    if (estimate != null) 'estimate': estimate,
+    if (seriesId != null) 'series': seriesId,
+    if (place != null) 'place': place,
+    if (placeLeave) 'placeLeave': true,
+    if (kanban) 'kanban': true,
+    if (stageId != null) 'stage': stageId,
+    if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
+    if (stepsOnBoard) 'stepsBoard': true,
+    if (emails.isNotEmpty) 'emails': emails.map((e) => e.toJson()).toList(),
+    if (gantt) 'gantt': true,
+    if (startAt != null) 'start': startAt!.toIso8601String(),
+    if (takesDays != null) 'takes': takesDays,
+    if (countWeekends != null) 'weekends': countWeekends,
+    if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
+    if (lagDays != null) 'lag': lagDays,
+    if (milestone) 'milestone': true,
+    if (progress != null) 'progress': progress,
+    if (planStart != null) 'planStart': planStart!.toIso8601String(),
+    if (planDue != null) 'planDue': planDue!.toIso8601String(),
+    if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
+    if (habit) 'habit': true,
+    if (habit) 'hGoal': habitGoal.name,
+    if (habit && habitGoal == HabitGoal.perWeek) 'hTimes': habitTimes,
+    if (habit && habitGoal == HabitGoal.weekdays) 'hDays': habitDays.toList()..sort(),
+    if (habit && !habitFreeMiss) 'hFree': false,
+    if (habitRemind != null) 'hRemind': habitRemind,
+    if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
+  };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? '',
-        notes: j['notes'] as String? ?? '',
-        createdAt: DateTime.parse(j['createdAt'] as String),
-        dueAt: _date(j['dueAt']),
-        closedAt: _date(j['closedAt']),
-        updatedAt: _date(j['updatedAt']),
-        categoryId: j['categoryId'] as String?,
-        starred: j['starred'] as bool? ?? false,
-        snoozedUntil: _date(j['snoozedUntil']),
-        afterTaskId: j['afterTaskId'] as String?,
-        readyAt: _date(j['readyAt']),
-        repeat: j['repeat'] is Map ? Repeat.fromJson(j['repeat'] as Map<String, dynamic>) : null,
-        remindBefore: (j['remindBefore'] as num?)?.toInt(),
-        steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
-        eventId: j['eventId'] as String?,
-        sourceRef: j['ref'] as String?,
-        splitFrom: j['splitFrom'] as String?,
-        matrixBox: MatrixBox.byId(j['box'] as String?)?.id,
-        waitingOn: j['waiting'] as String?,
-        // Older calendar tasks are known to be from the calendar even without a source.
-        source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
-        addedWhere: GeoPoint.tryParse(j['addedWhere']),
-        doneWhere: GeoPoint.tryParse(j['doneWhere']),
-        estimate: (j['estimate'] as num?)?.toInt(),
-        seriesId: j['series'] as String?,
-        place: j['place'] as String?,
-        placeLeave: j['placeLeave'] as bool? ?? false,
-        kanban: j['kanban'] as bool? ?? false,
-        stageId: j['stage'] as String?,
-        moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
-        stepsOnBoard: j['stepsBoard'] as bool? ?? false,
-        emails: [for (final e in j['emails'] as List? ?? []) TaskEmail.fromJson(e as Map<String, dynamic>)],
-        gantt: j['gantt'] as bool? ?? false,
-        startAt: _date(j['start']),
-        takesDays: (j['takes'] as num?)?.toInt(),
-        countWeekends: j['weekends'] as bool?,
-        alsoAfter: [for (final id in j['alsoAfter'] as List? ?? []) ?id as String?],
-        lagDays: (j['lag'] as num?)?.toInt(),
-        milestone: j['milestone'] as bool? ?? false,
-        progress: (j['progress'] as num?)?.toInt(),
-        planStart: _date(j['planStart']),
-        planDue: _date(j['planDue']),
-        worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
-        habit: j['habit'] as bool? ?? false,
-        habitGoal: HabitGoal.values.where((g) => g.name == j['hGoal']).firstOrNull ?? HabitGoal.daily,
-        habitTimes: (j['hTimes'] as num?)?.toInt() ?? 3,
-        habitDays: j['hDays'] is List ? {for (final d in j['hDays'] as List) (d as num).toInt()} : null,
-        habitFreeMiss: j['hFree'] as bool? ?? true,
-        habitRemind: (j['hRemind'] as num?)?.toInt(),
-        habitPauses: [for (final p in j['hPauses'] as List? ?? []) ?p as String?],
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    title: j['title'] as String? ?? '',
+    notes: j['notes'] as String? ?? '',
+    createdAt: DateTime.parse(j['createdAt'] as String),
+    dueAt: _date(j['dueAt']),
+    closedAt: _date(j['closedAt']),
+    updatedAt: _date(j['updatedAt']),
+    categoryId: j['categoryId'] as String?,
+    starred: j['starred'] as bool? ?? false,
+    snoozedUntil: _date(j['snoozedUntil']),
+    afterTaskId: j['afterTaskId'] as String?,
+    readyAt: _date(j['readyAt']),
+    repeat: j['repeat'] is Map ? Repeat.fromJson(j['repeat'] as Map<String, dynamic>) : null,
+    remindBefore: (j['remindBefore'] as num?)?.toInt(),
+    steps: [for (final st in j['steps'] as List? ?? []) TaskStep.fromJson(st as Map<String, dynamic>)],
+    eventId: j['eventId'] as String?,
+    sourceRef: j['ref'] as String?,
+    splitFrom: j['splitFrom'] as String?,
+    matrixBox: MatrixBox.byId(j['box'] as String?)?.id,
+    waitingOn: j['waiting'] as String?,
+    // Older calendar tasks are known to be from the calendar even without a source.
+    source: j['source'] as String? ?? (j['eventId'] != null ? TaskSource.calendar : null),
+    addedWhere: GeoPoint.tryParse(j['addedWhere']),
+    doneWhere: GeoPoint.tryParse(j['doneWhere']),
+    estimate: (j['estimate'] as num?)?.toInt(),
+    seriesId: j['series'] as String?,
+    place: j['place'] as String?,
+    placeLeave: j['placeLeave'] as bool? ?? false,
+    kanban: j['kanban'] as bool? ?? false,
+    stageId: j['stage'] as String?,
+    moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
+    stepsOnBoard: j['stepsBoard'] as bool? ?? false,
+    emails: [for (final e in j['emails'] as List? ?? []) TaskEmail.fromJson(e as Map<String, dynamic>)],
+    gantt: j['gantt'] as bool? ?? false,
+    startAt: _date(j['start']),
+    takesDays: (j['takes'] as num?)?.toInt(),
+    countWeekends: j['weekends'] as bool?,
+    alsoAfter: [for (final id in j['alsoAfter'] as List? ?? []) ?id as String?],
+    lagDays: (j['lag'] as num?)?.toInt(),
+    milestone: j['milestone'] as bool? ?? false,
+    progress: (j['progress'] as num?)?.toInt(),
+    planStart: _date(j['planStart']),
+    planDue: _date(j['planDue']),
+    worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
+    habit: j['habit'] as bool? ?? false,
+    habitGoal: HabitGoal.values.where((g) => g.name == j['hGoal']).firstOrNull ?? HabitGoal.daily,
+    habitTimes: (j['hTimes'] as num?)?.toInt() ?? 3,
+    habitDays: j['hDays'] is List ? {for (final d in j['hDays'] as List) (d as num).toInt()} : null,
+    habitFreeMiss: j['hFree'] as bool? ?? true,
+    habitRemind: (j['hRemind'] as num?)?.toInt(),
+    habitPauses: [for (final p in j['hPauses'] as List? ?? []) ?p as String?],
+    extra: unknownFields(j, _known),
+  );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
 }
@@ -515,24 +559,24 @@ class TaskEmail {
   Uri get link => Uri.parse('https://mail.google.com/mail/u/0/#all/${threadId ?? id}');
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        if (threadId != null) 'thread': threadId,
-        'subject': subject,
-        'from': from,
-        if (date != null) 'date': date!.toUtc().toIso8601String(),
-        if (snippet.isNotEmpty) 'snippet': snippet,
-      };
+    ...extra,
+    'id': id,
+    if (threadId != null) 'thread': threadId,
+    'subject': subject,
+    'from': from,
+    if (date != null) 'date': date!.toUtc().toIso8601String(),
+    if (snippet.isNotEmpty) 'snippet': snippet,
+  };
 
   factory TaskEmail.fromJson(Map<String, dynamic> j) => TaskEmail(
-        id: j['id'] as String,
-        threadId: j['thread'] as String?,
-        subject: j['subject'] as String? ?? '',
-        from: j['from'] as String? ?? '',
-        date: DateTime.tryParse(j['date'] as String? ?? '')?.toLocal(),
-        snippet: j['snippet'] as String? ?? '',
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    threadId: j['thread'] as String?,
+    subject: j['subject'] as String? ?? '',
+    from: j['from'] as String? ?? '',
+    date: DateTime.tryParse(j['date'] as String? ?? '')?.toLocal(),
+    snippet: j['snippet'] as String? ?? '',
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// A location fix: latitude and longitude in degrees, accuracy in metres, and when it was taken.
@@ -545,11 +589,11 @@ class GeoPoint {
   final DateTime at;
 
   Map<String, dynamic> toJson() => {
-        'lat': lat,
-        'lng': lng,
-        if (accuracy != null) 'acc': accuracy!.roundToDouble(),
-        'at': at.toUtc().toIso8601String(),
-      };
+    'lat': lat,
+    'lng': lng,
+    if (accuracy != null) 'acc': accuracy!.roundToDouble(),
+    'at': at.toUtc().toIso8601String(),
+  };
 
   static GeoPoint? tryParse(Object? j) {
     if (j is! Map) return null;
@@ -569,37 +613,52 @@ class GeoPoint {
 
 /// One line of a task's checklist. [taskId] is set when it was made into a full task.
 class TaskStep {
-  TaskStep(
-      {required this.id,
-      required this.title,
-      bool done = false,
-      this.doneAt,
-      this.carried,
-      this.taskId,
-      this.stageId,
-      this.dueAt,
-      this.remindBefore,
-      this.note = '',
-      this.eventId,
-      this.startAt,
-      this.takesDays,
-      this.progress,
-      List<String>? afterIds,
-      List<StageMove>? moves,
-      Map<String, dynamic>? extra})
-      // ignore: prefer_initializing_formals
-      : _done = done,
-        afterIds = afterIds ?? [],
-        moves = moves ?? [],
-        extra = extra ?? {};
+  TaskStep({
+    required this.id,
+    required this.title,
+    bool done = false,
+    this.doneAt,
+    this.carried,
+    this.taskId,
+    this.stageId,
+    this.dueAt,
+    this.remindBefore,
+    this.note = '',
+    this.eventId,
+    this.startAt,
+    this.takesDays,
+    this.progress,
+    List<String>? afterIds,
+    List<StageMove>? moves,
+    Map<String, dynamic>? extra,
+  })
+    // ignore: prefer_initializing_formals
+    : _done = done,
+       afterIds = afterIds ?? [],
+       moves = moves ?? [],
+       extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
   static const _known = {
-    'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'progress', 'after',
+    'id',
+    'title',
+    'done',
+    'doneAt',
+    'carried',
+    'taskId',
+    'stage',
+    'moves',
+    'due',
+    'remind',
+    'note',
+    'event',
+    'start',
+    'takes',
+    'progress',
+    'after',
   };
 
   final String id;
@@ -678,51 +737,51 @@ class TaskStep {
       TaskStep(id: 's${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', title: title.trim());
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        'title': title,
-        if (done) 'done': true,
-        if (doneAt != null) 'doneAt': doneAt!.toIso8601String(),
-        if (carried != null) 'carried': carried,
-        if (taskId != null) 'taskId': taskId,
-        if (stageId != null) 'stage': stageId,
-        if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
-        if (dueAt != null) 'due': dueAt!.toIso8601String(),
-        if (remindBefore != null) 'remind': remindBefore,
-        if (note.isNotEmpty) 'note': note,
-        if (eventId != null) 'event': eventId,
-        if (startAt != null) 'start': startAt!.toIso8601String(),
-        if (takesDays != null) 'takes': takesDays,
-        if (progress != null) 'progress': progress,
-        if (afterIds.isNotEmpty) 'after': afterIds,
-      };
+    ...extra,
+    'id': id,
+    'title': title,
+    if (done) 'done': true,
+    if (doneAt != null) 'doneAt': doneAt!.toIso8601String(),
+    if (carried != null) 'carried': carried,
+    if (taskId != null) 'taskId': taskId,
+    if (stageId != null) 'stage': stageId,
+    if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
+    if (dueAt != null) 'due': dueAt!.toIso8601String(),
+    if (remindBefore != null) 'remind': remindBefore,
+    if (note.isNotEmpty) 'note': note,
+    if (eventId != null) 'event': eventId,
+    if (startAt != null) 'start': startAt!.toIso8601String(),
+    if (takesDays != null) 'takes': takesDays,
+    if (progress != null) 'progress': progress,
+    if (afterIds.isNotEmpty) 'after': afterIds,
+  };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
-        id: j['id'] as String,
-        title: j['title'] as String? ?? '',
-        done: j['done'] as bool? ?? false,
-        doneAt: DateTime.tryParse(j['doneAt'] as String? ?? ''),
-        carried: j['carried'] is Map ? Map<String, dynamic>.from(j['carried'] as Map) : null,
-        taskId: j['taskId'] as String?,
-        stageId: j['stage'] as String?,
-        dueAt: DateTime.tryParse(j['due'] as String? ?? ''),
-        remindBefore: (j['remind'] as num?)?.toInt(),
-        note: j['note'] as String? ?? '',
-        eventId: j['event'] as String?,
-        moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
-        startAt: DateTime.tryParse(j['start'] as String? ?? ''),
-        takesDays: (j['takes'] as num?)?.toInt(),
-        progress: (j['progress'] as num?)?.toInt(),
-        afterIds: [for (final id in j['after'] as List? ?? []) id as String],
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    title: j['title'] as String? ?? '',
+    done: j['done'] as bool? ?? false,
+    doneAt: DateTime.tryParse(j['doneAt'] as String? ?? ''),
+    carried: j['carried'] is Map ? Map<String, dynamic>.from(j['carried'] as Map) : null,
+    taskId: j['taskId'] as String?,
+    stageId: j['stage'] as String?,
+    dueAt: DateTime.tryParse(j['due'] as String? ?? ''),
+    remindBefore: (j['remind'] as num?)?.toInt(),
+    note: j['note'] as String? ?? '',
+    eventId: j['event'] as String?,
+    moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
+    startAt: DateTime.tryParse(j['start'] as String? ?? ''),
+    takesDays: (j['takes'] as num?)?.toInt(),
+    progress: (j['progress'] as num?)?.toInt(),
+    afterIds: [for (final id in j['after'] as List? ?? []) id as String],
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// A saved checklist that can be added to any task.
 class ChecklistTemplate {
   ChecklistTemplate({required this.id, required this.name, List<String>? steps, Map<String, dynamic>? extra})
-      : steps = steps ?? [],
-        extra = extra ?? {};
+    : steps = steps ?? [],
+      extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
@@ -735,16 +794,19 @@ class ChecklistTemplate {
   final List<String> steps;
 
   factory ChecklistTemplate.create(String name, List<String> steps) => ChecklistTemplate(
-      id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim(), steps: steps);
+    id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
+    name: name.trim(),
+    steps: steps,
+  );
 
   Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, 'steps': steps};
 
   factory ChecklistTemplate.fromJson(Map<String, dynamic> j) => ChecklistTemplate(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? '',
-        steps: [for (final s in j['steps'] as List? ?? []) s as String],
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String? ?? '',
+    steps: [for (final s in j['steps'] as List? ?? []) s as String],
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// A note that a task was ticked off, kept for the statistics after the archive is cleaned up.
@@ -805,47 +867,47 @@ class DoneRecord {
   DateTime? get due => lateMinutes == null ? null : at.subtract(Duration(minutes: lateMinutes!));
 
   factory DoneRecord.of(Task t, DateTime at) => DoneRecord(
-        at: at,
-        tookMinutes: at.difference(t.createdAt).inMinutes,
-        onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
-        categoryId: t.categoryId,
-        source: t.source,
-        title: t.title,
-        series: t.repeat != null || t.seriesId != null ? t.series : null,
-        lateMinutes: t.dueAt == null ? null : at.difference(t.dueAt!).inMinutes,
-        missed: missedCycles(t, at),
-        stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
-      );
+    at: at,
+    tookMinutes: at.difference(t.createdAt).inMinutes,
+    onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
+    categoryId: t.categoryId,
+    source: t.source,
+    title: t.title,
+    series: t.repeat != null || t.seriesId != null ? t.series : null,
+    lateMinutes: t.dueAt == null ? null : at.difference(t.dueAt!).inMinutes,
+    missed: missedCycles(t, at),
+    stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
+  );
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'at': at.toUtc().toIso8601String(),
-        'took': tookMinutes,
-        if (onTime != null) 'onTime': onTime,
-        if (categoryId != null) 'cat': categoryId,
-        if (source != null) 'src': source,
-        if (title != null) 'title': title,
-        if (series != null) 'series': series,
-        if (lateMinutes != null) 'late': lateMinutes,
-        if (missed > 0) 'missed': missed,
-        if (stageMinutes != null) 'stages': stageMinutes,
-      };
+    ...extra,
+    'at': at.toUtc().toIso8601String(),
+    'took': tookMinutes,
+    if (onTime != null) 'onTime': onTime,
+    if (categoryId != null) 'cat': categoryId,
+    if (source != null) 'src': source,
+    if (title != null) 'title': title,
+    if (series != null) 'series': series,
+    if (lateMinutes != null) 'late': lateMinutes,
+    if (missed > 0) 'missed': missed,
+    if (stageMinutes != null) 'stages': stageMinutes,
+  };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
-        at: DateTime.parse(j['at'] as String).toLocal(),
-        tookMinutes: (j['took'] as num?)?.toInt() ?? 0,
-        onTime: j['onTime'] as bool?,
-        categoryId: j['cat'] as String?,
-        source: j['src'] as String?,
-        title: j['title'] as String?,
-        series: j['series'] as String?,
-        lateMinutes: (j['late'] as num?)?.toInt(),
-        missed: (j['missed'] as num?)?.toInt() ?? 0,
-        stageMinutes: j['stages'] is Map
-            ? {for (final e in (j['stages'] as Map).entries) e.key as String: (e.value as num).toInt()}
-            : null,
-        extra: unknownFields(j, _known),
-      );
+    at: DateTime.parse(j['at'] as String).toLocal(),
+    tookMinutes: (j['took'] as num?)?.toInt() ?? 0,
+    onTime: j['onTime'] as bool?,
+    categoryId: j['cat'] as String?,
+    source: j['src'] as String?,
+    title: j['title'] as String?,
+    series: j['series'] as String?,
+    lateMinutes: (j['late'] as num?)?.toInt(),
+    missed: (j['missed'] as num?)?.toInt() ?? 0,
+    stageMinutes: j['stages'] is Map
+        ? {for (final e in (j['stages'] as Map).entries) e.key as String: (e.value as num).toInt()}
+        : null,
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// How many whole cycles of a fixed-schedule repeating task went by, unticked, between its
@@ -867,7 +929,7 @@ int missedCycles(Task t, DateTime at) {
 /// A column of the Kanban board.
 class KanbanStage {
   KanbanStage({required this.id, required this.name, this.colour, this.limit, Map<String, dynamic>? extra})
-      : extra = extra ?? {};
+    : extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
@@ -889,28 +951,28 @@ class KanbanStage {
 
   /// Fixed ids, so two devices set up separately share the same stages.
   static List<KanbanStage> defaults() => [
-        KanbanStage(id: 'backlog', name: 'Backlog'),
-        KanbanStage(id: 'next', name: 'Up next'),
-        KanbanStage(id: 'doing', name: 'In progress'),
-        KanbanStage(id: 'blocked', name: 'Blocked'),
-        KanbanStage(id: 'done', name: 'Done'),
-      ];
+    KanbanStage(id: 'backlog', name: 'Backlog'),
+    KanbanStage(id: 'next', name: 'Up next'),
+    KanbanStage(id: 'doing', name: 'In progress'),
+    KanbanStage(id: 'blocked', name: 'Blocked'),
+    KanbanStage(id: 'done', name: 'Done'),
+  ];
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        'name': name,
-        if (colour != null) 'colour': colour,
-        if (limit != null) 'limit': limit,
-      };
+    ...extra,
+    'id': id,
+    'name': name,
+    if (colour != null) 'colour': colour,
+    if (limit != null) 'limit': limit,
+  };
 
   factory KanbanStage.fromJson(Map<String, dynamic> j) => KanbanStage(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? '',
-        colour: (j['colour'] as num?)?.toInt(),
-        limit: (j['limit'] as num?)?.toInt(),
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String? ?? '',
+    colour: (j['colour'] as num?)?.toInt(),
+    limit: (j['limit'] as num?)?.toInt(),
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// How a task was moved between stages. Plain names, like [TaskSource].
@@ -993,46 +1055,45 @@ class StageMove {
     required String how,
     String? device,
     String? note,
-  }) =>
-      StageMove(
-        id: 'm${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
-        fromId: from?.id,
-        fromName: from?.name,
-        toId: to?.id,
-        toName: to?.name,
-        at: at,
-        how: how,
-        device: device,
-        note: note == null || note.trim().isEmpty ? null : note.trim(),
-      );
+  }) => StageMove(
+    id: 'm${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
+    fromId: from?.id,
+    fromName: from?.name,
+    toId: to?.id,
+    toName: to?.name,
+    at: at,
+    how: how,
+    device: device,
+    note: note == null || note.trim().isEmpty ? null : note.trim(),
+  );
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        if (fromId != null) 'from': fromId,
-        if (fromName != null) 'fromName': fromName,
-        if (toId != null) 'to': toId,
-        if (toName != null) 'toName': toName,
-        'at': at.toUtc().toIso8601String(),
-        'how': how,
-        if (where != null) 'where': where!.toJson(),
-        if (device != null) 'device': device,
-        if (note != null) 'note': note,
-      };
+    ...extra,
+    'id': id,
+    if (fromId != null) 'from': fromId,
+    if (fromName != null) 'fromName': fromName,
+    if (toId != null) 'to': toId,
+    if (toName != null) 'toName': toName,
+    'at': at.toUtc().toIso8601String(),
+    'how': how,
+    if (where != null) 'where': where!.toJson(),
+    if (device != null) 'device': device,
+    if (note != null) 'note': note,
+  };
 
   factory StageMove.fromJson(Map<String, dynamic> j) => StageMove(
-        id: j['id'] as String,
-        fromId: j['from'] as String?,
-        fromName: j['fromName'] as String?,
-        toId: j['to'] as String?,
-        toName: j['toName'] as String?,
-        at: DateTime.parse(j['at'] as String).toLocal(),
-        how: j['how'] as String? ?? MoveHow.menu,
-        where: GeoPoint.tryParse(j['where']),
-        device: j['device'] as String?,
-        note: j['note'] as String?,
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    fromId: j['from'] as String?,
+    fromName: j['fromName'] as String?,
+    toId: j['to'] as String?,
+    toName: j['toName'] as String?,
+    at: DateTime.parse(j['at'] as String).toLocal(),
+    how: j['how'] as String? ?? MoveHow.menu,
+    where: GeoPoint.tryParse(j['where']),
+    device: j['device'] as String?,
+    note: j['note'] as String?,
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// One spell of a task in a stage: from [start] to [end] (null = still there).
@@ -1091,24 +1152,30 @@ class SkipRecord {
   String get key => '$taskId@${(due ?? at).toUtc().toIso8601String()}';
 
   Map<String, dynamic> toJson() => {
-        'task': taskId,
-        'series': series,
-        'at': at.toUtc().toIso8601String(),
-        if (due != null) 'due': due!.toUtc().toIso8601String(),
-        if (missed > 0) 'missed': missed,
-      };
+    'task': taskId,
+    'series': series,
+    'at': at.toUtc().toIso8601String(),
+    if (due != null) 'due': due!.toUtc().toIso8601String(),
+    if (missed > 0) 'missed': missed,
+  };
 
   factory SkipRecord.fromJson(Map<String, dynamic> j) => SkipRecord(
-        taskId: j['task'] as String? ?? '',
-        series: j['series'] as String? ?? j['task'] as String? ?? '',
-        at: DateTime.parse(j['at'] as String).toLocal(),
-        due: DateTime.tryParse(j['due'] as String? ?? '')?.toLocal(),
-        missed: (j['missed'] as num?)?.toInt() ?? 0,
-      );
+    taskId: j['task'] as String? ?? '',
+    series: j['series'] as String? ?? j['task'] as String? ?? '',
+    at: DateTime.parse(j['at'] as String).toLocal(),
+    due: DateTime.tryParse(j['due'] as String? ?? '')?.toLocal(),
+    missed: (j['missed'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// How the main list is ordered (Settings, List).
 enum ListSort { manual, due, age, newest, categoryDue }
+
+/// What a drag does in a sorted list (Settings, List, "When you drag a task").
+/// [auto]: a drop into another category keeps the sort and re-sorts; a drop inside the same
+/// category switches to hand-made order. [handMade]: every drop switches to hand-made order.
+/// [keepSort]: the sort always stays; a drag only changes the category.
+enum DragInSort { auto, handMade, keepSort }
 
 /// What happens to the category of a task added without one.
 enum AutoCategory { off, suggest, apply }
@@ -1123,12 +1190,7 @@ enum RepeatUnit { day, week, month, year }
 
 /// How a task repeats.
 class Repeat {
-  const Repeat({
-    required this.unit,
-    this.every = 1,
-    this.weekdays = const {},
-    this.fromCompletion = false,
-  });
+  const Repeat({required this.unit, this.every = 1, this.weekdays = const {}, this.fromCompletion = false});
 
   final RepeatUnit unit;
 
@@ -1196,11 +1258,11 @@ class Repeat {
     final base = switch (unit) {
       RepeatUnit.day => n == 1 ? 'Every day' : 'Every $n days',
       RepeatUnit.week => switch ((n, weekdays.isEmpty)) {
-          (1, true) => 'Every week',
-          (1, false) => 'Every $_dayList',
-          (_, true) => 'Every $n weeks',
-          (_, false) => 'Every $n weeks on $_dayList',
-        },
+        (1, true) => 'Every week',
+        (1, false) => 'Every $_dayList',
+        (_, true) => 'Every $n weeks',
+        (_, false) => 'Every $n weeks on $_dayList',
+      },
       RepeatUnit.month => n == 1 ? 'Every month' : 'Every $n months',
       RepeatUnit.year => n == 1 ? 'Every year' : 'Every $n years',
     };
@@ -1212,31 +1274,31 @@ class Repeat {
   String get _dayList => (weekdays.toList()..sort()).map((d) => _dayNames[d - 1]).join(', ');
 
   Map<String, dynamic> toJson() => {
-        'unit': unit.name,
-        'every': every,
-        if (weekdays.isNotEmpty) 'weekdays': (weekdays.toList()..sort()),
-        if (fromCompletion) 'fromCompletion': true,
-      };
+    'unit': unit.name,
+    'every': every,
+    if (weekdays.isNotEmpty) 'weekdays': (weekdays.toList()..sort()),
+    if (fromCompletion) 'fromCompletion': true,
+  };
 
   factory Repeat.fromJson(Map<String, dynamic> j) => Repeat(
-        unit: RepeatUnit.values.firstWhere((u) => u.name == j['unit'], orElse: () => RepeatUnit.day),
-        every: (j['every'] as num?)?.toInt() ?? 1,
-        weekdays: {for (final d in j['weekdays'] as List? ?? []) (d as num).toInt()},
-        fromCompletion: j['fromCompletion'] as bool? ?? false,
-      );
+    unit: RepeatUnit.values.firstWhere((u) => u.name == j['unit'], orElse: () => RepeatUnit.day),
+    every: (j['every'] as num?)?.toInt() ?? 1,
+    weekdays: {for (final d in j['weekdays'] as List? ?? []) (d as num).toInt()},
+    fromCompletion: j['fromCompletion'] as bool? ?? false,
+  );
 }
 
 class TaskCategory {
-  TaskCategory(
-      {required this.id,
-      required this.name,
-      List<String>? keywords,
-      this.boardByDefault = false,
-      this.boardStage,
-      this.stepsOnBoard = false,
-      Map<String, dynamic>? extra})
-      : keywords = keywords ?? [],
-        extra = extra ?? {};
+  TaskCategory({
+    required this.id,
+    required this.name,
+    List<String>? keywords,
+    this.boardByDefault = false,
+    this.boardStage,
+    this.stepsOnBoard = false,
+    Map<String, dynamic>? extra,
+  }) : keywords = keywords ?? [],
+       extra = extra ?? {};
 
   /// Item 67: tasks that get this category go on the Kanban board, in [boardStage] (the first
   /// stage when null), with their steps on it too when [stepsOnBoard].
@@ -1260,24 +1322,24 @@ class TaskCategory {
       TaskCategory(id: 'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name);
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        'name': name,
-        if (keywords.isNotEmpty) 'keywords': keywords,
-        if (boardByDefault) 'board': true,
-        if (boardStage != null) 'boardStage': boardStage,
-        if (stepsOnBoard) 'boardSteps': true,
-      };
+    ...extra,
+    'id': id,
+    'name': name,
+    if (keywords.isNotEmpty) 'keywords': keywords,
+    if (boardByDefault) 'board': true,
+    if (boardStage != null) 'boardStage': boardStage,
+    if (stepsOnBoard) 'boardSteps': true,
+  };
 
   factory TaskCategory.fromJson(Map<String, dynamic> j) => TaskCategory(
-        id: j['id'] as String,
-        name: j['name'] as String? ?? '',
-        keywords: [for (final k in j['keywords'] as List? ?? []) k as String],
-        boardByDefault: j['board'] as bool? ?? false,
-        boardStage: j['boardStage'] as String?,
-        stepsOnBoard: j['boardSteps'] as bool? ?? false,
-        extra: unknownFields(j, _known),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String? ?? '',
+    keywords: [for (final k in j['keywords'] as List? ?? []) k as String],
+    boardByDefault: j['board'] as bool? ?? false,
+    boardStage: j['boardStage'] as String?,
+    stepsOnBoard: j['boardSteps'] as bool? ?? false,
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// Everything that gets saved locally and synced to Dropbox.
@@ -1310,6 +1372,7 @@ class AppData {
     this.weeklyAt = 18 * 60,
     this.sort = ListSort.due,
     this.starredTop = true,
+    this.dragInSort = DragInSort.auto,
     this.showQuickFilters = true,
     List<KanbanStage>? stages,
     this.kanbanDone = KanbanDone.ask,
@@ -1333,25 +1396,25 @@ class AppData {
     Map<String, String>? matrixNames,
     this.urgentDays = 0,
     Map<String, String>? quickWords,
-  })  : active = active ?? [],
-        hiddenEmails = hiddenEmails ?? {},
-        allowedSenders = allowedSenders ?? [],
-        matrixNames = matrixNames ?? {},
-        quickWords = quickWords ?? {},
-        extra = extra ?? {},
-        archived = archived ?? [],
-        deleted = deleted ?? {},
-        categories = categories ?? [],
-        collapsed = collapsed ?? {},
-        templates = templates ?? [],
-        done = done ?? {},
-        skips = skips ?? {},
-        stages = stages ?? KanbanStage.defaults(),
-        eventCalendars = eventCalendars ?? {},
-        dismissedEvents = dismissedEvents ?? {},
-        updatedAt = updatedAt ?? _epoch,
-        orderUpdatedAt = orderUpdatedAt ?? _epoch,
-        settingsUpdatedAt = settingsUpdatedAt ?? _epoch;
+  }) : active = active ?? [],
+       hiddenEmails = hiddenEmails ?? {},
+       allowedSenders = allowedSenders ?? [],
+       matrixNames = matrixNames ?? {},
+       quickWords = quickWords ?? {},
+       extra = extra ?? {},
+       archived = archived ?? [],
+       deleted = deleted ?? {},
+       categories = categories ?? [],
+       collapsed = collapsed ?? {},
+       templates = templates ?? [],
+       done = done ?? {},
+       skips = skips ?? {},
+       stages = stages ?? KanbanStage.defaults(),
+       eventCalendars = eventCalendars ?? {},
+       dismissedEvents = dismissedEvents ?? {},
+       updatedAt = updatedAt ?? _epoch,
+       orderUpdatedAt = orderUpdatedAt ?? _epoch,
+       settingsUpdatedAt = settingsUpdatedAt ?? _epoch;
 
   static final _epoch = DateTime.utc(1970);
 
@@ -1396,6 +1459,9 @@ class AppData {
 
   /// Starred tasks go first, whatever the sort.
   bool starredTop;
+
+  /// What dragging a task does when the list is sorted.
+  DragInSort dragInSort;
 
   /// Show the row of quick filter chips (All, Today, Next 7 days, ...) above the list.
   bool showQuickFilters;
@@ -1543,76 +1609,118 @@ class AppData {
   bool get newerAppElsewhere => newestApp != null && compareVersions(newestApp!, currentAppVersion) > 0;
 
   static const _known = {
-    'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
-    'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
-    'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
-    'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
-    'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
-    'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
-    'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords',
+    'version',
+    'newestApp',
+    'hoursToRed',
+    'colourByDue',
+    'archiveKeepDays',
+    'categories',
+    'groupByCategory',
+    'collapsed',
+    'focusNext30',
+    'weeklyReview',
+    'weeklyDay',
+    'weeklyAt',
+    'sort',
+    'starredTop',
+    'dragInSort',
+    'showQuickFilters',
+    'stages',
+    'kanbanDone',
+    'kanbanHideFromList',
+    'skips',
+    'ganttWeekends',
+    'ganttPush',
+    'ganttStartOnProgress',
+    'defaultRemindBefore',
+    'templates',
+    'done',
+    'autoCategory',
+    'eventSuggest',
+    'eventCalendars',
+    'dismissedEvents',
+    'eventDays',
+    'overdueMode',
+    'overdueAt',
+    'nudgeHours',
+    'quietStart',
+    'quietEnd',
+    'updatedAt',
+    'orderUpdatedAt',
+    'settingsUpdatedAt',
+    'deleted',
+    'active',
+    'archived',
+    'hiddenEmails',
+    'starredDays',
+    'starredAfter',
+    'starredLine',
+    'emailTasks',
+    'allowedSenders',
+    'matrixNames',
+    'urgentDays',
+    'quickWords',
   };
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'version': 1,
-        'newestApp': newerVersion(newestApp, currentAppVersion),
-        'hoursToRed': hoursToRed,
-        'colourByDue': colourByDue,
-        'archiveKeepDays': archiveKeepDays,
-        'categories': categories.map((c) => c.toJson()).toList(),
-        'groupByCategory': groupByCategory,
-        'collapsed': collapsed.toList(),
-        'focusNext30': focusNext30,
-        'weeklyReview': weeklyReview,
-        'weeklyDay': weeklyDay,
-        'weeklyAt': weeklyAt,
-        'sort': sort.name,
-        'starredTop': starredTop,
-        'showQuickFilters': showQuickFilters,
-        'stages': stages.map((s) => s.toJson()).toList(),
-        'kanbanDone': kanbanDone.name,
-        if (kanbanHideFromList) 'kanbanHideFromList': true,
-        if (ganttWeekends) 'ganttWeekends': true,
-        if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
-        if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
-        if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
-        'defaultRemindBefore': defaultRemindBefore,
-        'templates': templates.map((t) => t.toJson()).toList(),
-        'done': done.map((k, v) => MapEntry(k, v.toJson())),
-        'autoCategory': autoCategory.name,
-        'eventSuggest': eventSuggest.name,
-        'eventCalendars': eventCalendars.toList(),
-        'dismissedEvents': dismissedEvents.toList(),
-        'eventDays': eventDays,
-        'overdueMode': overdueMode.name,
-        'overdueAt': overdueAt,
-        'nudgeHours': nudgeHours,
-        'quietStart': quietStart,
-        'quietEnd': quietEnd,
-        if (hiddenEmails.isNotEmpty) 'hiddenEmails': hiddenEmails.toList(),
-        'starredDays': starredDays,
-        'starredAfter': starredAfter.name,
-        if (starredLine) 'starredLine': true,
-        if (emailTasks) 'emailTasks': true,
-        if (allowedSenders.isNotEmpty) 'allowedSenders': allowedSenders,
-        if (matrixNames.isNotEmpty) 'matrixNames': matrixNames,
-        if (urgentDays > 0) 'urgentDays': urgentDays,
-        if (quickWords.isNotEmpty) 'quickWords': quickWords,
-        'updatedAt': updatedAt.toUtc().toIso8601String(),
-        'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
-        'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
-        'deleted': deleted.map((k, v) => MapEntry(k, v.toUtc().toIso8601String())),
-        'active': active.map((t) => t.toJson()).toList(),
-        'archived': archived.map((t) => t.toJson()).toList(),
-      };
+    ...extra,
+    'version': 1,
+    'newestApp': newerVersion(newestApp, currentAppVersion),
+    'hoursToRed': hoursToRed,
+    'colourByDue': colourByDue,
+    'archiveKeepDays': archiveKeepDays,
+    'categories': categories.map((c) => c.toJson()).toList(),
+    'groupByCategory': groupByCategory,
+    'collapsed': collapsed.toList(),
+    'focusNext30': focusNext30,
+    'weeklyReview': weeklyReview,
+    'weeklyDay': weeklyDay,
+    'weeklyAt': weeklyAt,
+    'sort': sort.name,
+    'starredTop': starredTop,
+    if (dragInSort != DragInSort.auto) 'dragInSort': dragInSort.name,
+    'showQuickFilters': showQuickFilters,
+    'stages': stages.map((s) => s.toJson()).toList(),
+    'kanbanDone': kanbanDone.name,
+    if (kanbanHideFromList) 'kanbanHideFromList': true,
+    if (ganttWeekends) 'ganttWeekends': true,
+    if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
+    if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
+    if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
+    'defaultRemindBefore': defaultRemindBefore,
+    'templates': templates.map((t) => t.toJson()).toList(),
+    'done': done.map((k, v) => MapEntry(k, v.toJson())),
+    'autoCategory': autoCategory.name,
+    'eventSuggest': eventSuggest.name,
+    'eventCalendars': eventCalendars.toList(),
+    'dismissedEvents': dismissedEvents.toList(),
+    'eventDays': eventDays,
+    'overdueMode': overdueMode.name,
+    'overdueAt': overdueAt,
+    'nudgeHours': nudgeHours,
+    'quietStart': quietStart,
+    'quietEnd': quietEnd,
+    if (hiddenEmails.isNotEmpty) 'hiddenEmails': hiddenEmails.toList(),
+    'starredDays': starredDays,
+    'starredAfter': starredAfter.name,
+    if (starredLine) 'starredLine': true,
+    if (emailTasks) 'emailTasks': true,
+    if (allowedSenders.isNotEmpty) 'allowedSenders': allowedSenders,
+    if (matrixNames.isNotEmpty) 'matrixNames': matrixNames,
+    if (urgentDays > 0) 'urgentDays': urgentDays,
+    if (quickWords.isNotEmpty) 'quickWords': quickWords,
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
+    'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
+    'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
+    'deleted': deleted.map((k, v) => MapEntry(k, v.toUtc().toIso8601String())),
+    'active': active.map((t) => t.toJson()).toList(),
+    'archived': archived.map((t) => t.toJson()).toList(),
+  };
 
   TaskCategory? category(String? id) => categories.where((c) => c.id == id).firstOrNull;
 
-  Task? task(String? id) => id == null
-      ? null
-      : active.where((t) => t.id == id).firstOrNull ?? archived.where((t) => t.id == id).firstOrNull;
+  Task? task(String? id) =>
+      id == null ? null : active.where((t) => t.id == id).firstOrNull ?? archived.where((t) => t.id == id).firstOrNull;
 
   /// Waiting for an earlier task that is still open.
   bool isLocked(Task t) => t.afterIds.any((id) => active.any((a) => a.id == id));
@@ -1630,69 +1738,69 @@ class AppData {
       values.where((v) => v.name == name).firstOrNull ?? fallback;
 
   factory AppData.fromJson(Map<String, dynamic> j) => AppData(
-        hoursToRed: (j['hoursToRed'] as num?)?.toDouble() ?? 72,
-        colourByDue: j['colourByDue'] as bool? ?? true,
-        archiveKeepDays: (j['archiveKeepDays'] as num?)?.toInt() ?? 0,
-        categories: [for (final c in j['categories'] as List? ?? []) TaskCategory.fromJson(c)],
-        groupByCategory: j['groupByCategory'] as bool? ?? false,
-        collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
-        focusNext30: j['focusNext30'] as bool? ?? false,
-        // Saved before sorting existed: keep the hand-made order.
-        weeklyReview: j['weeklyReview'] as bool? ?? false,
-        weeklyDay: (j['weeklyDay'] as num?)?.toInt() ?? DateTime.sunday,
-        weeklyAt: (j['weeklyAt'] as num?)?.toInt() ?? 18 * 60,
-        sort: _enum(ListSort.values, j['sort'], ListSort.manual),
-        starredTop: j['starredTop'] as bool? ?? true,
-        showQuickFilters: j['showQuickFilters'] as bool? ?? true,
-        stages: j['stages'] is List
-            ? [for (final s in j['stages'] as List) KanbanStage.fromJson(s as Map<String, dynamic>)]
-            : null,
-        kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
-        kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
-        ganttWeekends: j['ganttWeekends'] as bool? ?? false,
-        ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
-        ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
-        skips: {
-          for (final e in (j['skips'] as Map? ?? {}).entries)
-            e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
-        },
-        defaultRemindBefore: (j['defaultRemindBefore'] as num?)?.toInt() ?? 0,
-        templates: [for (final t in j['templates'] as List? ?? []) ChecklistTemplate.fromJson(t)],
-        done: {
-          for (final e in (j['done'] as Map? ?? {}).entries)
-            e.key as String: DoneRecord.fromJson(e.value as Map<String, dynamic>),
-        },
-        autoCategory: _enum(AutoCategory.values, j['autoCategory'], AutoCategory.suggest),
-        eventSuggest: _enum(EventSuggest.values, j['eventSuggest'], EventSuggest.off),
-        eventCalendars: {for (final c in j['eventCalendars'] as List? ?? []) c as String},
-        dismissedEvents: {for (final c in j['dismissedEvents'] as List? ?? []) c as String},
-        eventDays: (j['eventDays'] as num?)?.toInt() ?? 14,
-        overdueMode: _enum(OverdueMode.values, j['overdueMode'], OverdueMode.off),
-        overdueAt: (j['overdueAt'] as num?)?.toInt() ?? 8 * 60,
-        nudgeHours: (j['nudgeHours'] as num?)?.toInt() ?? 3,
-        quietStart: (j['quietStart'] as num?)?.toInt() ?? 22 * 60,
-        quietEnd: (j['quietEnd'] as num?)?.toInt() ?? 7 * 60,
-        updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
-        orderUpdatedAt: DateTime.tryParse(j['orderUpdatedAt'] as String? ?? ''),
-        settingsUpdatedAt: DateTime.tryParse(j['settingsUpdatedAt'] as String? ?? ''),
-        deleted: {
-          for (final e in (j['deleted'] as Map? ?? {}).entries)
-            e.key as String: ?DateTime.tryParse(e.value as String),
-        },
-        active: [for (final t in j['active'] as List? ?? []) Task.fromJson(t)],
-        archived: [for (final t in j['archived'] as List? ?? []) Task.fromJson(t)],
-        newestApp: j['newestApp'] as String?,
-        hiddenEmails: {for (final e in j['hiddenEmails'] as List? ?? []) e as String},
-        starredDays: (j['starredDays'] as num?)?.toInt() ?? 30,
-        starredAfter: _enum(StarredAfter.values, j['starredAfter'], StarredAfter.keep),
-        starredLine: j['starredLine'] as bool? ?? false,
-        emailTasks: j['emailTasks'] as bool? ?? false,
-        allowedSenders: [for (final a in j['allowedSenders'] as List? ?? []) a as String],
-        matrixNames: {for (final e in (j['matrixNames'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
-        urgentDays: (j['urgentDays'] as num?)?.toInt() ?? 0,
-        quickWords: {for (final e in (j['quickWords'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
-        extra: unknownFields(j, _known),
-      );
+    hoursToRed: (j['hoursToRed'] as num?)?.toDouble() ?? 72,
+    colourByDue: j['colourByDue'] as bool? ?? true,
+    archiveKeepDays: (j['archiveKeepDays'] as num?)?.toInt() ?? 0,
+    categories: [for (final c in j['categories'] as List? ?? []) TaskCategory.fromJson(c)],
+    groupByCategory: j['groupByCategory'] as bool? ?? false,
+    collapsed: {for (final c in j['collapsed'] as List? ?? []) c as String},
+    focusNext30: j['focusNext30'] as bool? ?? false,
+    // Saved before sorting existed: keep the hand-made order.
+    weeklyReview: j['weeklyReview'] as bool? ?? false,
+    weeklyDay: (j['weeklyDay'] as num?)?.toInt() ?? DateTime.sunday,
+    weeklyAt: (j['weeklyAt'] as num?)?.toInt() ?? 18 * 60,
+    sort: _enum(ListSort.values, j['sort'], ListSort.manual),
+    starredTop: j['starredTop'] as bool? ?? true,
+    dragInSort: _enum(DragInSort.values, j['dragInSort'], DragInSort.auto),
+    showQuickFilters: j['showQuickFilters'] as bool? ?? true,
+    stages: j['stages'] is List
+        ? [for (final s in j['stages'] as List) KanbanStage.fromJson(s as Map<String, dynamic>)]
+        : null,
+    kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
+    kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
+    ganttWeekends: j['ganttWeekends'] as bool? ?? false,
+    ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
+    ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
+    skips: {
+      for (final e in (j['skips'] as Map? ?? {}).entries)
+        e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
+    },
+    defaultRemindBefore: (j['defaultRemindBefore'] as num?)?.toInt() ?? 0,
+    templates: [for (final t in j['templates'] as List? ?? []) ChecklistTemplate.fromJson(t)],
+    done: {
+      for (final e in (j['done'] as Map? ?? {}).entries)
+        e.key as String: DoneRecord.fromJson(e.value as Map<String, dynamic>),
+    },
+    autoCategory: _enum(AutoCategory.values, j['autoCategory'], AutoCategory.suggest),
+    eventSuggest: _enum(EventSuggest.values, j['eventSuggest'], EventSuggest.off),
+    eventCalendars: {for (final c in j['eventCalendars'] as List? ?? []) c as String},
+    dismissedEvents: {for (final c in j['dismissedEvents'] as List? ?? []) c as String},
+    eventDays: (j['eventDays'] as num?)?.toInt() ?? 14,
+    overdueMode: _enum(OverdueMode.values, j['overdueMode'], OverdueMode.off),
+    overdueAt: (j['overdueAt'] as num?)?.toInt() ?? 8 * 60,
+    nudgeHours: (j['nudgeHours'] as num?)?.toInt() ?? 3,
+    quietStart: (j['quietStart'] as num?)?.toInt() ?? 22 * 60,
+    quietEnd: (j['quietEnd'] as num?)?.toInt() ?? 7 * 60,
+    updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
+    orderUpdatedAt: DateTime.tryParse(j['orderUpdatedAt'] as String? ?? ''),
+    settingsUpdatedAt: DateTime.tryParse(j['settingsUpdatedAt'] as String? ?? ''),
+    deleted: {
+      for (final e in (j['deleted'] as Map? ?? {}).entries) e.key as String: ?DateTime.tryParse(e.value as String),
+    },
+    active: [for (final t in j['active'] as List? ?? []) Task.fromJson(t)],
+    archived: [for (final t in j['archived'] as List? ?? []) Task.fromJson(t)],
+    newestApp: j['newestApp'] as String?,
+    hiddenEmails: {for (final e in j['hiddenEmails'] as List? ?? []) e as String},
+    starredDays: (j['starredDays'] as num?)?.toInt() ?? 30,
+    starredAfter: _enum(StarredAfter.values, j['starredAfter'], StarredAfter.keep),
+    starredLine: j['starredLine'] as bool? ?? false,
+    emailTasks: j['emailTasks'] as bool? ?? false,
+    allowedSenders: [for (final a in j['allowedSenders'] as List? ?? []) a as String],
+    matrixNames: {for (final e in (j['matrixNames'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
+    urgentDays: (j['urgentDays'] as num?)?.toInt() ?? 0,
+    quickWords: {for (final e in (j['quickWords'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
+    extra: unknownFields(j, _known),
+  );
 }
 
 /// The version of this copy of the app (the newest entry in the changelog, which a test keeps
@@ -1718,8 +1826,10 @@ String? newerVersion(String? a, String? b) {
 }
 
 /// Item 62: the entries of [j] whose keys aren't in [known], i.e. what a newer version added.
-Map<String, dynamic> unknownFields(Map<String, dynamic> j, Set<String> known) =>
-    {for (final e in j.entries) if (!known.contains(e.key)) e.key: e.value};
+Map<String, dynamic> unknownFields(Map<String, dynamic> j, Set<String> known) => {
+  for (final e in j.entries)
+    if (!known.contains(e.key)) e.key: e.value,
+};
 
 /// Combines two copies of the data (this device's and Dropbox's) task by task, so edits
 /// made on both devices between syncs are kept. For each task the most recently changed
@@ -1805,8 +1915,7 @@ AppData mergeData(AppData a, AppData b) {
       if (tasks[t.id] case final m? when open.contains(m)) m,
   ];
   final placed = active.toSet();
-  active.addAll(open.where((t) => !placed.contains(t)).toList()
-    ..sort((x, y) => x.createdAt.compareTo(y.createdAt)));
+  active.addAll(open.where((t) => !placed.contains(t)).toList()..sort((x, y) => x.createdAt.compareTo(y.createdAt)));
 
   final archived = tasks.values.where((t) => t.closedAt != null).toList()
     ..sort((x, y) => y.closedAt!.compareTo(x.closedAt!));
@@ -1835,6 +1944,7 @@ AppData mergeData(AppData a, AppData b) {
     weeklyAt: settingsFrom.weeklyAt,
     sort: settingsFrom.sort,
     starredTop: settingsFrom.starredTop,
+    dragInSort: settingsFrom.dragInSort,
     showQuickFilters: settingsFrom.showQuickFilters,
     stages: settingsFrom.stages,
     kanbanDone: settingsFrom.kanbanDone,
