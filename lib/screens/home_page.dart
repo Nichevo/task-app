@@ -103,14 +103,12 @@ class HomePageState extends State<HomePage> {
       final state = WidgetsBinding.instance.lifecycleState;
       if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) setState(() {});
     });
-    _lifecycle = AppLifecycleListener(
-      onResume: () {
-        setState(() {}); // Colours and snoozes may have moved on while it was hidden.
-        store.syncIfStale();
-        _checkStarred();
-        if (store.dropbox == null) store.checkEmailTasks();
-      },
-    );
+    _lifecycle = AppLifecycleListener(onResume: () {
+      setState(() {}); // Colours and snoozes may have moved on while it was hidden.
+      store.syncIfStale();
+      _checkStarred();
+      if (store.dropbox == null) store.checkEmailTasks();
+    });
     store.addListener(_checkEvents);
     _checkEvents();
     _checkStarred();
@@ -200,10 +198,8 @@ class HomePageState extends State<HomePage> {
     _select(null);
   }
 
-  void openGantt({String? categoryId}) => _open(
-    context,
-    GanttPage(store: store, initialCategory: categoryId == null || categoryId.isEmpty ? null : categoryId),
-  );
+  void openGantt({String? categoryId}) =>
+      _open(context, GanttPage(store: store, initialCategory: categoryId == null || categoryId.isEmpty ? null : categoryId));
 
   void openAchievements() => _open(context, AchievementsPage(store: store));
 
@@ -230,12 +226,8 @@ class HomePageState extends State<HomePage> {
   void _complete(Task t) {
     final index = data.active.indexOf(t);
     final spawned = store.complete(t);
-    _snack(
-      spawned == null
-          ? 'Archived "${t.title}"'
-          : 'Archived "${t.title}". Next one due ${dateTimeFmt.format(spawned.dueAt!)}',
-      () => store.uncomplete(t, index, spawned),
-    );
+    _snack(spawned == null ? 'Archived "${t.title}"' : 'Archived "${t.title}". Next one due ${dateTimeFmt.format(spawned.dueAt!)}',
+        () => store.uncomplete(t, index, spawned));
   }
 
   void _skip(Task t) {
@@ -252,15 +244,11 @@ class HomePageState extends State<HomePage> {
   void _snack(String text, VoidCallback undo) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(text),
-          action: SnackBarAction(label: 'Undo', onPressed: undo),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(text), action: SnackBarAction(label: 'Undo', onPressed: undo)));
   }
 
-  void _open(BuildContext context, Widget page) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+  void _open(BuildContext context, Widget page) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
 
   /// Wide enough (unfolded Fold, tablet, wide window) to show two panes.
   static const _twoPaneWidth = 600.0;
@@ -283,20 +271,18 @@ class HomePageState extends State<HomePage> {
     final q = _query;
     final shown = q.isNotEmpty
         ? data.active.where((t) => matchesSearch(t, q, data))
-        : data.active.where(
-            (t) =>
-                !t.habit &&
-                (_showSnoozed || !t.isSnoozed(now)) &&
-                passesFilter(t, _filter, now) &&
-                !(data.kanbanHideFromList && t.kanban),
-          );
+        : data.active.where((t) =>
+            !t.habit &&
+            (_showSnoozed || !t.isSnoozed(now)) &&
+            passesFilter(t, _filter, now) &&
+            !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
   }
 
   void _closeSearch() => setState(() {
-    _searching = false;
-    _search.clear();
-  });
+        _searching = false;
+        _search.clear();
+      });
 
   List<_Row> _rows(DateTime now) {
     final tasks = _visibleTasks(now);
@@ -331,14 +317,9 @@ class HomePageState extends State<HomePage> {
       if (category == oldCategory) {
         ScaffoldMessenger.of(context)
           ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                'Sorted by ${sortLabels[wasSort]!.toLowerCase()}, so it stays where the sort puts it. '
-                'To move it by hand, change Settings, When you drag a task.',
-              ),
-            ),
-          );
+          ..showSnackBar(SnackBar(
+              content: Text('Sorted by ${sortLabels[wasSort]!.toLowerCase()}, so it stays where the sort puts it. '
+                  'To move it by hand, change Settings, When you drag a task.')));
         setState(() {});
         return;
       }
@@ -374,22 +355,17 @@ class HomePageState extends State<HomePage> {
     } else if (_snapsBack(next, moved)) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Starred tasks stay at the top. Turn off "Starred at the top" in Settings to move them freely.',
-            ),
-          ),
-        );
+        ..showSnackBar(const SnackBar(
+            content: Text('Starred tasks stay at the top. Turn off "Starred at the top" in Settings to move them freely.')));
     }
   }
 
   /// Whether a drop in a sorted list keeps the sort (Settings, When you drag a task).
   bool _keepsSort(bool newCategory) => switch (data.dragInSort) {
-    DragInSort.keepSort => true,
-    DragInSort.handMade => false,
-    DragInSort.auto => newCategory,
-  };
+        DragInSort.keepSort => true,
+        DragInSort.handMade => false,
+        DragInSort.auto => newCategory,
+      };
 
   /// Whether "Starred at the top" will put [moved] back above or below where it was dropped.
   bool _snapsBack(List<_Row> next, _TaskRow moved) {
@@ -397,9 +373,9 @@ class HomePageState extends State<HomePage> {
     final at = next.indexOf(moved);
     // A category header next to it counts as no neighbour: sorting stays inside each group.
     Task? neighbour(int step) => switch (next.elementAtOrNull(at + step)) {
-      _TaskRow r => r.task,
-      _ => null,
-    };
+          _TaskRow r => r.task,
+          _ => null,
+        };
 
     final above = neighbour(-1), below = neighbour(1);
     return moved.task.starred ? (above != null && !above.starred) : (below != null && below.starred);
@@ -424,44 +400,40 @@ class HomePageState extends State<HomePage> {
         // Forget a selection whose task was deleted (e.g. on another device).
         final open = data.task(_selectedId);
         if (open == null) _selectedId = null;
-        return LayoutBuilder(
-          builder: (context, box) {
-            final wide = box.maxWidth >= _twoPaneWidth;
-            _unfolded(wide);
-            final list = _listScaffold(context, wide);
-            if (!wide) {
-              return PopScope(
-                canPop: open == null,
-                onPopInvokedWithResult: (didPop, _) {
-                  if (!didPop) _select(null);
-                },
-                child: open == null
-                    ? list
-                    : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
-              );
-            }
-            // Item 59: the matrix needs room for its 2 by 2 grid, so it gets at least half the screen.
-            final half = open == null && store.panelView == PanelView.matrix;
-            // Item 81: the divider can be dragged to make the right-hand pane wider or narrower.
-            final f = store.panelFraction ?? 0.4;
-            final panel = half && f < 0.5 ? 0.5 : f;
-            return Row(
-              children: [
-                SizedBox(width: box.maxWidth * (1 - panel) - _PaneDivider.width / 2, child: list),
-                _PaneDivider(
-                  onDrag: (dx) => store.setPanelFraction(panel - dx / box.maxWidth),
-                  onEnd: () => store.setPanelFraction(store.panelFraction, save: true),
-                  onReset: () => store.setPanelFraction(null, save: true),
-                ),
-                Expanded(
-                  child: open == null
-                      ? SidePanel(store: store, onOpen: (t) => _select(t.id))
-                      : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
-                ),
-              ],
+        return LayoutBuilder(builder: (context, box) {
+          final wide = box.maxWidth >= _twoPaneWidth;
+          _unfolded(wide);
+          final list = _listScaffold(context, wide);
+          if (!wide) {
+            return PopScope(
+              canPop: open == null,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) _select(null);
+              },
+              child: open == null
+                  ? list
+                  : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
             );
-          },
-        );
+          }
+          // Item 59: the matrix needs room for its 2 by 2 grid, so it gets at least half the screen.
+          final half = open == null && store.panelView == PanelView.matrix;
+          // Item 81: the divider can be dragged to make the right-hand pane wider or narrower.
+          final f = store.panelFraction ?? 0.4;
+          final panel = half && f < 0.5 ? 0.5 : f;
+          return Row(children: [
+            SizedBox(width: box.maxWidth * (1 - panel) - _PaneDivider.width / 2, child: list),
+            _PaneDivider(
+              onDrag: (dx) => store.setPanelFraction(panel - dx / box.maxWidth),
+              onEnd: () => store.setPanelFraction(store.panelFraction, save: true),
+              onReset: () => store.setPanelFraction(null, save: true),
+            ),
+            Expanded(
+              child: open == null
+                  ? SidePanel(store: store, onOpen: (t) => _select(t.id))
+                  : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
+            ),
+          ]);
+        });
       },
     );
   }
@@ -487,21 +459,13 @@ class HomePageState extends State<HomePage> {
     final hiddenCount = searching || _filter == QuickFilter.all
         ? 0
         : data.active
-              .where(
-                (t) =>
-                    !t.habit &&
-                    !t.isSnoozed(now) &&
-                    !passesFilter(t, _filter, now) &&
-                    !(data.kanbanHideFromList && t.kanban),
-              )
-              .length;
+            .where((t) =>
+                !t.habit && !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
+            .length;
     final showBoardIcon = data.boardTasks.isNotEmpty && store.topIconShown(TopIcon.board);
     final showMatrixIcon = data.matrixTasks.isNotEmpty && store.topIconShown(TopIcon.matrix);
     final showGanttIcon = data.ganttTasks.isNotEmpty && store.topIconShown(TopIcon.gantt);
-    final shownTasks = [
-      for (final r in rows)
-        if (r is _TaskRow) r.task,
-    ];
+    final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
     final estimate = describeEstimates(shownTasks);
     return Scaffold(
       appBar: AppBar(
@@ -525,7 +489,11 @@ class HomePageState extends State<HomePage> {
               onPressed: () => _open(context, SearchPage(store: store, initialQuery: _search.text.trim())),
             ),
           if (_searching)
-            IconButton(tooltip: 'Clear', icon: const Icon(Icons.clear), onPressed: () => setState(_search.clear))
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.clear),
+              onPressed: () => setState(_search.clear),
+            )
           else if (store.topIconShown(TopIcon.search))
             IconButton(
               tooltip: 'Search',
@@ -535,7 +503,8 @@ class HomePageState extends State<HomePage> {
           // Item 74: Search, Kanban, Matrix, Calendar; the views only once a task is on them.
           if (showBoardIcon)
             IconButton(tooltip: 'Kanban board', icon: const Icon(Icons.view_kanban_outlined), onPressed: openBoard),
-          if (showMatrixIcon) IconButton(tooltip: 'Matrix', icon: const Icon(Icons.grid_view), onPressed: openMatrix),
+          if (showMatrixIcon)
+            IconButton(tooltip: 'Matrix', icon: const Icon(Icons.grid_view), onPressed: openMatrix),
           if (showGanttIcon)
             IconButton(tooltip: 'Gantt chart', icon: const Icon(Icons.view_timeline_outlined), onPressed: openGantt),
           if (store.topIconShown(TopIcon.calendar))
@@ -547,9 +516,9 @@ class HomePageState extends State<HomePage> {
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
               'group' => () {
-                data.groupByCategory = !data.groupByCategory;
-                store.changed(settings: true);
-              }(),
+                  data.groupByCategory = !data.groupByCategory;
+                  store.changed(settings: true);
+                }(),
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'stats' => openStats(),
@@ -571,9 +540,8 @@ class HomePageState extends State<HomePage> {
             },
             itemBuilder: (_) => [
               PopupMenuItem(
-                value: 'group',
-                child: Text(data.groupByCategory ? 'Show as one list' : 'Group by category'),
-              ),
+                  value: 'group',
+                  child: Text(data.groupByCategory ? 'Show as one list' : 'Group by category')),
               PopupMenuItem(
                 value: 'archive',
                 child: Text(data.archived.isEmpty ? 'Archive' : 'Archive (${data.archived.length})'),
@@ -584,8 +552,7 @@ class HomePageState extends State<HomePage> {
               if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
               if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
               if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
-              if (!store.topIconShown(TopIcon.calendar))
-                const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
+              if (!store.topIconShown(TopIcon.calendar)) const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
@@ -595,126 +562,118 @@ class HomePageState extends State<HomePage> {
               const PopupMenuItem(value: 'import', child: Text('Import from CSV')),
               const PopupMenuItem(value: 'csv', child: Text('Export to CSV')),
               const PopupMenuDivider(),
-              if (store.dropbox != null) const PopupMenuItem(value: 'sync', child: Text('Sync with Dropbox now')),
+              if (store.dropbox != null)
+                const PopupMenuItem(value: 'sync', child: Text('Sync with Dropbox now')),
               const PopupMenuItem(value: 'settings', child: Text('Settings')),
             ],
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (data.newerAppElsewhere && !_updateNoteHidden)
-            MaterialBanner(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              leading: const Icon(Icons.system_update_outlined),
-              content: Text(
-                'Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
-                'Everything keeps working, and nothing the newer version added is lost.',
-              ),
-              actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
-            ),
-          if (store.restoreOffer case final b?)
-            MaterialBanner(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              leading: const Icon(Icons.settings_backup_restore),
-              content: Text(
-                'Dropbox has settings saved from your ${b.device} '
-                'on ${DateFormat('d MMM').format(b.savedAt.toLocal())}: ${b.describe()}. Restore them here?',
-              ),
-              actions: [
-                TextButton(onPressed: store.dismissRestoreOffer, child: const Text('Not now')),
-                TextButton(onPressed: () => store.restoreDeviceSettings(b), child: const Text('Restore')),
-              ],
-            ),
-          if (_starredCount > 0 && data.starredLine && !_starredHidden)
-            MaterialBanner(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              leading: const Icon(Icons.star_outline),
-              content: Text('$_starredCount starred email${_starredCount == 1 ? '' : 's'} not yet tasks'),
-              actions: [
-                TextButton(onPressed: () => setState(() => _starredHidden = true), child: const Text('Not now')),
-                TextButton(
-                  onPressed: () {
-                    setState(() => _starredHidden = true);
-                    _open(context, StarredPage(store: store));
-                  },
-                  child: const Text('Have a look'),
-                ),
-              ],
-            ),
-          if (_eventCount > 0)
-            MaterialBanner(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-              leading: const Icon(Icons.event_available_outlined),
-              content: Text('$_eventCount event${_eventCount == 1 ? '' : 's'} coming up could be tasks'),
-              actions: [
-                TextButton(onPressed: _dismissEvents, child: const Text('Not now')),
-                TextButton(
-                  onPressed: () {
-                    _dismissEvents();
-                    _open(context, EventsPage(store: store));
-                  },
-                  child: const Text('Have a look'),
-                ),
-              ],
-            ),
-          if (data.showQuickFilters && !_searching) _filterChips(),
-          if (data.habits.isNotEmpty && !_searching) _habitsLine(now),
-          if (estimate != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${shownTasks.length} task${shownTasks.length == 1 ? '' : 's'} shown, about $estimate',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
-                ),
-              ),
-            ),
-          Expanded(
-            child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0
-                ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
-                : ReorderableListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    buildDefaultDragHandles: false,
-                    itemCount: rows.length,
-                    onReorderItem: (o, n) => _onReorder(rows, o, n),
-                    footer: _footer(hiddenCount, snoozedCount),
-                    itemBuilder: (context, i) => switch (rows[i]) {
-                      _Header h => _header(h),
-                      _TaskRow r => _taskRow(r.task, i, now),
-                    },
-                  ),
+      body: Column(children: [
+        if (data.newerAppElsewhere && !_updateNoteHidden)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.system_update_outlined),
+            content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
+                'Everything keeps working, and nothing the newer version added is lost.'),
+            actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
           ),
-          _AddBar(key: _addBar, store: store),
-        ],
-      ),
+        if (store.restoreOffer case final b?)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.settings_backup_restore),
+            content: Text('Dropbox has settings saved from your ${b.device} '
+                'on ${DateFormat('d MMM').format(b.savedAt.toLocal())}: ${b.describe()}. Restore them here?'),
+            actions: [
+              TextButton(onPressed: store.dismissRestoreOffer, child: const Text('Not now')),
+              TextButton(onPressed: () => store.restoreDeviceSettings(b), child: const Text('Restore')),
+            ],
+          ),
+        if (_starredCount > 0 && data.starredLine && !_starredHidden)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.star_outline),
+            content: Text('$_starredCount starred email${_starredCount == 1 ? '' : 's'} not yet tasks'),
+            actions: [
+              TextButton(onPressed: () => setState(() => _starredHidden = true), child: const Text('Not now')),
+              TextButton(
+                onPressed: () {
+                  setState(() => _starredHidden = true);
+                  _open(context, StarredPage(store: store));
+                },
+                child: const Text('Have a look'),
+              ),
+            ],
+          ),
+        if (_eventCount > 0)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.event_available_outlined),
+            content: Text('$_eventCount event${_eventCount == 1 ? '' : 's'} coming up could be tasks'),
+            actions: [
+              TextButton(onPressed: _dismissEvents, child: const Text('Not now')),
+              TextButton(
+                onPressed: () {
+                  _dismissEvents();
+                  _open(context, EventsPage(store: store));
+                },
+                child: const Text('Have a look'),
+              ),
+            ],
+          ),
+        if (data.showQuickFilters && !_searching) _filterChips(),
+        if (data.habits.isNotEmpty && !_searching) _habitsLine(now),
+        if (estimate != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('${shownTasks.length} task${shownTasks.length == 1 ? '' : 's'} shown, about $estimate',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+            ),
+          ),
+        Expanded(
+          child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0
+              ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
+              : ReorderableListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  buildDefaultDragHandles: false,
+                  itemCount: rows.length,
+                  onReorderItem: (o, n) => _onReorder(rows, o, n),
+                  footer: _footer(hiddenCount, snoozedCount),
+                  itemBuilder: (context, i) => switch (rows[i]) {
+                    _Header h => _header(h),
+                    _TaskRow r => _taskRow(r.task, i, now),
+                  },
+                ),
+        ),
+        _AddBar(key: _addBar, store: store),
+      ]),
     );
   }
 
   Widget _header(_Header h) => Padding(
-    key: ValueKey('h:${h.key}'),
-    padding: const EdgeInsets.fromLTRB(10, 6, 6, 0),
-    child: InkWell(
-      onTap: () => store.toggleCollapsed(h.key),
-      child: Row(
-        children: [
-          Icon(h.collapsed ? Icons.chevron_right : Icons.expand_more, size: 22),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(h.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
-          if (h.collapsed || h.count > 0) Text('${h.count}', style: TextStyle(color: Theme.of(context).hintColor)),
-          IconButton(
-            tooltip: 'Add a task to ${h.name}',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.add, size: 20),
-            onPressed: () => focusAdd(categoryId: h.key.isEmpty ? null : h.key),
-          ),
-        ],
-      ),
-    ),
-  );
+        key: ValueKey('h:${h.key}'),
+        padding: const EdgeInsets.fromLTRB(10, 6, 6, 0),
+        child: InkWell(
+          onTap: () => store.toggleCollapsed(h.key),
+          child: Row(children: [
+            Icon(h.collapsed ? Icons.chevron_right : Icons.expand_more, size: 22),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(h.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            if (h.collapsed || h.count > 0)
+              Text('${h.count}', style: TextStyle(color: Theme.of(context).hintColor)),
+            IconButton(
+              tooltip: 'Add a task to ${h.name}',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.add, size: 20),
+              onPressed: () => focusAdd(categoryId: h.key.isEmpty ? null : h.key),
+            ),
+          ]),
+        ),
+      );
 
   /// Item 78: the one line habits take in the list; it opens the Habits page.
   Widget _habitsLine(DateTime now) {
@@ -730,19 +689,15 @@ class HomePageState extends State<HomePage> {
           onTap: openHabits,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(all ? Icons.check_circle : Icons.repeat_on_outlined, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    due == 0 ? 'Habits: none due today' : 'Habits today: $done of $due',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
+            child: Row(children: [
+              Icon(all ? Icons.check_circle : Icons.repeat_on_outlined, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(due == 0 ? 'Habits: none due today' : 'Habits today: $done of $due',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right),
+            ]),
           ),
         ),
       ),
@@ -751,24 +706,24 @@ class HomePageState extends State<HomePage> {
 
   /// All / Today / Next 7 days / ... above the list.
   Widget _filterChips() => SizedBox(
-    height: 44,
-    child: ListView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      children: [
-        for (final f in QuickFilter.values)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: ChoiceChip(
-              label: Text(f.label),
-              selected: store.quickFilter == f,
-              visualDensity: VisualDensity.compact,
-              onSelected: (_) => store.setQuickFilter(f),
-            ),
-          ),
-      ],
-    ),
-  );
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          children: [
+            for (final f in QuickFilter.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(f.label),
+                  selected: store.quickFilter == f,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => store.setQuickFilter(f),
+                ),
+              ),
+          ],
+        ),
+      );
 
   Widget _taskRow(Task t, int i, DateTime now) {
     final waitingFor = data.isLocked(t) ? data.task(t.afterTaskId)?.title : null;
@@ -781,41 +736,41 @@ class HomePageState extends State<HomePage> {
 
   Widget _block(Task t, int i, DateTime now, String? waitingFor, bool drag) {
     return Dismissible(
-      key: ValueKey('swipe-${t.id}'),
-      direction: waitingFor == null ? DismissDirection.horizontal : DismissDirection.endToStart,
-      background: const _SwipeBackground(color: Color(0xFF2E7D32), icon: Icons.check, alignment: Alignment.centerLeft),
-      secondaryBackground: const _SwipeBackground(
-        color: Color(0xFFC62828),
-        icon: Icons.delete,
-        alignment: Alignment.centerRight,
-      ),
-      onDismissed: (dir) => dir == DismissDirection.startToEnd ? _complete(t) : _delete(t),
-      child: TaskBlock(
-        task: t,
-        color: waitingFor != null ? lockedColor : ageColor(t, data.hoursToRed, byDue: data.colourByDue, now: now),
-        lockedBy: waitingFor,
-        categoryName: data.category(t.categoryId)?.name,
-        selected: _selectedId == t.id,
-        expanded: _expanded.contains(t.id),
-        onTap: () => setState(() => _expanded.contains(t.id) ? _expanded.remove(t.id) : _expanded.add(t.id)),
-        onOpen: () => _select(t.id),
-        onCheck: () => _complete(t),
-        onStep: (s) => _toggleStep(t, s),
-        onSkip: () => _skip(t),
-        onWorked: () => store.toggleWorked(t),
-        stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
-        boxName: MatrixBox.byId(t.matrixBox) == null ? null : data.boxName(MatrixBox.byId(t.matrixBox)!),
-        onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),
-        trailing: drag
-            ? ReorderableDragStartListener(
-                index: i,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(Icons.drag_handle, color: Color(0x99000000)),
-                ),
-              )
-            : null,
-      ),
+        key: ValueKey('swipe-${t.id}'),
+        direction: waitingFor == null ? DismissDirection.horizontal : DismissDirection.endToStart,
+        background: const _SwipeBackground(
+            color: Color(0xFF2E7D32), icon: Icons.check, alignment: Alignment.centerLeft),
+        secondaryBackground: const _SwipeBackground(
+            color: Color(0xFFC62828), icon: Icons.delete, alignment: Alignment.centerRight),
+        onDismissed: (dir) => dir == DismissDirection.startToEnd ? _complete(t) : _delete(t),
+        child: TaskBlock(
+          task: t,
+          color: waitingFor != null
+              ? lockedColor
+              : ageColor(t, data.hoursToRed, byDue: data.colourByDue, now: now),
+          lockedBy: waitingFor,
+          categoryName: data.category(t.categoryId)?.name,
+          selected: _selectedId == t.id,
+          expanded: _expanded.contains(t.id),
+          onTap: () => setState(() => _expanded.contains(t.id) ? _expanded.remove(t.id) : _expanded.add(t.id)),
+          onOpen: () => _select(t.id),
+          onCheck: () => _complete(t),
+          onStep: (s) => _toggleStep(t, s),
+          onSkip: () => _skip(t),
+          onWorked: () => store.toggleWorked(t),
+          stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
+          boxName: MatrixBox.byId(t.matrixBox) == null ? null : data.boxName(MatrixBox.byId(t.matrixBox)!),
+          onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),
+          trailing: drag
+              ? ReorderableDragStartListener(
+                  index: i,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Icon(Icons.drag_handle, color: Color(0x99000000)),
+                  ),
+                )
+              : null,
+        ),
     );
   }
 
@@ -823,24 +778,20 @@ class HomePageState extends State<HomePage> {
     store.setOnBoard(t, true);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Put "${t.title}" on the board in ${data.stage(t.stageId)?.name}'),
-          action: SnackBarAction(label: 'Open board', onPressed: openBoard),
-        ),
-      );
+      ..showSnackBar(SnackBar(
+        content: Text('Put "${t.title}" on the board in ${data.stage(t.stageId)?.name}'),
+        action: SnackBarAction(label: 'Open board', onPressed: openBoard),
+      ));
   }
 
   void _toggleStep(Task t, TaskStep s) {
     if (store.toggleStep(t, s)) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('All steps of "${t.title}" done'),
-            action: SnackBarAction(label: 'Tick off task', onPressed: () => _complete(t)),
-          ),
-        );
+        ..showSnackBar(SnackBar(
+          content: Text('All steps of "${t.title}" done'),
+          action: SnackBarAction(label: 'Tick off task', onPressed: () => _complete(t)),
+        ));
     }
   }
 
@@ -848,23 +799,20 @@ class HomePageState extends State<HomePage> {
     if (hiddenCount == 0 && snoozedCount == 0) return null;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Wrap(
-        spacing: 8,
-        children: [
-          if (hiddenCount > 0)
-            TextButton.icon(
-              onPressed: () => store.setQuickFilter(QuickFilter.all),
-              icon: const Icon(Icons.filter_alt_off_outlined),
-              label: Text('$hiddenCount more not in "${_filter.label}". Show all'),
-            ),
-          if (snoozedCount > 0)
-            TextButton.icon(
-              onPressed: () => setState(() => _showSnoozed = !_showSnoozed),
-              icon: Icon(_showSnoozed ? Icons.visibility_off : Icons.snooze),
-              label: Text(_showSnoozed ? 'Hide snoozed' : 'Snoozed ($snoozedCount)'),
-            ),
-        ],
-      ),
+      child: Wrap(spacing: 8, children: [
+        if (hiddenCount > 0)
+          TextButton.icon(
+            onPressed: () => store.setQuickFilter(QuickFilter.all),
+            icon: const Icon(Icons.filter_alt_off_outlined),
+            label: Text('$hiddenCount more not in "${_filter.label}". Show all'),
+          ),
+        if (snoozedCount > 0)
+          TextButton.icon(
+            onPressed: () => setState(() => _showSnoozed = !_showSnoozed),
+            icon: Icon(_showSnoozed ? Icons.visibility_off : Icons.snooze),
+            label: Text(_showSnoozed ? 'Hide snoozed' : 'Snoozed ($snoozedCount)'),
+          ),
+      ]),
     );
   }
 }
@@ -942,16 +890,14 @@ class _AddBarState extends State<_AddBar> {
     if (text.isEmpty) return;
     final p = _parsed;
     final category = _forcedCategory ?? (_ignoreCategory ? null : p.categoryId);
-    widget.store.addTask(
-      _ignoreDate ? text : p.title,
-      due: _ignoreDate ? null : p.due,
-      categoryId: category,
-      source: _source ?? TaskSource.typed,
-      box: p.box,
-      board: p.board,
-      gantt: p.gantt,
-      star: p.star,
-    );
+    widget.store.addTask(_ignoreDate ? text : p.title,
+        due: _ignoreDate ? null : p.due,
+        categoryId: category,
+        source: _source ?? TaskSource.typed,
+        box: p.box,
+        board: p.board,
+        gantt: p.gantt,
+        star: p.star);
     _source = null;
     _input.clear();
     _ignoreDate = _ignoreCategory = false;
@@ -989,93 +935,79 @@ class _AddBarState extends State<_AddBar> {
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 6,
-                  children: [
-                    // Item 64: the "!" words that were picked up.
-                    if (p?.box case final b?)
-                      Chip(
-                        avatar: const Icon(Icons.grid_view, size: 18),
-                        label: Text('Box: ${data.boxName(b)}'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    if (p?.board == true)
-                      const Chip(
-                        avatar: Icon(Icons.view_kanban_outlined, size: 18),
-                        label: Text('On the board'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    if (p?.star == true)
-                      const Chip(
-                        avatar: Icon(Icons.star, size: 18),
-                        label: Text('Starred'),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    if (due != null)
-                      InputChip(
-                        avatar: const Icon(Icons.event, size: 18),
-                        label: Text('Due ${dateTimeFmt.format(due)}'),
-                        tooltip: 'Picked from what you typed. Tap ✕ to keep the words instead.',
-                        onDeleted: () => setState(() => _ignoreDate = true),
-                      ),
-                    if (showCategoryChip)
-                      InputChip(
-                        avatar: Icon(
-                          _forcedCategory != null
-                              ? Icons.label
-                              : p?.source == CategorySource.learned
-                              ? Icons.auto_awesome
-                              : Icons.label_outline,
-                          size: 18,
-                        ),
-                        label: Text(category.name),
-                        tooltip: switch (p?.source) {
-                          _ when _forcedCategory != null => 'Category for this task. Tap to change.',
-                          CategorySource.learned => 'Guessed from similar tasks. Tap to change, ✕ to drop.',
-                          CategorySource.keyword => 'Matched a keyword in Settings. Tap to change, ✕ to drop.',
-                          _ => 'From the #tag you typed. Tap to change, ✕ to drop.',
-                        },
-                        onPressed: _pickCategory,
-                        onDeleted: () => setState(() {
-                          _forcedCategory = null;
-                          _ignoreCategory = true;
-                        }),
-                      ),
-                  ],
-                ),
-              ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    focusNode: _focus,
-                    textCapitalization: TextCapitalization.sentences,
-                    // Not a strict single-line field, so a pasted list keeps its line breaks
-                    // (and is offered as several tasks); Enter still adds the task.
-                    minLines: 1,
-                    maxLines: 3,
-                    keyboardType: TextInputType.text,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      hintText: 'Add a task… (e.g. "Call bank tomorrow 5pm #home")',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _add(),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(spacing: 6, children: [
+                // Item 64: the "!" words that were picked up.
+                if (p?.box case final b?)
+                  Chip(
+                      avatar: const Icon(Icons.grid_view, size: 18),
+                      label: Text('Box: ${data.boxName(b)}'),
+                      visualDensity: VisualDensity.compact),
+                if (p?.board == true)
+                  const Chip(
+                      avatar: Icon(Icons.view_kanban_outlined, size: 18),
+                      label: Text('On the board'),
+                      visualDensity: VisualDensity.compact),
+                if (p?.star == true)
+                  const Chip(
+                      avatar: Icon(Icons.star, size: 18), label: Text('Starred'), visualDensity: VisualDensity.compact),
+                if (due != null)
+                  InputChip(
+                    avatar: const Icon(Icons.event, size: 18),
+                    label: Text('Due ${dateTimeFmt.format(due)}'),
+                    tooltip: 'Picked from what you typed. Tap ✕ to keep the words instead.',
+                    onDeleted: () => setState(() => _ignoreDate = true),
                   ),
-                ),
-                IconButton.filled(onPressed: _add, icon: const Icon(Icons.add)),
-              ],
+                if (showCategoryChip)
+                  InputChip(
+                    avatar: Icon(
+                        _forcedCategory != null
+                            ? Icons.label
+                            : p?.source == CategorySource.learned
+                                ? Icons.auto_awesome
+                                : Icons.label_outline,
+                        size: 18),
+                    label: Text(category.name),
+                    tooltip: switch (p?.source) {
+                      _ when _forcedCategory != null => 'Category for this task. Tap to change.',
+                      CategorySource.learned => 'Guessed from similar tasks. Tap to change, ✕ to drop.',
+                      CategorySource.keyword => 'Matched a keyword in Settings. Tap to change, ✕ to drop.',
+                      _ => 'From the #tag you typed. Tap to change, ✕ to drop.',
+                    },
+                    onPressed: _pickCategory,
+                    onDeleted: () => setState(() {
+                      _forcedCategory = null;
+                      _ignoreCategory = true;
+                    }),
+                  ),
+              ]),
             ),
-          ],
-        ),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                focusNode: _focus,
+                textCapitalization: TextCapitalization.sentences,
+                // Not a strict single-line field, so a pasted list keeps its line breaks
+                // (and is offered as several tasks); Enter still adds the task.
+                minLines: 1,
+                maxLines: 3,
+                keyboardType: TextInputType.text,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  hintText: 'Add a task… (e.g. "Call bank tomorrow 5pm #home")',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _add(),
+              ),
+            ),
+            IconButton.filled(onPressed: _add, icon: const Icon(Icons.add)),
+          ]),
+        ]),
       ),
     );
   }
@@ -1090,12 +1022,12 @@ class _SwipeBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    alignment: alignment,
-    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-    child: Icon(icon, color: Colors.white),
-  );
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        alignment: alignment,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+        child: Icon(icon, color: Colors.white),
+      );
 }
 
 Future<void> exportCsv(BuildContext context, AppStore store) async {
@@ -1175,17 +1107,14 @@ class _PaneDivider extends StatelessWidget {
           onDoubleTap: onReset,
           child: SizedBox(
             width: width,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VerticalDivider(width: 1, color: scheme.outlineVariant),
-                Container(
-                  width: 6,
-                  height: 40,
-                  decoration: BoxDecoration(color: scheme.outline, borderRadius: BorderRadius.circular(3)),
-                ),
-              ],
-            ),
+            child: Stack(alignment: Alignment.center, children: [
+              VerticalDivider(width: 1, color: scheme.outlineVariant),
+              Container(
+                width: 6,
+                height: 40,
+                decoration: BoxDecoration(color: scheme.outline, borderRadius: BorderRadius.circular(3)),
+              ),
+            ]),
           ),
         ),
       ),
