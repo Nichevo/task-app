@@ -12,7 +12,7 @@ import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/worked_week.dart';
-import 'gantt_page.dart' show editStepPlan;
+import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -1040,6 +1040,15 @@ class _TaskPageState extends State<TaskPage> {
           },
         ),
       if (task.gantt) ...[
+        if (bar != null)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: const Text('Show on the Gantt chart'),
+            subtitle: const Text('Zoomed in on this task and its steps'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => GanttPage(store: widget.store, focusTaskId: task.id))),
+          ),
         ListTile(
           contentPadding: const EdgeInsets.only(left: 72, right: 16),
           title: const Text('Starts'),

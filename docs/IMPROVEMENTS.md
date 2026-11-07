@@ -948,3 +948,13 @@ Planned in November 2026: a Gantt chart and the things around it. Built in four 
 - The statistics chart widget (added and done per day for 4 weeks, open-count line; item 77) already
   existed as "Added vs done"; its picker name is now "Stats chart: added vs done" so it is easier to find.
 
+## 84. Focus the Gantt chart on what you're looking at ☑ (version 1.10.1)
+
+The chart opened on today at Week zoom, so tasks far from today could be off screen.
+- **Fit** button in the top bar: picks a day width so everything the filter shows fits the screen
+  (Day/Week/Month go blank while fitted; picking one goes back to it, keeping the same middle day).
+- Choosing a category in the filter zooms to its tasks; tapping a category heading does too.
+- Long-press a task's name (or the target button beside it when unfolded) to zoom to that task and
+  its steps.
+- Task page: "Show on the Gantt chart" opens the chart zoomed on that task.
+- Opening the chart: on today as before, unless nothing is near today; then it fits everything.

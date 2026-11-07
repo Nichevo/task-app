@@ -12,12 +12,15 @@ import 'task_page.dart';
 /// Item 72: the Gantt chart. Only tasks put on it show, as bars from start to expected end with
 /// the due date as a flag, grouped by category, with arrows for "comes after".
 class GanttPage extends StatefulWidget {
-  const GanttPage({super.key, required this.store, this.initialCategory});
+  const GanttPage({super.key, required this.store, this.initialCategory, this.focusTaskId});
 
   final AppStore store;
 
   /// Opens on one category (null = all, '' = no category).
   final String? initialCategory;
+
+  /// Item 84: opens zoomed in on this task and its steps (from the task page).
+  final String? focusTaskId;
 
   @override
   State<GanttPage> createState() => _GanttPageState();
@@ -51,18 +54,20 @@ Color ganttColour(AppData data, String? categoryId) {
 }
 
 class _Row {
-  _Row.group(this.label, this.colour, this.groupBar)
+  _Row.group(this.label, this.colour, this.groupBar, this.members)
       : task = null,
         step = null,
         height = 30;
   _Row.task(Task this.task)
       : label = task.title,
+        members = const [],
         colour = null,
         groupBar = null,
         step = null,
         height = 44;
   _Row.step(Task this.task, TaskStep this.step)
       : label = step.title,
+        members = const [],
         colour = null,
         groupBar = null,
         height = 28;
@@ -70,6 +75,7 @@ class _Row {
   final String label;
   final Color? colour;
   final (DateTime, DateTime)? groupBar;
+  final List<Task> members;
   final Task? task;
   final TaskStep? step;
   final double height;
@@ -89,11 +95,73 @@ class _GanttPageState extends State<GanttPage> {
   bool _dragEnd = false;
 
   final _hScroll = ScrollController();
-  bool _scrolledToToday = false;
+  bool _opened = false;
+
+  // Item 84: a day width picked to fit some bars on screen (null = the zoom's own), how wide the
+  // dates area is, and its first day.
+  double? _fitW;
+  double _viewW = 0;
+  DateTime? _first;
 
   AppStore get store => widget.store;
   AppData get data => store.data;
-  double get _dayW => _zoom.dayWidth;
+  double get _dayW => _fitW ?? _zoom.dayWidth;
+
+  @override
+  void initState() {
+    super.initState();
+    final id = widget.focusTaskId;
+    if (id != null) {
+      _expanded.add(id);
+      if (data.archived.any((t) => t.id == id)) _showTicked = true;
+    }
+  }
+
+  /// The bars of [tasks], with the steps of the ones opened out (or all their steps).
+  List<GanttBar> _barsOf(Iterable<Task> tasks, {bool steps = false}) => [
+        for (final t in tasks) ...[
+          ?barFor(t, data),
+          if (steps || _expanded.contains(t.id))
+            for (final s in t.steps) ?stepBar(t, s, data),
+        ],
+      ];
+
+  /// Item 84: zoom and scroll so [bars] fill the width of the chart, with a day spare each side.
+  void _focusOn(Iterable<GanttBar> bars) {
+    if (bars.isEmpty || _viewW <= 0) return;
+    var a = bars.first.start, b = bars.first.end;
+    for (final x in bars) {
+      if (x.start.isBefore(a)) a = x.start;
+      if (x.end.isAfter(b)) b = x.end;
+      final due = x.due;
+      if (due != null && due.isAfter(b)) b = due;
+    }
+    a = addDays(a, -1);
+    b = addDays(b, 1);
+    final span = daysBetween(a, b) + 1;
+    setState(() => _fitW = (_viewW / span).clamp(3.0, 56.0));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final first = _first;
+      if (first == null || !_hScroll.hasClients) return;
+      // Centred when it is short enough to leave room either side.
+      final x = daysBetween(first, a) * _dayW - max(0.0, (_viewW - span * _dayW) / 2);
+      _hScroll.jumpTo(x.clamp(0.0, _hScroll.position.maxScrollExtent));
+    });
+  }
+
+  /// Back to a set zoom, keeping the same day in the middle.
+  void _setZoom(GanttZoom z) {
+    final mid = _hScroll.hasClients ? (_hScroll.offset + _viewW / 2) / _dayW : null;
+    setState(() {
+      _zoom = z;
+      _fitW = null;
+    });
+    if (mid == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hScroll.hasClients) return;
+      _hScroll.jumpTo((mid * _dayW - _viewW / 2).clamp(0.0, _hScroll.position.maxScrollExtent));
+    });
+  }
 
   @override
   void dispose() {
@@ -177,7 +245,8 @@ class _GanttPageState extends State<GanttPage> {
           ? null
           : (bars.map((b) => b.start).reduce((a, b) => a.isBefore(b) ? a : b),
               bars.map((b) => b.end).reduce((a, b) => a.isAfter(b) ? a : b));
-      out.add(_Row.group(data.category(id)?.name ?? 'No category', ganttColour(data, id), span));
+      out.add(_Row.group(data.category(id)?.name ?? 'No category', ganttColour(data, id), span,
+          [for (final t in list) if (barFor(t, data) != null) t]));
       for (final t in list) {
         if (barFor(t, data) == null) continue;
         out.add(_Row.task(t));
@@ -205,13 +274,22 @@ class _GanttPageState extends State<GanttPage> {
           appBar: AppBar(
             title: const Text('Gantt chart'),
             actions: [
+              IconButton(
+                tooltip: 'Fit what is shown',
+                icon: const Icon(Icons.fit_screen_outlined),
+                isSelected: _fitW != null,
+                onPressed: dated.isEmpty ? null : () => _focusOn(_barsOf(dated)),
+              ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: SegmentedButton<GanttZoom>(
                   showSelectedIcon: false,
+                  emptySelectionAllowed: true,
                   segments: [for (final z in GanttZoom.values) ButtonSegment(value: z, label: Text(z.label))],
-                  selected: {_zoom},
-                  onSelectionChanged: (s) => setState(() => _zoom = s.first),
+                  selected: _fitW == null ? {_zoom} : {},
+                  onSelectionChanged: (s) {
+                    if (s.isNotEmpty) _setZoom(s.first);
+                  },
                 ),
               ),
             ],
@@ -305,7 +383,11 @@ class _GanttPageState extends State<GanttPage> {
             for (final c in data.categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
             const DropdownMenuItem(value: '', child: Text('No category')),
           ],
-          onChanged: (v) => setState(() => _category = v),
+          onChanged: (v) {
+            setState(() => _category = v);
+            // Item 84: zoom to the category picked.
+            _focusOn(_barsOf([for (final t in _tasks(DateTime.now())) if (barFor(t, data) != null) t]));
+          },
         ),
         FilterChip(
           label: const Text('Show ticked'),
@@ -321,13 +403,13 @@ class _GanttPageState extends State<GanttPage> {
   }
 
   Widget _chart(List<Task> tasks, DateTime now) {
-    final scheme = Theme.of(context).colorScheme;
     final bars = [
       for (final t in tasks) ?barFor(t, data),
       for (final t in tasks)
         for (final s in t.steps) ?stepBar(t, s, data),
     ];
     final (first, last) = chartRange(bars, now);
+    _first = first;
     final days = daysBetween(first, last) + 1;
     final width = days * _dayW;
     final rows = _rows(tasks);
@@ -335,14 +417,35 @@ class _GanttPageState extends State<GanttPage> {
     final nameW = narrow ? 120.0 : 220.0;
     double xOf(DateTime d) => daysBetween(first, d) * _dayW;
 
-    if (!_scrolledToToday) {
-      _scrolledToToday = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_hScroll.hasClients) {
-          _hScroll.jumpTo(max(0, min(xOf(addDays(now, -2)), _hScroll.position.maxScrollExtent)));
-        }
-      });
+    return LayoutBuilder(builder: (context, box) {
+      _viewW = max(0.0, box.maxWidth - nameW - 1);
+      if (!_opened && _viewW > 0) {
+        _opened = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openAt(tasks, bars, now));
+      }
+      return _chartBody(tasks, rows, first, days, width, nameW, narrow, now, xOf);
+    });
+  }
+
+  /// Item 84: where the chart opens. On the task it was opened for; else on today, unless nothing
+  /// on the chart is near today, then zoomed to fit everything.
+  void _openAt(List<Task> tasks, List<GanttBar> bars, DateTime now) {
+    if (!mounted) return;
+    final id = widget.focusTaskId;
+    final focus = id == null ? null : tasks.where((t) => t.id == id).firstOrNull;
+    if (focus != null) return _focusOn(_barsOf([focus], steps: true));
+    final from = addDays(dayOf(now), -2), to = addDays(from, (_viewW / _dayW).floor());
+    final nearToday = bars.any((b) => !b.start.isAfter(to) && !b.end.isBefore(from));
+    if (!nearToday && bars.isNotEmpty) return _focusOn(bars);
+    final first = _first;
+    if (first != null && _hScroll.hasClients) {
+      _hScroll.jumpTo((daysBetween(first, from) * _dayW).clamp(0.0, _hScroll.position.maxScrollExtent));
     }
+  }
+
+  Widget _chartBody(List<Task> tasks, List<_Row> rows, DateTime first, int days, double width, double nameW,
+      bool narrow, DateTime now, double Function(DateTime) xOf) {
+    final scheme = Theme.of(context).colorScheme;
 
     // Where each task's bar sits, for the arrows.
     final rowTop = <String, double>{};
@@ -446,7 +549,7 @@ class _GanttPageState extends State<GanttPage> {
                     borderRadius: today ? BorderRadius.circular(6) : null,
                   ),
                   child: Text(
-                    showDay ? '${DateFormat('E').format(d).substring(0, 1)} ${d.day}' : (d.day % 7 == 1 ? '${d.day}' : ''),
+                    showDay ? '${DateFormat('E').format(d).substring(0, 1)} ${d.day}' : (d.day % 7 == 1 && _dayW >= 10 ? '${d.day}' : ''),
                     style: small?.copyWith(color: today ? scheme.onPrimary : null),
                     overflow: TextOverflow.clip,
                     maxLines: 1,
@@ -462,15 +565,22 @@ class _GanttPageState extends State<GanttPage> {
   Widget _nameCell(_Row r, bool narrow) {
     final theme = Theme.of(context);
     if (r.task == null) {
-      return Container(
-        height: r.height,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+      // Item 84: tap a category to zoom to its tasks.
+      return Material(
         color: theme.colorScheme.surfaceContainerLow,
-        child: Row(children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: r.colour, borderRadius: BorderRadius.circular(3))),
-          const SizedBox(width: 8),
-          Expanded(child: Text(r.label, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
-        ]),
+        child: InkWell(
+          onTap: r.members.isEmpty ? null : () => _focusOn(_barsOf(r.members)),
+          child: Container(
+            height: r.height,
+            padding: const EdgeInsets.only(left: 12, right: 8),
+            child: Row(children: [
+              Container(width: 10, height: 10, decoration: BoxDecoration(color: r.colour, borderRadius: BorderRadius.circular(3))),
+              const SizedBox(width: 8),
+              Expanded(child: Text(r.label, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+              Icon(Icons.fit_screen_outlined, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            ]),
+          ),
+        ),
       );
     }
     final t = r.task!;
@@ -507,8 +617,14 @@ class _GanttPageState extends State<GanttPage> {
                 : t.milestone
                     ? 'Milestone · ${fmt.format(bar.start)}'
                     : '${fmt.format(bar.start)} to ${fmt.format(bar.end)}';
+    void focus() {
+      setState(() => _expanded.add(t.id));
+      _focusOn(_barsOf([t], steps: true));
+    }
+
     return InkWell(
       onTap: () => _open(t),
+      onLongPress: focus,
       child: Container(
         height: r.height,
         color: clash ? theme.colorScheme.errorContainer.withValues(alpha: 0.35) : null,
@@ -530,6 +646,13 @@ class _GanttPageState extends State<GanttPage> {
                       color: clash || bar.late ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant)),
             ]),
           ),
+          if (!narrow)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Zoom to this task',
+              icon: const Icon(Icons.center_focus_strong_outlined, size: 18),
+              onPressed: focus,
+            ),
           if (t.steps.isNotEmpty)
             IconButton(
               visualDensity: VisualDensity.compact,
