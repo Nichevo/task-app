@@ -11,6 +11,7 @@ import '../task_list.dart';
 import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
+import '../widgets/step_links.dart';
 import '../widgets/worked_week.dart';
 import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
@@ -79,15 +80,17 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   Future<void> _stepMenu(TaskStep s) async {
-    final linked = data.task(s.taskId);
+    final linked = s.taskId == null ? null : anyTask(data, s.taskId!);
     final choice = await showDialog<String>(
       context: context,
       builder: (c) => SimpleDialog(
         title: Text(s.title),
         children: [
-          if (linked != null)
-            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"'))
-          else if (!archived) ...[
+          if (linked != null) ...[
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
+            if (!archived)
+              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'unlink'), child: const Text('Unlink from that task')),
+          ] else if (!archived) ...[
             if (s.carried != null)
               SimpleDialogOption(onPressed: () => Navigator.pop(c, 'carried'), child: const Text('Show what it carries')),
             SimpleDialogOption(
@@ -105,6 +108,13 @@ class _TaskPageState extends State<TaskPage> {
                     ? 'Start, days of work and progress (Gantt chart)'
                     : 'Change its start, days of work or progress'),
               ),
+            if (task.steps.length > 1)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, 'after'),
+                child: Text(s.afterIds.isEmpty ? 'Comes after another step…' : 'Change what it comes after'),
+              ),
+            if (s.carried == null && s.taskId == null)
+              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'link'), child: const Text('Link to an existing task…')),
             if (s.carried == null)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'task'),
@@ -127,6 +137,12 @@ class _TaskPageState extends State<TaskPage> {
     switch (choice) {
       case 'open':
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: widget.store, task: linked!)));
+      case 'unlink':
+        setState(() => widget.store.unlinkStep(task, s));
+      case 'after':
+        if (await editStepsBefore(context, widget.store, task, s) && mounted) setState(() {});
+      case 'link':
+        if (await linkStepToTask(context, widget.store, task, s) && mounted) setState(() {});
       case 'task':
         final t = widget.store.stepToTask(task, s);
         setState(() {});
@@ -649,6 +665,7 @@ class _TaskPageState extends State<TaskPage> {
                         decoration: s.done ? TextDecoration.lineThrough : null,
                         color: s.done ? Theme.of(context).disabledColor : null)),
                 subtitle: s.taskId == null &&
+                        s.afterIds.isEmpty &&
                         !task.boardSteps.contains(s) &&
                         s.dueAt == null &&
                         s.note.isEmpty &&
@@ -658,7 +675,8 @@ class _TaskPageState extends State<TaskPage> {
                         if (s.carried != null) 'Was a task: ${carriedSummary(s, data, short: true).join(', ')}',
                         if (s.dueAt != null)
                           'Due ${dateTimeFmt.format(s.dueAt!)}${s.remindBefore != null && s.remindBefore! > 0 ? ' (${remindOptions[s.remindBefore] ?? '${s.remindBefore} min before'})' : ''}',
-                        if (s.taskId != null) 'Task: ${data.task(s.taskId)?.title ?? '(deleted)'}',
+                        ?stepAfterLabel(task, s),
+                        ?stepLinkLabel(s, data),
                         if (task.boardSteps.contains(s)) 'Board: ${data.stage(s.stageId)?.name ?? '?'}',
                         if (s.note.isNotEmpty) s.note,
                       ].join(' · ')),

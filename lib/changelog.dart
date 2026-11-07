@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.2', 'November 2026', [
+    'Steps can come after other steps. Tap a step and choose "Comes after another step", or in Edit all steps tap the arrow beside it, or tick several and use "Chain in order". When a step moves later, the steps after it move later too, by just enough (not when Settings, Gantt chart says never). A step that starts too early is shown in red.',
+    'On the Gantt chart, open out a task\'s steps to see arrows between them.',
+    'Link a step to a task you already have: tap the step and choose "Link to an existing task", or use the link button in Edit all steps. Ticking that task off ticks the step. Unlink it from the same place.',
+  ]),
   Release('1.10.1', 'November 2026', [
     'Gantt chart: the new Fit button (next to Day, Week, Month) zooms so everything shown fits on the screen. Pick a category from the list, or tap a category\'s heading, and it zooms to just those tasks.',
     'Zoom to one task: long-press its name on the chart (or tap the target button next to it when unfolded). Its steps open out and it fills the width.',

@@ -1506,6 +1506,7 @@ class AppStore extends ChangeNotifier {
 
   void removeStep(Task t, TaskStep s) {
     t.steps.remove(s);
+    tidyStepLinks(t);
     changed(task: t);
   }
 
@@ -1669,6 +1670,7 @@ class AppStore extends ChangeNotifier {
   void setStepDue(Task t, TaskStep s, DateTime? due, {int? remindBefore}) {
     s.dueAt = due;
     s.remindBefore = due == null ? null : remindBefore;
+    keepStepOrder(t);
     changed(task: t);
   }
 
@@ -1677,6 +1679,37 @@ class AppStore extends ChangeNotifier {
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
     s.progress = progress == null || progress <= 0 ? null : progress.clamp(0, 100);
+    keepStepOrder(t);
+    changed(task: t);
+  }
+
+  /// Item 85: moves steps that come after others later where they would start too early, unless
+  /// Settings, Gantt chart, "When a task moves later" says never. Returns how many moved.
+  int keepStepOrder(Task t) => data.ganttPush == GanttPush.never ? 0 : pushSteps(t, data);
+
+  /// Item 85: sets which steps [s] comes after (others of the same task), then keeps the order.
+  int setStepAfter(Task t, TaskStep s, Iterable<String> ids) {
+    s.afterIds
+      ..clear()
+      ..addAll(ids.where((id) => id != s.id));
+    final moved = keepStepOrder(t);
+    changed(task: t);
+    return moved;
+  }
+
+  /// Item 85: links [s] to a task that already exists, so ticking that task off ticks the step.
+  /// Linked to one that is already ticked off, the step is ticked now.
+  void linkStep(Task t, TaskStep s, Task other) {
+    s.taskId = other.id;
+    if (other.closedAt != null && !s.done) {
+      s.done = true;
+      _stepTicked(t, s);
+    }
+    changed(task: t);
+  }
+
+  void unlinkStep(Task t, TaskStep s) {
+    s.taskId = null;
     changed(task: t);
   }
 

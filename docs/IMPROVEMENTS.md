@@ -958,3 +958,17 @@ The chart opened on today at Week zoom, so tasks far from today could be off scr
   its steps.
 - Task page: "Show on the Gantt chart" opens the chart zoomed on that task.
 - Opening the chart: on today as before, unless nothing is near today; then it fits everything.
+
+## 85. Link steps ☑ (version 1.10.2)
+
+- **Steps come after steps** (same task): `TaskStep.afterIds` (JSON `after`). Set from the step
+  menu on the task page ("Comes after another step…"), the arrow button / chip in Edit all steps,
+  or "Chain in order" on ticked steps (each comes after the one above it). Loops can't be picked.
+  When a step's dates change, `pushSteps` moves the ones after it later by just enough (next
+  working day when the task skips weekends), start and due together, never earlier; off when
+  Settings "When a task moves later" is Never (then the step shows red: "Starts before … ends").
+  Gantt chart draws arrows between the steps of an opened-out task. More menu: "Clear what they
+  come after".
+- **Link a step to an existing task**: step menu "Link to an existing task…" / "Unlink", and the
+  link button / chip in Edit all steps (open, link to a different task, unlink, or make a new
+  linked task). Ticking the task off ticks the step; linking to an already ticked task ticks it.

@@ -584,10 +584,12 @@ class TaskStep {
       this.startAt,
       this.takesDays,
       this.progress,
+      List<String>? afterIds,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
       // ignore: prefer_initializing_formals
       : _done = done,
+        afterIds = afterIds ?? [],
         moves = moves ?? [],
         extra = extra ?? {};
 
@@ -597,7 +599,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'progress',
+    'start', 'takes', 'progress', 'after',
   };
 
   final String id;
@@ -652,6 +654,10 @@ class TaskStep {
   /// Item 72: how far along it is, 0 to 100, set by hand; ticked counts as 100.
   int? progress;
 
+  /// Item 85: the ids of other steps of the same task that this one comes after. Moving one of
+  /// those later moves this one later too (see pushSteps).
+  final List<String> afterIds;
+
   /// Done share for the chart: 1 when ticked, else [progress].
   double get share => done ? 1 : (progress ?? 0).clamp(0, 100) / 100;
 
@@ -688,6 +694,7 @@ class TaskStep {
         if (startAt != null) 'start': startAt!.toIso8601String(),
         if (takesDays != null) 'takes': takesDays,
         if (progress != null) 'progress': progress,
+        if (afterIds.isNotEmpty) 'after': afterIds,
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -706,6 +713,7 @@ class TaskStep {
         startAt: DateTime.tryParse(j['start'] as String? ?? ''),
         takesDays: (j['takes'] as num?)?.toInt(),
         progress: (j['progress'] as num?)?.toInt(),
+        afterIds: [for (final id in j['after'] as List? ?? []) id as String],
         extra: unknownFields(j, _known),
       );
 }
