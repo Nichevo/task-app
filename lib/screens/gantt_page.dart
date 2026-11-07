@@ -449,10 +449,25 @@ class _GanttPageState extends State<GanttPage> {
 
     // Where each task's bar sits, for the arrows.
     final rowTop = <String, double>{};
+    // Item 85: arrows between steps that come after other steps, for opened-out tasks.
+    final stepTop = <String, (Task, TaskStep, double)>{};
     var y = 0.0;
     for (final r in rows) {
       if (r.task != null && r.step == null) rowTop[r.task!.id] = y;
+      if (r.step != null) stepTop[r.step!.id] = (r.task!, r.step!, y + r.height / 2);
       y += r.height;
+    }
+    final stepArrows = <(double, double, double, double, bool)>[];
+    for (final (t, s, y2) in stepTop.values) {
+      final b = stepBar(t, s, data);
+      if (b == null) continue;
+      final clash = stepClashes(t, s, data);
+      for (final p in stepsBefore(t, s)) {
+        final from = stepTop[p.id];
+        final a = stepBar(t, p, data);
+        if (from == null || a == null) continue;
+        stepArrows.add((xOf(a.end) + _dayW, from.$3, xOf(b.start), y2, clash));
+      }
     }
     final bodyHeight = y;
     final links = linksAmong(tasks, data);
@@ -497,6 +512,8 @@ class _GanttPageState extends State<GanttPage> {
                             dragId: _dragId, dragDays: (_dragDx / _dayW).round(), dragEnd: _dragEnd),
                       ),
                     ),
+                    if (stepArrows.isNotEmpty)
+                      Positioned.fill(child: CustomPaint(painter: _StepLinkPainter(stepArrows, scheme))),
                     Column(children: [for (final r in rows) _barCell(r, xOf, width, now)]),
                   ]),
                 ),
@@ -1073,6 +1090,51 @@ class _LinkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LinkPainter old) => true;
+}
+
+/// Item 85: arrows from the end of one step's bar to the start of a step that comes after it,
+/// red when that one starts too early.
+class _StepLinkPainter extends CustomPainter {
+  _StepLinkPainter(this.arrows, this.scheme);
+
+  final List<(double, double, double, double, bool)> arrows;
+  final ColorScheme scheme;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final (x1, y1, x2, y2, clash) in arrows) {
+      final paint = Paint()
+        ..color = clash ? scheme.error : scheme.outline
+        ..strokeWidth = clash ? 1.6 : 1.2
+        ..style = PaintingStyle.stroke;
+      final path = Path()..moveTo(x1, y1);
+      if (x2 - 8 >= x1 + 4) {
+        path
+          ..lineTo(x1 + 5, y1)
+          ..lineTo(x1 + 5, y2)
+          ..lineTo(x2 - 2, y2);
+      } else {
+        final drop = y1 + (y2 > y1 ? 12 : -12);
+        path
+          ..lineTo(x1 + 6, y1)
+          ..lineTo(x1 + 6, drop)
+          ..lineTo(x2 - 8, drop)
+          ..lineTo(x2 - 8, y2)
+          ..lineTo(x2 - 2, y2);
+      }
+      canvas.drawPath(path, paint);
+      canvas.drawPath(
+          Path()
+            ..moveTo(x2, y2)
+            ..lineTo(x2 - 6, y2 - 3.5)
+            ..lineTo(x2 - 6, y2 + 3.5)
+            ..close(),
+          Paint()..color = paint.color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StepLinkPainter old) => true;
 }
 
 /// Item 72: the right-hand panel's Timeline view: the next 14 days of the Gantt chart, narrow.

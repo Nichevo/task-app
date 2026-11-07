@@ -7,7 +7,9 @@ import '../gantt.dart';
 import '../models.dart';
 import '../step_bulk.dart';
 import '../store.dart';
+import '../widgets/step_links.dart';
 import 'settings_page.dart' show askText, remindOptions;
+import 'task_page.dart' show TaskPage;
 
 /// Item 80: "Edit all steps". Every step of one task on one screen: tap a field to change that
 /// step, or tick several and change them all at once (start, due, days of work, move dates,
@@ -47,8 +49,90 @@ class _StepsEditPageState extends State<StepsEditPage> {
     if (_undo.length > 50) _undo.removeAt(0);
     change();
     _sel.retainWhere((id) => task.steps.any((s) => s.id == id));
+    tidyStepLinks(task);
+    // Item 85: steps that come after others follow when those move later.
+    final moved = store.keepStepOrder(task);
     store.changed(task: task);
     setState(() {});
+    if (moved > 0) showMovedSnack(context, moved);
+  }
+
+  // --- Item 85: linking ---
+
+  Future<void> _setAfter(TaskStep s) async {
+    final ids = await pickStepsBefore(context, task, s);
+    if (ids == null || !mounted) return;
+    _do(() => s.afterIds
+      ..clear()
+      ..addAll(ids));
+  }
+
+  void _chain(List<TaskStep> steps) {
+    if (steps.length < 2) return _snack('Tick two or more steps to put them in a chain');
+    _do(() => chainSteps(steps));
+    _snack('Each ticked step now comes after the one above it');
+  }
+
+  Future<void> _linkMenu(TaskStep s) async {
+    final linked = s.taskId == null ? null : anyTask(data, s.taskId!);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(title: Text(s.title), children: [
+        if (linked != null) ...[
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to a different task…')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'unlink'), child: const Text('Unlink')),
+        ] else ...[
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to an existing task…')),
+          if (s.carried == null)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'new'), child: const Text('Make into a new linked task')),
+        ],
+      ]),
+    );
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case 'open':
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: linked!)));
+      case 'other':
+        _undo.add(snapshotSteps(task));
+        if (!await linkStepToTask(context, store, task, s)) _undo.removeLast();
+      case 'unlink':
+        _do(() => s.taskId = null);
+      case 'new':
+        final t = store.stepToTask(task, s);
+        _snack('Added "${t.title}" as a task, linked to this step');
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// "After ..." and the linked task, for under a step's name.
+  String? _linksText(TaskStep s) {
+    final parts = [?stepAfterLabel(task, s), ?stepLinkLabel(s, data)];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
+  /// Small buttons beside a step's name: what it comes after, and its linked task.
+  List<Widget> _linkButtons(TaskStep s) {
+    final scheme = Theme.of(context).colorScheme;
+    return [
+      if (task.steps.length > 1)
+        IconButton(
+          tooltip: s.afterIds.isEmpty ? 'Comes after…' : stepAfterLabel(task, s),
+          visualDensity: VisualDensity.compact,
+          iconSize: 18,
+          color: s.afterIds.isEmpty ? scheme.onSurfaceVariant : scheme.primary,
+          icon: const Icon(Icons.subdirectory_arrow_right),
+          onPressed: () => _setAfter(s),
+        ),
+      IconButton(
+        tooltip: s.taskId == null ? 'Link to a task…' : stepLinkLabel(s, data),
+        visualDensity: VisualDensity.compact,
+        iconSize: 18,
+        color: s.taskId == null ? scheme.onSurfaceVariant : scheme.primary,
+        icon: Icon(s.taskId == null ? Icons.add_link : Icons.link),
+        onPressed: () => _linkMenu(s),
+      ),
+    ];
   }
 
   void _undoLast() {
@@ -248,6 +332,8 @@ class _StepsEditPageState extends State<StepsEditPage> {
       context: context,
       builder: (c) => SimpleDialog(title: Text(_who(steps)), children: [
         SimpleDialogOption(onPressed: () => Navigator.pop(c, 'clear'), child: const Text('Clear their dates and days of work')),
+        if (steps.any((s) => s.afterIds.isNotEmpty))
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'unchain'), child: const Text('Clear what they come after')),
         if (steps.any((s) => !s.done))
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'tick'), child: const Text('Tick them')),
         if (steps.any((s) => s.done))
@@ -265,6 +351,8 @@ class _StepsEditPageState extends State<StepsEditPage> {
               ..takesDays = null
               ..dueAt = null
               ..remindBefore = null;
+          case 'unchain':
+            s.afterIds.clear();
           case 'tick' when !s.done:
           case 'untick' when s.done:
             store.toggleStep(task, s);
@@ -559,6 +647,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
         (Icons.timelapse, 'Days of work', () => _setDays(sel)),
         (Icons.swap_horiz, 'Move dates ±', () => _moveDates(sel)),
         (Icons.segment, 'Line up in order', () => _lineUp(sel)),
+        (Icons.subdirectory_arrow_right, 'Chain in order', () => _chain(sel)),
         if (_showStage) (Icons.view_kanban_outlined, 'Stage', () => _setStage(sel)),
         (Icons.notifications_outlined, 'Reminder', () => _setReminder(sel)),
         if (_showPlan) (Icons.percent, 'Progress', () => _setProgress(sel)),
@@ -625,6 +714,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
                       ListTile(
                         leading: Icon(icon),
                         title: Text(label == 'More' ? 'Clear, tick or remove…' : label),
+                        subtitle: label == 'Chain in order' ? const Text('Each comes after the one above it') : null,
                         onTap: () => Navigator.pop(c, onTap),
                       ),
                   ]),
@@ -697,6 +787,10 @@ class _StepsEditPageState extends State<StepsEditPage> {
 
   String? _lateText(TaskStep s) {
     if (s.done) return s.doneAt == null ? null : 'Ticked ${_day.format(s.doneAt!)}';
+    if (stepClashes(task, s, data)) {
+      final before = stepsBefore(task, s);
+      return 'Starts before ${before.length == 1 ? '"${before.single.title}"' : 'what it comes after'} ends';
+    }
     final bar = stepBar(task, s, data);
     if (bar != null && bar.late && bar.task.id == task.id && !stepIsPoint(s)) {
       return 'Ends ${_day.format(bar.end)}, ${bar.lateDays} day${bar.lateDays == 1 ? '' : 's'} after due';
@@ -748,9 +842,12 @@ class _StepsEditPageState extends State<StepsEditPage> {
                         fontWeight: isLate ? FontWeight.w500 : null,
                       ),
                 ),
+              if (_linksText(s) case final links?)
+                Text(links, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
             ]),
           ),
         ),
+        ..._linkButtons(s),
         const SizedBox(width: 8),
         ..._columns(
           [
@@ -916,6 +1013,11 @@ class _StepsEditPageState extends State<StepsEditPage> {
                       s.takesDays == null, () => _setDays([s])),
                 chip(Icons.event, s.dueAt == null ? 'Due' : _dayTime.format(s.dueAt!), s.dueAt == null, () => _setDue([s])),
                 if (s.dueAt != null) chip(Icons.notifications_outlined, _remindText(s), false, () => _setReminder([s])),
+                if (task.steps.length > 1)
+                  chip(Icons.subdirectory_arrow_right, stepAfterLabel(task, s) ?? 'After…', s.afterIds.isEmpty,
+                      () => _setAfter(s)),
+                chip(s.taskId == null ? Icons.add_link : Icons.link, stepLinkLabel(s, data) ?? 'Link task', s.taskId == null,
+                    () => _linkMenu(s)),
               ]),
             ]),
           ),

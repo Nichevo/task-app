@@ -128,6 +128,97 @@ GanttBar? stepBar(Task t, TaskStep s, AppData data) {
   return null;
 }
 
+// --- Steps that come after other steps (item 85) ---
+
+TaskStep? stepById(Task t, String id) => t.steps.where((s) => s.id == id).firstOrNull;
+
+/// The steps [s] comes after that still exist.
+List<TaskStep> stepsBefore(Task t, TaskStep s) => [for (final id in s.afterIds) ?stepById(t, id)];
+
+/// The day after the latest end of the steps [s] comes after (a ticked one ends the day it was
+/// ticked). Null when it comes after nothing with dates.
+DateTime? stepEarliestStart(Task t, TaskStep s, AppData data) {
+  DateTime? latest;
+  for (final p in stepsBefore(t, s)) {
+    final end = p.done && p.doneAt != null ? dayOf(p.doneAt!) : stepBar(t, p, data)?.end;
+    if (end == null) continue;
+    if (latest == null || end.isAfter(latest)) latest = end;
+  }
+  return latest == null ? null : addDays(latest, 1);
+}
+
+/// Whether open step [s] is planned to start before what it comes after ends.
+bool stepClashes(Task t, TaskStep s, AppData data) {
+  if (s.done) return false;
+  final bar = stepBar(t, s, data);
+  final earliest = stepEarliestStart(t, s, data);
+  return bar != null && earliest != null && bar.start.isBefore(earliest);
+}
+
+/// Would making [s] come after [other] make a loop (or is it itself)?
+bool stepWouldLoop(Task t, TaskStep s, TaskStep other) {
+  final seen = <String>{};
+  var wave = [other.id];
+  while (wave.isNotEmpty) {
+    final next = <String>[];
+    for (final id in wave) {
+      if (id == s.id) return true;
+      if (!seen.add(id)) continue;
+      next.addAll(stepById(t, id)?.afterIds ?? const []);
+    }
+    wave = next;
+  }
+  return false;
+}
+
+/// Moves each open step that would start before what it comes after ends later, by just enough
+/// (to the next working day when the task skips weekends), along whole chains. Its start and due
+/// date move together. Never moves anything earlier. Returns how many steps moved.
+int pushSteps(Task t, AppData data) {
+  final weekends = weekendsFor(t, data);
+  final moved = <String>{};
+  for (var pass = 0; pass < t.steps.length * 3 + 1; pass++) {
+    var any = false;
+    for (final s in t.steps) {
+      if (s.done || s.afterIds.isEmpty) continue;
+      final bar = stepBar(t, s, data);
+      final after = stepEarliestStart(t, s, data);
+      if (bar == null || after == null || !bar.start.isBefore(after)) continue;
+      final days = max(1, daysBetween(bar.start, workEnd(after, 1, weekends: weekends)));
+      if (s.startAt != null) s.startAt = addDays(s.startAt!, days);
+      if (s.dueAt != null) s.dueAt = addDays(s.dueAt!, days);
+      moved.add(s.id);
+      any = true;
+    }
+    if (!any) break;
+  }
+  return moved.length;
+}
+
+/// Makes each of [steps] (in that order) come after the one before it.
+void chainSteps(List<TaskStep> steps) {
+  for (var i = 1; i < steps.length; i++) {
+    steps[i].afterIds
+      ..clear()
+      ..add(steps[i - 1].id);
+  }
+}
+
+/// Drops "comes after" ids that point at steps no longer in [t].
+void tidyStepLinks(Task t) {
+  final ids = {for (final s in t.steps) s.id};
+  for (final s in t.steps) {
+    s.afterIds.removeWhere((id) => !ids.contains(id));
+  }
+}
+
+/// "After Design", "After 2 steps", or null.
+String? stepAfterLabel(Task t, TaskStep s) {
+  final before = stepsBefore(t, s);
+  if (before.isEmpty) return null;
+  return before.length == 1 ? 'After "${before.single.title}"' : 'After ${before.length} steps';
+}
+
 /// Whether a step shows as a diamond (a date only) rather than a bar.
 bool stepIsPoint(TaskStep s) => s.startAt == null && s.takesDays == null;
 
