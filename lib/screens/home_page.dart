@@ -260,7 +260,8 @@ class HomePageState extends State<HomePage> {
   /// The chip in use; All when the chip row is switched off.
   QuickFilter get _filter => data.showQuickFilters ? store.quickFilter : QuickFilter.all;
 
-  /// Drag to reorder works in any sort (a drop switches to hand-made order), but not while a
+  /// Drag to reorder works in any sort (Settings, When you drag a task, says whether a drop
+  /// keeps the sort or switches to hand-made order), but not while a
   /// search hides most of the list.
   bool get _canDrag => _query.isEmpty;
 
@@ -311,6 +312,30 @@ class HomePageState extends State<HomePage> {
     final wasSort = data.sort;
     final before = [...data.active];
     final oldCategory = moved.task.categoryId;
+    if (wasSort != ListSort.manual && _keepsSort(category != oldCategory)) {
+      // Keep the sort: the drop only changes the category, and the list re-sorts.
+      if (category == oldCategory) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
+              content: Text('Sorted by ${sortLabels[wasSort]!.toLowerCase()}, so it stays where the sort puts it. '
+                  'To move it by hand, change Settings, When you drag a task.')));
+        setState(() {});
+        return;
+      }
+      moved.task
+        ..categoryId = category
+        ..touch();
+      store.changed(task: moved.task);
+      final name = data.categories.where((c) => c.id == category).firstOrNull?.name ?? 'No category';
+      _snack('Moved to $name. Still sorted by ${sortLabels[wasSort]!.toLowerCase()}.', () {
+        moved.task
+          ..categoryId = oldCategory
+          ..touch();
+        store.changed(task: moved.task);
+      });
+      return;
+    }
     // Dragging in a sorted list keeps the order on screen as the hand-made order, with the move.
     if (wasSort != ListSort.manual) data.sort = ListSort.manual;
     store.reorderVisible([for (final r in next.whereType<_TaskRow>()) r.task], moved: moved.task, categoryId: category);
@@ -334,6 +359,13 @@ class HomePageState extends State<HomePage> {
             content: Text('Starred tasks stay at the top. Turn off "Starred at the top" in Settings to move them freely.')));
     }
   }
+
+  /// Whether a drop in a sorted list keeps the sort (Settings, When you drag a task).
+  bool _keepsSort(bool newCategory) => switch (data.dragInSort) {
+        DragInSort.keepSort => true,
+        DragInSort.handMade => false,
+        DragInSort.auto => newCategory,
+      };
 
   /// Whether "Starred at the top" will put [moved] back above or below where it was dropped.
   bool _snapsBack(List<_Row> next, _TaskRow moved) {

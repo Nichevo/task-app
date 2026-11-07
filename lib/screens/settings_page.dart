@@ -600,7 +600,7 @@ class _SettingsPageState extends State<SettingsPage> {
               title: const Text('Sort by'),
               subtitle: Text(data.sort == ListSort.manual
                   ? 'Drag the handle on a task to move it.'
-                  : 'Dragging a task switches to hand-made order, keeping the order you see.'),
+                  : 'Drag the handle on a task to move it. What a drag does is set just below.'),
               trailing: DropdownButton<ListSort>(
                 value: data.sort,
                 items: [
@@ -609,6 +609,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (v) => _set(() => data.sort = v ?? ListSort.due),
               ),
             ),
+            if (data.sort != ListSort.manual)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('When you drag a task'),
+                subtitle: Text(switch (data.dragInSort) {
+                  DragInSort.auto => 'Into another category: it changes category and the list stays sorted. '
+                      'Within its category: switches to hand-made order, keeping the order you see.',
+                  DragInSort.handMade => 'Every drag switches to hand-made order, keeping the order you see.',
+                  DragInSort.keepSort => 'The list always stays sorted. Dragging into another category '
+                      'changes the category; the task then goes where the sort puts it.',
+                }),
+                trailing: DropdownButton<DragInSort>(
+                  value: data.dragInSort,
+                  items: const [
+                    DropdownMenuItem(value: DragInSort.auto, child: Text('Keep sort across categories')),
+                    DropdownMenuItem(value: DragInSort.handMade, child: Text('Switch to hand-made')),
+                    DropdownMenuItem(value: DragInSort.keepSort, child: Text('Always keep sort')),
+                  ],
+                  onChanged: (v) => _set(() => data.dragInSort = v ?? DragInSort.auto),
+                ),
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Starred at the top'),

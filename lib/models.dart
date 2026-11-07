@@ -1110,6 +1110,12 @@ class SkipRecord {
 /// How the main list is ordered (Settings, List).
 enum ListSort { manual, due, age, newest, categoryDue }
 
+/// What a drag does in a sorted list (Settings, List, "When you drag a task").
+/// [auto]: a drop into another category keeps the sort and re-sorts; a drop inside the same
+/// category switches to hand-made order. [handMade]: every drop switches to hand-made order.
+/// [keepSort]: the sort always stays; a drag only changes the category.
+enum DragInSort { auto, handMade, keepSort }
+
 /// What happens to the category of a task added without one.
 enum AutoCategory { off, suggest, apply }
 
@@ -1310,6 +1316,7 @@ class AppData {
     this.weeklyAt = 18 * 60,
     this.sort = ListSort.due,
     this.starredTop = true,
+    this.dragInSort = DragInSort.auto,
     this.showQuickFilters = true,
     List<KanbanStage>? stages,
     this.kanbanDone = KanbanDone.ask,
@@ -1396,6 +1403,9 @@ class AppData {
 
   /// Starred tasks go first, whatever the sort.
   bool starredTop;
+
+  /// What dragging a task does when the list is sorted.
+  DragInSort dragInSort;
 
   /// Show the row of quick filter chips (All, Today, Next 7 days, ...) above the list.
   bool showQuickFilters;
@@ -1545,7 +1555,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -1570,6 +1580,7 @@ class AppData {
         'weeklyAt': weeklyAt,
         'sort': sort.name,
         'starredTop': starredTop,
+        if (dragInSort != DragInSort.auto) 'dragInSort': dragInSort.name,
         'showQuickFilters': showQuickFilters,
         'stages': stages.map((s) => s.toJson()).toList(),
         'kanbanDone': kanbanDone.name,
@@ -1643,6 +1654,7 @@ class AppData {
         weeklyAt: (j['weeklyAt'] as num?)?.toInt() ?? 18 * 60,
         sort: _enum(ListSort.values, j['sort'], ListSort.manual),
         starredTop: j['starredTop'] as bool? ?? true,
+        dragInSort: _enum(DragInSort.values, j['dragInSort'], DragInSort.auto),
         showQuickFilters: j['showQuickFilters'] as bool? ?? true,
         stages: j['stages'] is List
             ? [for (final s in j['stages'] as List) KanbanStage.fromJson(s as Map<String, dynamic>)]
@@ -1835,6 +1847,7 @@ AppData mergeData(AppData a, AppData b) {
     weeklyAt: settingsFrom.weeklyAt,
     sort: settingsFrom.sort,
     starredTop: settingsFrom.starredTop,
+    dragInSort: settingsFrom.dragInSort,
     showQuickFilters: settingsFrom.showQuickFilters,
     stages: settingsFrom.stages,
     kanbanDone: settingsFrom.kanbanDone,

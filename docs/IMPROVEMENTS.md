@@ -972,3 +972,15 @@ The chart opened on today at Week zoom, so tasks far from today could be off scr
 - **Link a step to an existing task**: step menu "Link to an existing task…" / "Unlink", and the
   link button / chip in Edit all steps (open, link to a different task, unlink, or make a new
   linked task). Ticking the task off ticks the step; linking to an already ticked task ticks it.
+
+## 87. Keep the sort when dragging ☑ (version 1.10.3)
+
+Dragging a task in a sorted list always switched to hand-made order, but often the drag is only
+to change the task's category.
+- New setting `AppData.dragInSort` (Settings, List, "When you drag a task"; shown when the sort
+  isn't hand-made): **Keep sort across categories** (default) — a drop into another category only
+  changes the category and the list re-sorts; a drop within the same category switches to
+  hand-made order as before. **Switch to hand-made** — the old behaviour for every drop.
+  **Always keep sort** — drops never change the order; inside the same category the task stays
+  where the sort puts it (a note says so).
+- A keep-sort drop shows "Moved to <category>. Still sorted by …" with Undo (puts the category back).

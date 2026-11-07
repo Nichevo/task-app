@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.3', 'November 2026', [
+    'Dragging a task into another category no longer switches the list to hand-made order: the task changes category and the list stays sorted (by due date, say), so it lands where the sort puts it. Undo puts the category back.',
+    'Settings, List, "When you drag a task" lets you choose: keep the sort across categories (the new default), always switch to hand-made order (as before), or always keep the sort.',
+  ]),
   Release('1.10.2', 'November 2026', [
     'Steps can come after other steps. Tap a step and choose "Comes after another step", or in Edit all steps tap the arrow beside it, or tick several and use "Chain in order". When a step moves later, the steps after it move later too, by just enough (not when Settings, Gantt chart says never). A step that starts too early is shown in red.',
     'On the Gantt chart, open out a task\'s steps to see arrows between them.',
