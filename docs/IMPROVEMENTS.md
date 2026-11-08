@@ -984,3 +984,10 @@ to change the task's category.
   **Always keep sort** — drops never change the order; inside the same category the task stays
   where the sort puts it (a note says so).
 - A keep-sort drop shows "Moved to <category>. Still sorted by …" with Undo (puts the category back).
+
+## 89. Decide without a date ☑ (version 1.10.5)
+
+Dragging a task into Decide on the Matrix (or picking Decide on its page) forced a due date:
+cancelling the date picker cancelled the move. The picker's cancel button now reads "No date"
+and puts the task in Decide without a due date (closing the picker any other way does the
+same, since Flutter's date picker reports them alike).

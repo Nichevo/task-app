@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.5', 'November 2026', [
+    'Matrix: moving a task into Decide no longer makes you pick a date. The date picker now has a "No date" button that puts the task in Decide without one. Pick a date as before if you want one.',
+  ]),
   Release('1.10.3', 'November 2026', [
     'Dragging a task into another category no longer switches the list to hand-made order: the task changes category and the list stays sorted (by due date, say), so it lands where the sort puts it. Undo puts the category back.',
     'Settings, List, "When you drag a task" lets you choose: keep the sort across categories (the new default), always switch to hand-made order (as before), or always keep the sort.',
