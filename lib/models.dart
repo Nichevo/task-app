@@ -64,6 +64,7 @@ class Task {
     this.planStart,
     this.planDue,
     Set<String>? worked,
+    this.workedAt,
     this.habit = false,
     this.habitGoal = HabitGoal.daily,
     this.habitTimes = 3,
@@ -92,7 +93,7 @@ class Task {
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
-    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked',
+    'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses',
   };
 
@@ -216,6 +217,10 @@ class Task {
   /// Item 75: the days (yyyy-MM-dd) it was worked on, ticked without finishing it.
   final Set<String> worked;
 
+  /// Item 88: when today's day was last ticked as worked, so an undated task's colour can start
+  /// again from that moment (the days in [worked] only hold the date).
+  DateTime? workedAt;
+
   /// Item 78: a habit is never ticked off; its days are ticked instead (in [worked]).
   bool habit;
   HabitGoal habitGoal;
@@ -271,13 +276,28 @@ class Task {
 
   bool isSnoozed(DateTime now) => snoozedUntil != null && snoozedUntil!.isAfter(now);
 
-  /// When the colour clock started: creation, or later if it was waiting or snoozed.
+  /// When the colour clock started: creation, or later if it was waiting or snoozed. Item 88: a
+  /// task with no due date starts again (green) from the last time it was ticked as worked.
   DateTime colourStart(DateTime now) {
     var start = createdAt;
-    for (final d in [readyAt, snoozedUntil]) {
+    for (final d in [readyAt, snoozedUntil, if (dueAt == null) lastWorked(now)]) {
       if (d != null && d.isAfter(start) && !d.isAfter(now)) start = d;
     }
     return start;
+  }
+
+  /// Item 88: the latest moment up to [now] it was ticked as worked: [workedAt] when that day is
+  /// still ticked, otherwise the start of the latest ticked day (ticked from a widget, say).
+  DateTime? lastWorked(DateTime now) {
+    final today = dayKey(now);
+    String? latest;
+    for (final k in worked) {
+      if (k.compareTo(today) <= 0 && (latest == null || k.compareTo(latest) > 0)) latest = k;
+    }
+    if (latest == null) return null;
+    final at = workedAt;
+    if (at != null && dayKey(at) == latest && !at.isAfter(now)) return at;
+    return DateTime.tryParse(latest);
   }
 
   /// A fresh copy for the next time a repeating task comes round.
@@ -369,6 +389,7 @@ class Task {
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
         if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
+        if (workedAt != null) 'wAt': workedAt!.toIso8601String(),
         if (habit) 'habit': true,
         if (habit) 'hGoal': habitGoal.name,
         if (habit && habitGoal == HabitGoal.perWeek) 'hTimes': habitTimes,
@@ -423,6 +444,7 @@ class Task {
         planStart: _date(j['planStart']),
         planDue: _date(j['planDue']),
         worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
+        workedAt: _date(j['wAt']),
         habit: j['habit'] as bool? ?? false,
         habitGoal: HabitGoal.values.where((g) => g.name == j['hGoal']).firstOrNull ?? HabitGoal.daily,
         habitTimes: (j['hTimes'] as num?)?.toInt() ?? 3,

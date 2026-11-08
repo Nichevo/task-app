@@ -984,3 +984,15 @@ to change the task's category.
   **Always keep sort** — drops never change the order; inside the same category the task stays
   where the sort puts it (a note says so).
 - A keep-sort drop shows "Moved to <category>. Still sorted by …" with Undo (puts the category back).
+
+## 88. Worked on today resets an undated task's colour ☑ (version 1.10.4)
+
+Ticking a task as worked on today didn't change its colour, so an undated task you keep chipping
+away at still went red.
+- `Task.colourStart` now also takes the last worked tick when the task has no due date
+  (`Task.lastWorked`): the exact moment from the new `workedAt` field (JSON `wAt`, set by
+  `setWorked` when today is ticked, cleared when today is unticked), or the start of the latest
+  ticked day when only the date is known (an earlier day, or a tick from a widget).
+- Unticking today falls back to the previous ticked day, or creation.
+- Tasks with a due date keep their colour as before. Widgets get the new start through the
+  existing `start` value, so they follow without Kotlin or Swift changes.
