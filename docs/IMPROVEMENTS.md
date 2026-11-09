@@ -996,3 +996,10 @@ away at still went red.
 - Unticking today falls back to the previous ticked day, or creation.
 - Tasks with a due date keep their colour as before. Widgets get the new start through the
   existing `start` value, so they follow without Kotlin or Swift changes.
+
+## 89. Decide without a date ☑ (version 1.10.5)
+
+Dragging a task into Decide on the Matrix (or picking Decide on its page) forced a due date:
+cancelling the date picker cancelled the move. The picker's cancel button now reads "No date"
+and puts the task in Decide without a due date (closing the picker any other way does the
+same, since Flutter's date picker reports them alike).

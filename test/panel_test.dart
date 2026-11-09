@@ -5,6 +5,15 @@ import 'package:task_blocks/models.dart';
 import 'package:task_blocks/screens/side_panel.dart';
 import 'package:task_blocks/store.dart';
 
+/// [by] from now, but never past midnight, so a run late in the evening still has the task
+/// under Today instead of Tomorrow.
+DateTime laterToday(Duration by) {
+  final now = DateTime.now();
+  final later = now.add(by);
+  final midnight = DateTime(now.year, now.month, now.day + 1);
+  return later.isBefore(midnight) ? later : now.add(midnight.difference(now) ~/ 2);
+}
+
 void main() {
   void wide(WidgetTester tester) {
     tester.view.physicalSize = const Size(900 * 3, 800 * 3);
@@ -50,7 +59,7 @@ void main() {
       (tester) async {
     wide(tester);
     final s = AppStore();
-    s.addTask('Fix the leak', due: DateTime.now().add(const Duration(hours: 1)), box: MatrixBox.doNow);
+    s.addTask('Fix the leak', due: laterToday(const Duration(hours: 1)), box: MatrixBox.doNow);
     await tester.pumpWidget(TaskApp(store: s));
     await tester.pumpAndSettle();
     expect(find.descendant(of: find.byType(SidePanel), matching: find.text('Today')), findsOneWidget);
@@ -95,9 +104,7 @@ void main() {
   testWidgets('opening a task from the agenda comes back to it', (tester) async {
     wide(tester);
     final s = AppStore();
-    // Later today, whatever the time the test runs (now + 2 h is tomorrow late in the evening).
-    final now = DateTime.now();
-    s.addTask('Ring the vet', due: DateTime(now.year, now.month, now.day, 23, 59));
+    s.addTask('Ring the vet', due: laterToday(const Duration(hours: 2)));
     await tester.pumpWidget(TaskApp(store: s));
     await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: find.byType(SidePanel), matching: find.text('Ring the vet')));

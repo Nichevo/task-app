@@ -8,7 +8,8 @@ import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
 
-/// Item 60: puts [t] in [box], doing what that box asks for first: Decide wants a due date,
+/// Item 60: puts [t] in [box], doing what that box asks for first: Decide offers a due date
+/// (item 89: "No date" puts it there without one),
 /// Delegate an optional "Waiting on" note, and Delete offers to tick it off or delete it.
 /// Returns false when the user cancelled.
 Future<bool> putInBox(BuildContext context, AppStore store, Task t, MatrixBox box) async {
@@ -19,12 +20,12 @@ Future<bool> putInBox(BuildContext context, AppStore store, Task t, MatrixBox bo
       final day = await showDatePicker(
         context: context,
         helpText: 'When will you do it?',
+        cancelText: 'No date',
         initialDate: now.add(const Duration(days: 1)),
         firstDate: DateTime(now.year - 1),
         lastDate: DateTime(now.year + 5),
       );
-      if (day == null) return false;
-      t.dueAt = DateTime(day.year, day.month, day.day, 9);
+      if (day != null) t.dueAt = DateTime(day.year, day.month, day.day, 9);
     case MatrixBox.delegate:
       if (!context.mounted) return false;
       final who = await askText(context, 'Waiting on (optional)', initial: t.waitingOn ?? '');

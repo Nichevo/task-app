@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.5', 'November 2026', [
+    'Matrix: moving a task into Decide no longer makes you pick a date. The date picker now has a "No date" button that puts the task in Decide without one. Pick a date as before if you want one.',
+  ]),
   Release('1.10.4', 'November 2026', [
     'A task with no due date goes back to green when you tick "Worked on it today" (on an opened block, the task page\'s week of dots or the Worked today widget), then ages again from there at the usual colour speed. Unticking today puts the old colour back. Tasks with a due date are unchanged.',
   ]),
