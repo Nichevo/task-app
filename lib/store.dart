@@ -1118,10 +1118,16 @@ class AppStore extends ChangeNotifier {
   // --- Days worked (item 75) ---
 
   /// Ticks (or unticks) [day] as a day [t] was worked on. It doesn't finish the task or move it on
-  /// the board.
+  /// the board. Item 88: ticking today restarts an undated task's colour from green.
   void setWorked(Task t, DateTime day, bool on) {
     final key = dayKey(day);
     if (on ? !t.worked.add(key) : !t.worked.remove(key)) return;
+    final now = DateTime.now();
+    if (on && key == dayKey(now)) {
+      t.workedAt = now;
+    } else if (!on && t.workedAt != null && dayKey(t.workedAt!) == key) {
+      t.workedAt = null;
+    }
     changed(task: t);
   }
 
