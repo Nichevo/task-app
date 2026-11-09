@@ -95,7 +95,9 @@ void main() {
   testWidgets('opening a task from the agenda comes back to it', (tester) async {
     wide(tester);
     final s = AppStore();
-    s.addTask('Ring the vet', due: DateTime.now().add(const Duration(hours: 2)));
+    // Later today, whatever the time the test runs (now + 2 h is tomorrow late in the evening).
+    final now = DateTime.now();
+    s.addTask('Ring the vet', due: DateTime(now.year, now.month, now.day, 23, 59));
     await tester.pumpWidget(TaskApp(store: s));
     await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: find.byType(SidePanel), matching: find.text('Ring the vet')));

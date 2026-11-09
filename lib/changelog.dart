@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.4', 'November 2026', [
+    'A task with no due date goes back to green when you tick "Worked on it today" (on an opened block, the task page\'s week of dots or the Worked today widget), then ages again from there at the usual colour speed. Unticking today puts the old colour back. Tasks with a due date are unchanged.',
+  ]),
   Release('1.10.3', 'November 2026', [
     'Dragging a task into another category no longer switches the list to hand-made order: the task changes category and the list stays sorted (by due date, say), so it lands where the sort puts it. Undo puts the category back.',
     'Settings, List, "When you drag a task" lets you choose: keep the sort across categories (the new default), always switch to hand-made order (as before), or always keep the sort.',
