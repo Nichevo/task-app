@@ -1,3 +1,4 @@
+import EventKit
 import Foundation
 import SwiftUI
 
@@ -249,6 +250,14 @@ enum W {
     return due.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
   }
 
+  /** A shorter [dueLabel] for narrow lists: "16:00" today, "Fri" this week, else "11 Nov". */
+  static func shortDue(_ due: Date, now: Date) -> String {
+    let today = Calendar.current.startOfDay(for: now)
+    if due >= today && due < today.addingTimeInterval(day) { return due.formatted(date: .omitted, time: .shortened) }
+    if due >= today && due < today.addingTimeInterval(7 * day) { return due.formatted(.dateTime.weekday(.abbreviated)) }
+    return due.formatted(.dateTime.day().month(.abbreviated))
+  }
+
   /** "overdue 2 days", "due Fri", or "". */
   static func dueText(_ due: Date?, now: Date) -> String {
     guard let due else { return "" }
@@ -295,4 +304,19 @@ enum W {
 
   static let amber = Color(red: 0.90, green: 0.32, blue: 0.0)
   static let blue = Color(red: 0.10, green: 0.37, blue: 0.71)
+}
+
+// MARK: - Calendar events (item 90)
+
+/** Today's events from the iPad's calendars, once the app has been allowed to read them. */
+enum Events {
+  static func today(_ now: Date) -> [(id: String, title: String, start: Date, allDay: Bool)] {
+    guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+    let store = EKEventStore()
+    let start = Calendar.current.startOfDay(for: now)
+    let pred = store.predicateForEvents(withStart: start, end: start.addingTimeInterval(W.day), calendars: nil)
+    return store.events(matching: pred).map {
+      ($0.eventIdentifier ?? UUID().uuidString, $0.title ?? "(No title)", $0.startDate, $0.isAllDay)
+    }
+  }
 }

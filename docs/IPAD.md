@@ -19,12 +19,16 @@ calendar view, CSV, Dropbox sync, pasted lists), plus:
   buttons (press and hold the notification).
 - **Location**: the "Record where tasks are added and done" switch in Settings.
 
-Android-only for now (they are written in Kotlin): calendar event suggestions, photo of a list, Share to
-Task Blocks and voice add. Each could be added for iPad later (a share extension, EventKit for the calendar).
+- **Upcoming events** (from 1.10.6): tasks suggested from the iPad's calendars. The first time, the iPad
+  asks to read your calendars. Settings → Calendar events picks which calendars and how far ahead.
+- **Photo of a list** (from 1.10.6): take or pick a photo of a written list and each line becomes a task,
+  read on the iPad itself.
+
+Android-only for now: email tasks from Gmail, Share to Task Blocks, voice add and place reminders.
 
 ## Home screen widgets (item 79)
 
-From version 1.9.5 the iPad has ten home screen widgets. Press and hold the home screen, tap **Edit** →
+From version 1.9.5 the iPad has home screen widgets (eleven from 1.10.6), plus Lock Screen widgets. Press and hold the home screen, tap **Edit** →
 **Add Widget**, search for Task Blocks, and pick one. Open Task Blocks once first so it shares your tasks.
 
 | Widget | Shows | Sizes |
@@ -38,7 +42,14 @@ From version 1.9.5 the iPad has ten home screen widgets. Press and hold the home
 | Matrix | The four boxes and the top tasks in each | Medium, Large, Extra large |
 | Worked today | A category's tasks, or your habits, with this week's worked days | Medium, Large |
 | Chart | Added vs done for 4 weeks, or the Gantt burn-down | Medium, Large |
-| Quick add | Opens the app ready to type a task | Small |
+| Quick add | Opens the app ready to type a task | Small, Lock Screen |
+| Calendar (1.10.6) | This month on the left; overdue, the next two weeks and today's events on the right | Large, Extra large |
+| At a glance (1.10.6) | Open and overdue counts and what's due next | Lock Screen only |
+
+**Lock Screen:** press and hold the Lock Screen, tap **Customize** → **Lock Screen**, tap the widget area
+and pick Task Blocks. On iPad the widget area sits beside or under the clock depending on the
+orientation. Calendar events show on the Calendar widget once you have let the app read your calendars
+(Upcoming events in the menu asks).
 
 Press and hold a widget, then **Edit Widget**, to choose its category, stage, task or "Show" option.
 Tapping a task opens it in the app; tapping a widget's title opens that page. From 1.9.6 the widgets

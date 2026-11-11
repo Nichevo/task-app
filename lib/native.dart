@@ -40,16 +40,17 @@ class CalendarEvent {
   final String? location;
 }
 
-/// The small amount of Android-only plumbing written in Kotlin (see MainActivity.kt):
-/// shared text, the phone's calendars and on-device text recognition.
+/// The small amount of native plumbing: shared text (Android only, MainActivity.kt), and the
+/// phone's calendars and on-device text recognition (Android, and iPad from 1.10.6 in
+/// ios/Runner/AppDelegate.swift).
 class Native {
   static const _channel = MethodChannel('app.taskblocks/native');
 
-  static bool get supported => !kIsWeb && Platform.isAndroid;
+  static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  /// Text shared to the app since it last asked, if any.
+  /// Text shared to the app since it last asked, if any (Android only for now).
   static Future<SharedText?> takeShared() async {
-    if (!supported) return null;
+    if (kIsWeb || !Platform.isAndroid) return null;
     try {
       final m = await _channel.invokeMapMethod<String, dynamic>('takeShared');
       final text = m?['text'] as String?;

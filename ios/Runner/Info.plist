@@ -4,6 +4,10 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Suggest tasks from your upcoming calendar events, and show today's events on the Calendar widget.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Suggest tasks from your upcoming calendar events, and show today's events on the Calendar widget.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
