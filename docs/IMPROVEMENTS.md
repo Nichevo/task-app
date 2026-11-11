@@ -1003,3 +1003,21 @@ Dragging a task into Decide on the Matrix (or picking Decide on its page) forced
 cancelling the date picker cancelled the move. The picker's cancel button now reads "No date"
 and puts the task in Decide without a due date (closing the picker any other way does the
 same, since Flutter's date picker reports them alike).
+
+## 90. Bring the iPad up to date ☑ (version 1.10.6)
+
+The owner asked for all the recent updates and extra widgets on the iPad version. Everything
+since the iPad widgets (items 80-89) is shared Dart code, so the iPad build already has it. What
+was still missing on iPad:
+- **Calendar widget** (Android item 83): kind `Calendar`, Large and Extra large. `MonthGrid` (now
+  shared with Mini month) on the left; on the right overdue, the next two weeks and today's events
+  (`Events.today`, EventKit, only once the app has calendar access), with tick buttons and short
+  due labels (`W.shortDue`). Redraws hourly.
+- **Lock Screen widgets**: new kind `Glance` (circular: open or overdue count; rectangular: counts
+  and next two due; inline: next due), and Quick add also as a circular Lock Screen button.
+- **Upcoming events and Photo of a list**: `Native.supported` now includes iOS. The iPad answers
+  the same `app.taskblocks/native` calls in `ios/Runner/AppDelegate.swift` (`NativeChannel`):
+  `calendarPermission`, `calendars`, `events` (EventKit) and `recognizeText` (Vision, accurate,
+  top to bottom). Shared text stays Android-only.
+- Still Android-only (asked separately): Gmail email tasks, Share to Task Blocks, voice add and
+  place reminders.

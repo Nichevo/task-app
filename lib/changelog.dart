@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.6', 'November 2026', [
+    'iPad: new Calendar widget (Large and Extra large). This month on the left, with a dot on days that have tasks due; tap a day to open it. On the right, what is coming up: overdue tasks, the next two weeks and today\'s calendar events, with a circle to tick each off.',
+    'iPad: Lock Screen widgets. "At a glance" shows how many tasks are open or overdue and what is due next; Quick add is a plus button that opens the app ready to type.',
+    'iPad: Upcoming events and Photo of a list are now in the menu, as on Android. Upcoming events reads the iPad\'s calendars (Settings, Calendar events to choose which); Photo of a list reads the writing in a photo on the iPad itself.',
+  ]),
   Release('1.10.5', 'November 2026', [
     'Matrix: moving a task into Decide no longer makes you pick a date. The date picker now has a "No date" button that puts the task in Decide without one. Pick a date as before if you want one.',
   ]),

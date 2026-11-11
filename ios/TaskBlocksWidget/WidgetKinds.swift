@@ -3,8 +3,9 @@ import Charts
 import SwiftUI
 import WidgetKit
 
-// Item 79: the iPad (and iPhone) home screen widgets. Ten kinds cover the 16 Android widgets;
-// similar ones are one kind with a "Show" choice in Edit Widget.
+// Item 79: the iPad (and iPhone) home screen widgets. Eleven kinds cover the 17 Android widgets;
+// similar ones are one kind with a "Show" choice in Edit Widget. Item 90 adds the Calendar widget
+// and Lock Screen widgets (At a glance, Quick add).
 
 // MARK: - Timeline
 
@@ -40,6 +41,9 @@ struct PlainEntry: TimelineEntry {
 }
 
 struct PlainProvider: TimelineProvider {
+  /** Also redraw every hour (the Calendar widget's list and colours), not only at midnight. */
+  var hourly = false
+
   func placeholder(in context: Context) -> PlainEntry { PlainEntry(date: Date(), snap: Snapshot()) }
 
   func getSnapshot(in context: Context, completion: @escaping (PlainEntry) -> Void) {
@@ -50,8 +54,14 @@ struct PlainProvider: TimelineProvider {
     // Redraw just after midnight, so the month and today move on.
     let snap = Snapshot.load()
     let cal = Calendar.current
-    let next = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date().addingTimeInterval(3600)
-    completion(Timeline(entries: [PlainEntry(date: Date(), snap: snap)], policy: .after(next.addingTimeInterval(60))))
+    let now = Date()
+    let next = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
+    if hourly {
+      let entries = (0..<6).map { PlainEntry(date: now.addingTimeInterval(Double($0) * 3600), snap: snap) }
+      completion(Timeline(entries: entries, policy: .atEnd))
+      return
+    }
+    completion(Timeline(entries: [PlainEntry(date: now, snap: snap)], policy: .after(next.addingTimeInterval(60))))
   }
 }
 
@@ -109,6 +119,8 @@ struct Block: View {
   let task: WTask
   let now: Date
   var compact = false
+  /** The Calendar widget's narrow list: "16:00", "Fri", "11 Nov" (item 83). */
+  var short = false
 
   var body: some View {
     Link(destination: W.open(task.id)) {
@@ -116,7 +128,7 @@ struct Block: View {
         Text((task.star ? "★ " : "") + task.title).font(compact ? .caption : .subheadline).lineLimit(1)
         Spacer(minLength: 4)
         if let due = task.due {
-          Text(W.dueLabel(due, now: now)).font(.caption2)
+          Text(short ? W.shortDue(due, now: now) : W.dueLabel(due, now: now)).font(.caption2)
             .foregroundStyle(due < now ? Color.red : Color.black.opacity(0.6))
         }
       }
@@ -136,6 +148,7 @@ struct TaskRow: View {
   let now: Date
   var compact = false
   var snooze = false
+  var short = false
 
   var body: some View {
     HStack(spacing: 6) {
@@ -147,7 +160,7 @@ struct TaskRow: View {
         }
         .buttonStyle(.plain)
       }
-      Block(snap: snap, task: task, now: now, compact: compact)
+      Block(snap: snap, task: task, now: now, compact: compact, short: short)
       if snooze {
         Button(intent: SnoozeTaskAction(id: task.id)) {
           Image(systemName: "moon.zzz").font(.caption).foregroundStyle(.secondary)
@@ -503,8 +516,25 @@ struct ChecklistWidget: Widget {
 // MARK: - 5. Mini month
 
 struct MonthView: View {
-  @Environment(\.widgetFamily) var family
   let entry: PlainEntry
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Link(destination: W.link("day")) {
+        Text(entry.date.formatted(.dateTime.month(.wide).year())).font(.headline)
+      }
+      MonthGrid(snap: entry.snap, now: entry.date)
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+}
+
+/** This month's days, Monday first, with a dot on days with tasks due. Tap a day to open it. */
+struct MonthGrid: View {
+  let snap: Snapshot
+  let now: Date
+  var big = false
 
   var body: some View {
     let cal: Calendar = {
@@ -512,17 +542,13 @@ struct MonthView: View {
       c.firstWeekday = 2
       return c
     }()
-    let now = entry.date
     let month = cal.dateInterval(of: .month, for: now)!
     let lead = (cal.component(.weekday, from: month.start) + 5) % 7
     let days = cal.range(of: .day, in: .month, for: now)?.count ?? 30
     let today = cal.component(.day, from: now)
     let cells: [Int?] = Array(repeating: nil, count: lead) + (1...days).map { Optional($0) }
     let rows = stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
-    VStack(alignment: .leading, spacing: 2) {
-      Link(destination: W.link("day")) {
-        Text(now.formatted(.dateTime.month(.wide).year())).font(.headline)
-      }
+    VStack(alignment: .leading, spacing: big ? 6 : 2) {
       HStack(spacing: 0) {
         ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, d in
           Text(d).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity)
@@ -536,22 +562,20 @@ struct MonthView: View {
           }
         }
       }
-      Spacer(minLength: 0)
     }
-    .widgetCard()
   }
 
   @ViewBuilder
   private func dayCell(_ d: Int?, cal: Calendar, month: Date, today: Int) -> some View {
     if let d, let date = cal.date(byAdding: .day, value: d - 1, to: month) {
       let key = W.key(date)
-      let due = entry.snap.dueDays[key]
+      let due = snap.dueDays[key]
       Link(destination: W.link("day", ["d": key])) {
         VStack(spacing: 1) {
-          Text("\(d)").font(.caption2.weight(d == today ? .bold : .regular))
+          Text("\(d)").font((big ? Font.subheadline : Font.caption2).weight(d == today ? .bold : .regular))
             .foregroundStyle(d == today ? W.blue : Color.primary)
           Circle().fill(due == nil ? Color.clear : due!.faded ? Color.secondary.opacity(0.5) : Color.accentColor)
-            .frame(width: 4, height: 4)
+            .frame(width: big ? 5 : 4, height: big ? 5 : 4)
         }
         .frame(maxWidth: .infinity)
       }
@@ -879,10 +903,20 @@ struct ChartWidget: Widget {
 // MARK: - 10. Quick add
 
 struct QuickAddView: View {
+  @Environment(\.widgetFamily) var family
   let entry: SnapEntry<CategoryIntent>
 
   var body: some View {
     let cat = entry.config.category?.id
+    if family == .accessoryCircular {
+      // Lock Screen (item 90).
+      ZStack {
+        AccessoryWidgetBackground()
+        Image(systemName: "plus").font(.title.bold())
+      }
+      .containerBackground(for: .widget) {}
+      .widgetURL(W.link("add", ["cat": cat]))
+    } else {
     VStack(spacing: 6) {
       Image(systemName: "plus.circle.fill").font(.system(size: 44)).foregroundStyle(.tint)
       Text("Add a task").font(.headline)
@@ -893,6 +927,7 @@ struct QuickAddView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .containerBackground(.background, for: .widget)
     .widgetURL(W.link("add", ["cat": cat]))
+    }
   }
 }
 
@@ -902,8 +937,146 @@ struct QuickAddWidget: Widget {
       QuickAddView(entry: $0)
     }
     .configurationDisplayName("Quick add")
-    .description("Opens Task Blocks ready to type a new task.")
-    .supportedFamilies([.systemSmall])
+    .description("Opens Task Blocks ready to type a new task. Also fits on the Lock Screen.")
+    .supportedFamilies([.systemSmall, .accessoryCircular])
+  }
+}
+
+// MARK: - 11. Calendar (Android: Calendar, item 83; iPad item 90)
+
+/** A line in the Calendar widget's list: a task, or one of today's calendar events. */
+struct CalItem: Identifiable {
+  let id: String
+  let title: String
+  let due: Date
+  var task: WTask? = nil
+  var allDay = false
+}
+
+/** Overdue, the next two weeks and today's events, by date, as on Android. */
+func upcoming(_ snap: Snapshot, now: Date) -> [CalItem] {
+  let end = Calendar.current.startOfDay(for: now).addingTimeInterval(14 * W.day)
+  var out: [CalItem] = snap.tasks.compactMap { t in
+    guard let due = t.due, due < end else { return nil }
+    return CalItem(id: t.id, title: t.title, due: due, task: t)
+  }
+  out += Events.today(now).map { CalItem(id: "ev:" + $0.id, title: $0.title, due: $0.start, allDay: $0.allDay) }
+  return out.sorted { $0.due < $1.due }
+}
+
+struct CalendarView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: PlainEntry
+
+  var body: some View {
+    let snap = entry.snap
+    let now = entry.date
+    let big = family == .systemExtraLarge
+    let items = upcoming(snap, now: now)
+    let rows = big ? 12 : 9
+    VStack(alignment: .leading, spacing: 6) {
+      Header(
+        title: now.formatted(.dateTime.month(.wide).year()), url: W.link("day"), add: W.link("add"))
+      HStack(alignment: .top, spacing: 12) {
+        MonthGrid(snap: snap, now: now, big: big)
+          .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 4) {
+          if !snap.hasData {
+            EmptyNote(text: openAppFirst)
+          } else if items.isEmpty {
+            EmptyNote(text: "Nothing in the next two weeks")
+          }
+          ForEach(items.prefix(rows)) { item in
+            if let t = item.task {
+              TaskRow(snap: snap, task: t, now: now, compact: true, short: true)
+            } else {
+              HStack(spacing: 6) {
+                Image(systemName: "calendar").font(.caption).foregroundStyle(.secondary).frame(width: 20)
+                Text(item.title).font(.caption).lineLimit(1)
+                Spacer(minLength: 4)
+                Text(item.allDay ? "Today" : W.shortDue(item.due, now: now)).font(.caption2).foregroundStyle(.secondary)
+              }
+              .padding(.horizontal, 8)
+              .padding(.vertical, 3)
+              .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+            }
+          }
+          if items.count > rows {
+            Text("\(items.count - rows) more").font(.caption2).foregroundStyle(.secondary)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+      }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+}
+
+struct CalendarWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "Calendar", provider: PlainProvider(hourly: true)) { CalendarView(entry: $0) }
+      .configurationDisplayName("Calendar")
+      .description("This month, and what's coming up: overdue, the next two weeks and today's events.")
+      .supportedFamilies([.systemLarge, .systemExtraLarge])
+  }
+}
+
+// MARK: - 12. At a glance, for the Lock Screen (iPad item 90)
+
+struct GlanceView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: SnapEntry<CategoryIntent>
+
+  var body: some View {
+    let snap = entry.snap
+    let now = entry.date
+    let cat = entry.config.category?.id
+    let tasks = snap.tasks.filter { cat == nil || $0.cat == cat }
+    let overdue = tasks.filter { ($0.due.map { $0 < now }) ?? false }.count
+    let next = tasks.filter { $0.due != nil && !$0.locked }.sorted { $0.due! < $1.due! }
+    Group {
+      switch family {
+      case .accessoryCircular:
+        ZStack {
+          AccessoryWidgetBackground()
+          VStack(spacing: 0) {
+            Text("\(overdue > 0 ? overdue : tasks.count)").font(.title2.bold())
+            Text(overdue > 0 ? "late" : "open").font(.caption2)
+          }
+        }
+      case .accessoryInline:
+        if let t = next.first {
+          Text("\(W.shortDue(t.due!, now: now)) \(t.title)")
+        } else {
+          Text("\(tasks.count) tasks open")
+        }
+      default:
+        VStack(alignment: .leading, spacing: 1) {
+          Text("\(tasks.count) open" + (overdue > 0 ? " · \(overdue) overdue" : "")).font(.headline)
+          if next.isEmpty {
+            Text(snap.hasData ? "Nothing with a due date" : "Open Task Blocks once").font(.caption)
+          }
+          ForEach(next.prefix(2), id: \.id) { t in
+            Text("\(W.shortDue(t.due!, now: now))  \(t.title)").font(.caption).lineLimit(1)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .containerBackground(for: .widget) {}
+    .widgetURL(W.link("home"))
+  }
+}
+
+struct GlanceWidget: Widget {
+  var body: some WidgetConfiguration {
+    AppIntentConfiguration(kind: "Glance", intent: CategoryIntent.self, provider: SnapProvider<CategoryIntent>()) {
+      GlanceView(entry: $0)
+    }
+    .configurationDisplayName("At a glance")
+    .description("For the Lock Screen: how many tasks are open or overdue, and what's due next.")
+    .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
   }
 }
 
@@ -922,5 +1095,7 @@ struct TaskBlocksWidgets: WidgetBundle {
     WorkedWidget()
     ChartWidget()
     QuickAddWidget()
+    CalendarWidget()
+    GlanceWidget()
   }
 }

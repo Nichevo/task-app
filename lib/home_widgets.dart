@@ -20,6 +20,7 @@ class HomeWidgets {
   /// Item 79: the iPad widget kinds (WidgetKit `kind` strings in ios/TaskBlocksWidget).
   static const _iosKinds = [
     'TaskList', 'Summary', 'Focus', 'Checklist', 'Month', 'Board', 'Matrix', 'Worked', 'Chart', 'QuickAdd',
+    'Calendar', 'Glance', // Item 90.
   ];
 
   static const _channel = MethodChannel('app.taskblocks/widgets');
