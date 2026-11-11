@@ -7,10 +7,11 @@ import '../models.dart';
 import '../native.dart';
 import '../stats.dart';
 import '../store.dart';
+import '../task_list.dart' show sortTasks;
 import 'archive_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
-import 'kanban_page.dart' show KanbanPage, describeSpell, moveWithRule;
+import 'kanban_page.dart' show KanbanPage, boardColumnOrder, describeSpell, moveWithRule;
 import 'matrix_page.dart';
 import 'starred_page.dart' show pickTask;
 import 'stats_page.dart';
@@ -181,7 +182,10 @@ class _MiniBoardState extends State<MiniBoard> {
     return ListView(padding: const EdgeInsets.only(bottom: 16), children: [
       for (final st in data.stages)
         Builder(builder: (context) {
-          final tasks = [for (final t in data.boardTasks) if ((data.stage(t.stageId) ?? data.stages.first).id == st.id) t];
+          final tasks = boardColumnOrder(
+              sortTasks([for (final t in data.boardTasks) if ((data.stage(t.stageId) ?? data.stages.first).id == st.id) t],
+                  data, DateTime.now()),
+              data);
           final open = _open.contains(st.id);
           return Column(children: [
             ListTile(

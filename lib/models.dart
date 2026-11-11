@@ -1343,6 +1343,7 @@ class AppData {
     List<KanbanStage>? stages,
     this.kanbanDone = KanbanDone.ask,
     this.kanbanHideFromList = false,
+    this.boardSortLikeList = false,
     this.ganttWeekends = false,
     this.ganttPush = GanttPush.ask,
     this.ganttStartOnProgress = true,
@@ -1440,6 +1441,10 @@ class AppData {
 
   /// Leave board tasks out of the main list.
   bool kanbanHideFromList;
+
+  /// Item 92: sort each board column like the main list. Off: a task moved into a column goes
+  /// to its top and the rest keep their places, so a move never reshuffles the column.
+  bool boardSortLikeList;
 
   /// Item 72: whether a task's "Takes N days" counts Saturdays and Sundays unless the task says.
   bool ganttWeekends;
@@ -1577,7 +1582,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'skips',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -1607,6 +1612,7 @@ class AppData {
         'stages': stages.map((s) => s.toJson()).toList(),
         'kanbanDone': kanbanDone.name,
         if (kanbanHideFromList) 'kanbanHideFromList': true,
+        if (boardSortLikeList) 'boardSortLikeList': true,
         if (ganttWeekends) 'ganttWeekends': true,
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
@@ -1683,6 +1689,7 @@ class AppData {
             : null,
         kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
         kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
+        boardSortLikeList: j['boardSortLikeList'] as bool? ?? false,
         ganttWeekends: j['ganttWeekends'] as bool? ?? false,
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
@@ -1874,6 +1881,7 @@ AppData mergeData(AppData a, AppData b) {
     stages: settingsFrom.stages,
     kanbanDone: settingsFrom.kanbanDone,
     kanbanHideFromList: settingsFrom.kanbanHideFromList,
+    boardSortLikeList: settingsFrom.boardSortLikeList,
     ganttWeekends: settingsFrom.ganttWeekends,
     ganttPush: settingsFrom.ganttPush,
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,

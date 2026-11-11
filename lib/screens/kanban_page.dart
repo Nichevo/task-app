@@ -142,6 +142,19 @@ Future<void> showMoveTo(BuildContext context, AppStore store, Task t, [TaskStep?
   await moveItem(context, store, d, picked, MoveHow.menu, note: text);
 }
 
+/// Item 92: the order of one board column. [tasks] come in the main list's order; unless the
+/// board is set to sort like the list, the task that came into the column last goes on top and
+/// the others keep their places, so moving a task never reshuffles a column.
+List<Task> boardColumnOrder(List<Task> tasks, AppData data) {
+  if (data.boardSortLikeList) return tasks;
+  final place = {for (final (i, t) in tasks.indexed) t.id: i};
+  final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+  return [...tasks]..sort((a, b) {
+      final c = (b.stageSince ?? epoch).compareTo(a.stageSince ?? epoch);
+      return c != 0 ? c : place[a.id]!.compareTo(place[b.id]!);
+    });
+}
+
 /// "3 days", "5 h", "20 min".
 String describeSpell(Duration d) {
   final m = d.inMinutes;
@@ -208,17 +221,23 @@ class _KanbanPageState extends State<KanbanPage> {
     super.dispose();
   }
 
-  List<Task> _tasksIn(KanbanStage s, DateTime now) {
+  /// The board tasks that pass the search or filters, in the main list's order. This order
+  /// doesn't depend on stages, so lanes and step groups stay put when a task moves.
+  List<Task> _shown(DateTime now) {
     final q = _searching ? _search.text.trim() : '';
-    final shown = data.boardTasks.where((t) =>
-        _columnOf(t) == s.id &&
-        (q.isNotEmpty
-            ? matchesSearch(t, q, store.data) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
-            : passesFilter(t, _filter, now) &&
-                (_category == null ||
-                    (_category!.isEmpty ? data.category(t.categoryId) == null : t.categoryId == _category))));
+    final shown = data.boardTasks.where((t) => q.isNotEmpty
+        ? matchesSearch(t, q, store.data) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
+        : passesFilter(t, _filter, now) &&
+            (_category == null ||
+                (_category!.isEmpty ? data.category(t.categoryId) == null : t.categoryId == _category)));
     return sortTasks(shown.toList(), data, now);
   }
+
+  /// The tasks in column [s], taken from [shown].
+  List<Task> _tasksIn(KanbanStage s, List<Task> shown) => boardColumnOrder(
+        [for (final t in shown) if (_columnOf(t) == s.id) t],
+        data,
+      );
 
   /// The column a task shows in: its stage, or the first one if that stage was removed on
   /// another device.
@@ -325,8 +344,8 @@ class _KanbanPageState extends State<KanbanPage> {
       builder: (context, _) {
         final now = DateTime.now();
         final stages = data.stages;
-        final columns = {for (final s in stages) s.id: _tasksIn(s, now)};
-        final visible = [for (final s in stages) ...columns[s.id]!];
+        final visible = _shown(now);
+        final columns = {for (final s in stages) s.id: _tasksIn(s, visible)};
         return LayoutBuilder(builder: (context, box) {
           final wide = box.maxWidth >= 600;
           final appBar = _appBar(context, wide, stages, columns);
@@ -657,8 +676,8 @@ class _KanbanPageState extends State<KanbanPage> {
             ]),
           ),
           items: (s) => [
-            for (final t in others)
-              if (_columnOf(t) == s.id) _card(t, s, now, wide: true),
+            for (final t in boardColumnOrder([for (final t in others) if (_columnOf(t) == s.id) t], data))
+              _card(t, s, now, wide: true),
           ],
         ),
     ]);
@@ -1218,6 +1237,18 @@ class KanbanSettingsPage extends StatelessWidget {
                 store.changed(settings: true);
               },
             ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Sort columns like the main list'),
+            subtitle: Text(data.boardSortLikeList
+                ? 'Each column follows the main list\'s sort, so a moved task lands wherever that puts it.'
+                : 'Off: a task you move goes to the top of its new column and the others stay where they are.'),
+            value: data.boardSortLikeList,
+            onChanged: (v) {
+              data.boardSortLikeList = v;
+              store.changed(settings: true);
+            },
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

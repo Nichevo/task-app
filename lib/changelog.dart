@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.8', 'November 2026', [
+    'Kanban board: moving a task no longer reshuffles the board. A task you move goes to the top of its new column and everything else stays where it was, so the card you just moved is easy to find.',
+    'Kanban lanes: a task\'s row stays in the same place as you move it between stages, instead of jumping up or down the board.',
+    'Prefer the old way? Settings, Kanban board, "Sort columns like the main list".',
+  ]),
   Release('1.10.7', 'November 2026', [
     'iPad: email tasks from Gmail. Settings, Email tasks, connect Google as on the phone; the sign-in page opens inside the app and closes by itself.',
     'iPad: "Add a task in Task Blocks" to Siri asks what the task is, then opens the app with it ready to save. The same "Add to Task Blocks" action is in the Shortcuts app, so you can make a Share sheet shortcut (steps in the iPad guide).',

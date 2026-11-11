@@ -1039,3 +1039,18 @@ The owner chose to bring the remaining Android-only features to iPad after item 
   started at launch so iPadOS can wake the app for a crossing, and repeats PlaceReceiver.kt's rules
   reading tasks.json (folder re-found under the current app home after updates). No battery step
   on iPad (`PlaceReminders.needsBattery`).
+
+## 92. Moving a task doesn't reshuffle the board ☑ (version 1.10.8)
+
+Feedback: every move on the Kanban board re-sorted it, so the task (and the part of the board
+being looked at) jumped away; moving one task left a stage at a time, it landed somewhere new each
+time.
+
+- Columns were sorted with the main list's sort (due date, age, ...), so a moved task landed
+  wherever that sort put it. Now each column puts the task that came in last on top and keeps the
+  others in their order (`boardColumnOrder`, by `stageSince`, ties in list order). The side panel's
+  mini board uses the same order.
+- Lanes (and the step groups at the top of a column) were ordered stage by stage, so moving a
+  task moved its whole lane. They now follow the main list's order, which doesn't depend on stage.
+- Settings, Kanban board, "Sort columns like the main list" (`AppData.boardSortLikeList`, off by
+  default) brings back the old column sort.
