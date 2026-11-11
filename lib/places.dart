@@ -58,13 +58,16 @@ class PlaceSetup {
   bool get ready => alwaysLocation && batteryUnrestricted;
 }
 
-/// Android geofencing for place reminders. The phone watches the saved places itself (also when
-/// the app is closed); on arriving or leaving, PlaceReceiver.kt reads the saved task list and
-/// shows the matching reminders.
+/// Geofencing for place reminders. The phone watches the saved places itself (also when the app
+/// is closed); on arriving or leaving, PlaceReceiver.kt (Android) or PlaceWatcher in
+/// AppDelegate.swift (iPad) reads the saved task list and shows the matching reminders.
 class PlaceReminders {
   static const _channel = MethodChannel('app.taskblocks/native');
 
-  static bool get supported => !kIsWeb && Platform.isAndroid;
+  static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  /// Android holds alerts back for apps that aren't "Unrestricted"; the iPad has no such switch.
+  static bool get needsBattery => !kIsWeb && Platform.isAndroid;
 
   /// Hands the places (and the folder holding tasks.json) to Android to watch. Returns false when
   /// Android refused, e.g. without "Allow all the time" location access.
@@ -88,7 +91,7 @@ class PlaceReminders {
     var always = false, battery = false;
     try {
       always = await Geolocator.checkPermission() == LocationPermission.always;
-      battery = await _channel.invokeMethod<bool>('batteryUnrestricted') ?? false;
+      battery = !needsBattery || (await _channel.invokeMethod<bool>('batteryUnrestricted') ?? false);
     } catch (e) {
       debugPrint('place setup: $e');
     }

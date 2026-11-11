@@ -1021,3 +1021,21 @@ was still missing on iPad:
   top to bottom). Shared text stays Android-only.
 - Still Android-only (asked separately): Gmail email tasks, Share to Task Blocks, voice add and
   place reminders.
+
+## 91. The last Android-only features on iPad ☑ (version 1.10.7)
+
+The owner chose to bring the remaining Android-only features to iPad after item 90.
+- **Gmail email tasks**: `googleSupported` includes iOS. The loopback sign-in needs the app awake,
+  so on iPad the page opens with `LaunchMode.inAppBrowserView` (Safari view, which Google allows)
+  and `closeInAppWebView()` closes it after the answer.
+- **Voice add and Share**: no Share extension, because with a free Apple ID each extension may take
+  an AltStore app slot and the widget extension already uses one. Instead an App Intent in the app
+  (`AddTaskIntent`, "Add to Task Blocks", iOS 16+) opens the app and leaves the text in
+  `SharedInbox` (UserDefaults), which `Native.takeShared` reads as on Android. App Shortcuts give
+  Siri phrases ("Add a task in Task Blocks", marked spoken = voice source); a Shortcuts "Show in
+  Share Sheet" shortcut passing Shortcut Input gives Share (steps in docs/IPAD.md).
+- **Place reminders**: `PlaceReminders.supported` includes iOS; `PlaceWatcher` in AppDelegate.swift
+  answers `setPlaces` with CLLocationManager region monitoring (up to 20, radius at least 100 m),
+  started at launch so iPadOS can wake the app for a crossing, and repeats PlaceReceiver.kt's rules
+  reading tasks.json (folder re-found under the current app home after updates). No battery step
+  on iPad (`PlaceReminders.needsBattery`).

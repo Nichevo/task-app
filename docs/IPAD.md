@@ -24,7 +24,22 @@ calendar view, CSV, Dropbox sync, pasted lists), plus:
 - **Photo of a list** (from 1.10.6): take or pick a photo of a written list and each line becomes a task,
   read on the iPad itself.
 
-Android-only for now: email tasks from Gmail, Share to Task Blocks, voice add and place reminders.
+- **Email tasks from Gmail** (from 1.10.7): Settings → Email tasks, the same Google client ID and secret as
+  on the phone. The Google sign-in page opens inside the app and closes when you're signed in.
+- **Siri** (from 1.10.7): say "Add a task in Task Blocks". Siri asks what the task is and the app opens with
+  it ready to save.
+- **Share to Task Blocks** (from 1.10.7), set up once with a shortcut: open the **Shortcuts** app, tap **+**,
+  add the action **Add to Task Blocks**, tap the blue **Task** field and choose **Shortcut Input**. Tap the
+  **(i)** (or the shortcut's name → Details) and turn on **Show in Share Sheet**, then set it to receive
+  Text and URLs. Name it "Task Blocks". From then on, Share → Task Blocks in any app opens the app with what
+  you shared, as on the phone. (A real Share extension would need another app slot with a free Apple ID in
+  AltStore, which could cost the widgets, so this uses Shortcuts instead.)
+- **Place reminders** (from 1.10.7): menu → Places. The iPad asks for location access; pick **Change to
+  Always Allow** (or Settings → Task Blocks → Location → Always) so reminders come with the app closed. The
+  iPad watches up to 20 places. iPads without mobile data place themselves by Wi-Fi, so arrivals are less
+  exact than on the phone.
+
+Android-only: the Battery "Unrestricted" step (the iPad has nothing like it).
 
 ## Home screen widgets (item 79)
 

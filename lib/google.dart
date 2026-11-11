@@ -6,8 +6,10 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
-/// Where Google sign-in is offered: phone, Windows and Mac (and Linux); the iPad comes later.
-bool get googleSupported => Platform.isAndroid || Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+/// Where Google sign-in is offered: phone, iPad, Windows and Mac (and Linux). On iPad the sign-in
+/// page opens inside the app (Safari view), so the app stays awake to hear the answer.
+bool get googleSupported =>
+    Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
 /// Item 53: Google sign-in and the few Gmail calls the app needs.
 ///
