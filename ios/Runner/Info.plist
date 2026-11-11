@@ -43,6 +43,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>If you switch it on in Settings, Task Blocks saves where you were when you add or finish a task, for place-based reminders later.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Place reminders: Task Blocks tells you about a task when you arrive at or leave one of your saved places, also while the app is closed.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of a written list to turn it into tasks.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

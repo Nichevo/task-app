@@ -116,8 +116,9 @@ class _PlacesPageState extends State<PlacesPage> {
                   const Text('So the phone can tell you when you arrive, even with the app closed:'),
                   const SizedBox(height: 8),
                   _step(setup.alwaysLocation, 'Location: "Allow all the time"', 'Open', PlaceReminders.askAlwaysLocation),
-                  _step(setup.batteryUnrestricted, 'Battery: "Unrestricted" (Samsung holds alerts back otherwise)', 'Open',
-                      PlaceReminders.askBatteryUnrestricted),
+                  if (PlaceReminders.needsBattery)
+                    _step(setup.batteryUnrestricted, 'Battery: "Unrestricted" (Samsung holds alerts back otherwise)',
+                        'Open', PlaceReminders.askBatteryUnrestricted),
                 ]),
               ),
             ),

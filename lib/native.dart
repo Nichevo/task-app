@@ -40,17 +40,17 @@ class CalendarEvent {
   final String? location;
 }
 
-/// The small amount of native plumbing: shared text (Android only, MainActivity.kt), and the
-/// phone's calendars and on-device text recognition (Android, and iPad from 1.10.6 in
-/// ios/Runner/AppDelegate.swift).
+/// The small amount of native plumbing: shared text, the phone's calendars and on-device text
+/// recognition. Android has it in MainActivity.kt, the iPad in ios/Runner/AppDelegate.swift.
 class Native {
   static const _channel = MethodChannel('app.taskblocks/native');
 
   static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  /// Text shared to the app since it last asked, if any (Android only for now).
+  /// Text shared to the app since it last asked, if any. On iPad it comes from the "Add to Task
+  /// Blocks" action (Siri, Shortcuts or a Share sheet shortcut), see AppDelegate.swift.
   static Future<SharedText?> takeShared() async {
-    if (kIsWeb || !Platform.isAndroid) return null;
+    if (!supported) return null;
     try {
       final m = await _channel.invokeMapMethod<String, dynamic>('takeShared');
       final text = m?['text'] as String?;

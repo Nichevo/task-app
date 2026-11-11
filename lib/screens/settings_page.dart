@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -208,7 +210,12 @@ class _SettingsPageState extends State<SettingsPage> {
     store.googleClientSecret = secret;
     setState(() => _gBusy = true);
     try {
-      await store.connectGoogle((url) => launchUrl(url, mode: LaunchMode.externalApplication));
+      // On iPad a switch to Safari would pause the app and the small sign-in server with it, so
+      // the page opens in a Safari view inside the app instead, closed once the answer is in.
+      final ios = Platform.isIOS;
+      await store.connectGoogle(
+          (url) => launchUrl(url, mode: ios ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication));
+      if (ios) await closeInAppWebView();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not sign in: $e')));
@@ -222,7 +229,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final g = store.google;
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     if (!googleSupported) {
-      return Text('Google sign-in is on the phone, Windows and Mac for now; the iPad comes later.', style: hint);
+      return Text('Google sign-in is on the phone, iPad, Windows and Mac.', style: hint);
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       if (g == null) ...[

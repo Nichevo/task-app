@@ -2,7 +2,7 @@
 
 Task Blocks reads your Gmail straight from the app. There is no server in between, and nothing leaves your
 devices except what already syncs through Dropbox (a task's emails: subject, sender, date, a short snippet and
-the Gmail id). Sign-in works on the phone, Windows and Mac. The iPad comes later.
+the Gmail id). Sign-in works on the phone, iPad, Windows and Mac.
 
 The permission asked for is `gmail.modify`. The app uses it only to read emails and change their labels and stars.
 Google describes this permission as "Read, compose, and send emails", because `gmail.modify` covers sending too,

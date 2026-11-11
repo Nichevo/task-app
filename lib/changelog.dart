@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.7', 'November 2026', [
+    'iPad: email tasks from Gmail. Settings, Email tasks, connect Google as on the phone; the sign-in page opens inside the app and closes by itself.',
+    'iPad: "Add a task in Task Blocks" to Siri asks what the task is, then opens the app with it ready to save. The same "Add to Task Blocks" action is in the Shortcuts app, so you can make a Share sheet shortcut (steps in the iPad guide).',
+    'iPad: place reminders. Save places and give tasks "Remind me when I arrive" or "when I leave", as on the phone. The iPad needs location "Always" for this.',
+  ]),
   Release('1.10.6', 'November 2026', [
     'iPad: new Calendar widget (Large and Extra large). This month on the left, with a dot on days that have tasks due; tap a day to open it. On the right, what is coming up: overdue tasks, the next two weeks and today\'s calendar events, with a circle to tick each off.',
     'iPad: Lock Screen widgets. "At a glance" shows how many tasks are open or overdue and what is due next; Quick add is a plus button that opens the app ready to type.',
