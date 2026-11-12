@@ -175,8 +175,12 @@ class HomePageState extends State<HomePage> {
     if (show && mounted) await showWhatsNew(context, releases.first);
   }
 
-  /// Opens a task (e.g. from the home screen widget).
-  void openTask(String id) => _select(id);
+  /// Opens a task (e.g. from the home screen widget or a reminder), on top of whatever page is open.
+  void openTask(String id) {
+    if (data.task(id) == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    _select(id);
+  }
 
   /// Puts the cursor in the add box (e.g. from the quick-add widget), with [text] filled in
   /// and [categoryId] already chosen.
