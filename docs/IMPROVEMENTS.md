@@ -1054,3 +1054,12 @@ time.
   task moved its whole lane. They now follow the main list's order, which doesn't depend on stage.
 - Settings, Kanban board, "Sort columns like the main list" (`AppData.boardSortLikeList`, off by
   default) brings back the old column sort.
+
+## 93. Edit all steps for a task with one step ☑ (version 1.10.9)
+
+Feedback: some tasks had no "Edit all steps" button on the task page.
+
+- The button only appeared with two or more steps, so a task with a single step (for example a
+  "Checklist 0/1") had only the Templates button. It now shows whenever the task has any step
+  (still hidden for archived tasks). The Edit all steps screen already works with one step;
+  "Chain in order" still asks for two or more ticked.

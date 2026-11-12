@@ -617,7 +617,7 @@ class _TaskPageState extends State<TaskPage> {
             if (mounted) setState(() {});
           }
 
-          final canEditAll = task.steps.length >= 2 && !archived;
+          final canEditAll = task.steps.isNotEmpty && !archived;
           return Row(children: [
             const Icon(Icons.checklist),
             const SizedBox(width: 16),
