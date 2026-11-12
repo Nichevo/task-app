@@ -1797,6 +1797,7 @@ Map<String, dynamic> unknownFields(Map<String, dynamic> j, Set<String> known) =>
 /// copy wins; a deletion wins over edits made before it.
 AppData mergeData(AppData a, AppData b) {
   final settingsFrom = b.settingsUpdatedAt.isAfter(a.settingsUpdatedAt) ? b : a;
+  final olderSettings = identical(settingsFrom, a) ? b : a;
   final orderFrom = b.orderUpdatedAt.isAfter(a.orderUpdatedAt) ? b : a;
 
   final deleted = <String, DateTime>{...a.deleted};
@@ -1866,8 +1867,9 @@ AppData mergeData(AppData a, AppData b) {
       byRef[key] = t;
     }
   }
-  // Forget deletions after 90 days to keep the file small.
-  final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 90));
+  // Forget deletions after a year to keep the file small (L1: it was 90 days, so a device not
+  // synced for three months brought deleted tasks back).
+  final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 365));
   deleted.removeWhere((_, at) => at.isBefore(cutoff));
 
   final open = tasks.values.where((t) => t.closedAt == null).toSet();
@@ -1897,7 +1899,7 @@ AppData mergeData(AppData a, AppData b) {
     hoursToRed: settingsFrom.hoursToRed,
     colourByDue: settingsFrom.colourByDue,
     archiveKeepDays: settingsFrom.archiveKeepDays,
-    categories: settingsFrom.categories,
+    categories: _mergeById(settingsFrom.categories, olderSettings.categories, (c) => c.id, deleted),
     groupByCategory: settingsFrom.groupByCategory,
     collapsed: settingsFrom.collapsed,
     focusNext30: settingsFrom.focusNext30,
@@ -1908,7 +1910,7 @@ AppData mergeData(AppData a, AppData b) {
     starredTop: settingsFrom.starredTop,
     dragInSort: settingsFrom.dragInSort,
     showQuickFilters: settingsFrom.showQuickFilters,
-    stages: settingsFrom.stages,
+    stages: _mergeById(settingsFrom.stages, olderSettings.stages, (c) => c.id, deleted),
     kanbanDone: settingsFrom.kanbanDone,
     kanbanHideFromList: settingsFrom.kanbanHideFromList,
     boardSortLikeList: settingsFrom.boardSortLikeList,
@@ -1917,7 +1919,7 @@ AppData mergeData(AppData a, AppData b) {
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
     skips: skips,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
-    templates: settingsFrom.templates,
+    templates: _mergeById(settingsFrom.templates, olderSettings.templates, (c) => c.id, deleted),
     done: done,
     autoCategory: settingsFrom.autoCategory,
     eventSuggest: settingsFrom.eventSuggest,
@@ -1947,6 +1949,20 @@ AppData mergeData(AppData a, AppData b) {
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},
   );
+}
+
+/// H3 (review, Nov 2026): categories, board columns and checklist templates are merged one by
+/// one, so one added on a device whose other settings are older isn't lost. The newer copy's
+/// items come first, in its order, then any only the older copy has, unless deleted ([deleted]
+/// keeps their ids like a deleted task's).
+List<T> _mergeById<T>(List<T> newer, List<T> older, String Function(T) id, Map<String, DateTime> deleted) {
+  final have = {for (final x in newer) id(x)};
+  return [
+    for (final x in newer)
+      if (!deleted.containsKey(id(x))) x,
+    for (final x in older)
+      if (!have.contains(id(x)) && !deleted.containsKey(id(x))) x,
+  ];
 }
 
 /// Item 55: what happens to a starred email's star after it is used for a task.

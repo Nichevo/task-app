@@ -520,10 +520,7 @@ class HomePageState extends State<HomePage> {
             ),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
-              'group' => () {
-                  data.groupByCategory = !data.groupByCategory;
-                  store.changed(settings: true);
-                }(),
+              'group' => store.toggleGroupByCategory(),
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'stats' => openStats(),

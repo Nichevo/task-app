@@ -431,9 +431,11 @@ class AppStore extends ChangeNotifier {
     _setStatus('Syncing…');
     try {
       await flush();
+      var tries = 0;
       do {
         _syncAgain = false;
-        final remoteText = await db.download();
+        final got = await db.downloadWithRev(DropboxClient.filePath);
+        final remoteText = got?.$1;
         final remote = remoteText == null ? null : AppData.fromJson(jsonDecode(remoteText));
         final merged = remote == null ? data : mergeData(data, remote);
         // Item 54: the merge first, so a task another device already made from an email is known.
@@ -454,9 +456,10 @@ class AppStore extends ChangeNotifier {
         if (remoteText == null || mine != jsonEncode(remote!.toJson())) {
           // Item 62: a newer version wrote the Dropbox copy; keep it before this one saves over it.
           if (remote != null && remote.newerAppElsewhere) await db.backup(remoteText!, DateTime.now());
-          await db.upload(mine);
+          // M7: another device saved in the meantime; read its copy and merge again.
+          if (!await db.uploadIfUnchanged(DropboxClient.filePath, mine, got?.$2)) _syncAgain = true;
         }
-      } while (_syncAgain);
+      } while (_syncAgain && ++tries < 5);
       _lastSync = DateTime.now();
       _setStatus('Synced ${_now()}');
     } catch (e) {
@@ -699,6 +702,8 @@ class AppStore extends ChangeNotifier {
     for (final path in files) {
       final text = await db.downloadPath(path);
       if (text == null) continue;
+      // M6: take the file by deleting it first; when another device already took it, skip it.
+      if (await db.delete(path) == null) continue;
       List<Task> added;
       try {
         added = addInboxFile(data, text, DateTime.now());
@@ -706,11 +711,10 @@ class AppStore extends ChangeNotifier {
       } catch (e) {
         // Not a task file (bad JSON, no title, wrong types): set it aside, don't retry forever.
         debugPrint('inbox $path: $e');
-        await db.moveToFailed(path);
+        await db.uploadPath('${DropboxClient.inboxFolder}/failed/${path.split('/').last}', text);
         continue;
       }
       any = any || added.isNotEmpty;
-      await db.delete(path);
     }
     if (any) {
       notifyListeners();
@@ -722,7 +726,14 @@ class AppStore extends ChangeNotifier {
 
   /// Adds any lines written to the inbox file in Dropbox as tasks, then empties it.
   Future<bool> _takeInbox(DropboxClient db) async {
-    final text = await db.downloadInbox();
+    // M6: empty the file first, only if it is still what was read, so a line added meanwhile
+    // isn't lost and two devices never both take the same lines.
+    String? text;
+    for (var i = 0; i < 3 && text == null; i++) {
+      final got = await db.downloadWithRev(DropboxClient.inboxPath);
+      if (got == null || got.$1.trim().isEmpty) return false;
+      if (await db.uploadIfUnchanged(DropboxClient.inboxPath, '', got.$2)) text = got.$1;
+    }
     if (text == null) return false;
     final lines = splitLines(text);
     if (lines.isEmpty) return false;
@@ -735,7 +746,6 @@ class AppStore extends ChangeNotifier {
       _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
-    await db.clearInbox();
     notifyListeners();
     return true;
   }
@@ -1468,6 +1478,7 @@ class AppStore extends ChangeNotifier {
       }
     }
     data.stages.remove(s);
+    data.deleted[s.id] = DateTime.now().toUtc();
     changed(settings: true);
   }
 
@@ -1910,6 +1921,7 @@ class AppStore extends ChangeNotifier {
 
   void deleteTemplate(ChecklistTemplate tpl) {
     data.templates.remove(tpl);
+    data.deleted[tpl.id] = DateTime.now().toUtc();
     changed(settings: true);
   }
 
@@ -2112,7 +2124,7 @@ class AppStore extends ChangeNotifier {
 
   void hideEmail(String id) {
     data.hiddenEmails.add(id);
-    changed(settings: true);
+    changed(); // Joined from both copies on sync, so not a settings change (H3).
   }
 
   /// What the Starred emails setting says to do with the star once the email is used.
@@ -2140,7 +2152,7 @@ class AppStore extends ChangeNotifier {
 
   void dismissEvent(String eventId) {
     data.dismissedEvents.add(eventId);
-    changed(settings: true);
+    changed(); // Joined from both copies on sync, so not a settings change (H3).
   }
 
   // --- Categories ---
@@ -2208,6 +2220,7 @@ class AppStore extends ChangeNotifier {
   /// Removes a category; its tasks become uncategorised.
   void deleteCategory(TaskCategory c) {
     data.categories.remove(c);
+    data.deleted[c.id] = DateTime.now().toUtc();
     for (final t in data.allTasks.where((t) => t.categoryId == c.id)) {
       t.categoryId = null;
       t.touch();
@@ -2215,9 +2228,16 @@ class AppStore extends ChangeNotifier {
     changed(settings: true);
   }
 
+  /// A view choice: saved and synced, but it doesn't count as a settings change, so it can't make
+  /// this device's older settings win over another's on sync (H3).
+  void toggleGroupByCategory() {
+    data.groupByCategory = !data.groupByCategory;
+    changed();
+  }
+
   void toggleCollapsed(String categoryKey) {
     if (!data.collapsed.remove(categoryKey)) data.collapsed.add(categoryKey);
-    changed(settings: true);
+    changed();
   }
 }
 

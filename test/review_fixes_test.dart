@@ -4,7 +4,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:task_blocks/dropbox.dart';
 import 'package:task_blocks/store.dart';
+
+import 'older_copies_test.dart' show FakeDropbox;
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/reminders.dart';
 
@@ -98,6 +101,71 @@ void main() {
       expect(jsonDecode(File('${dir.path}/device_settings.json').readAsStringSync()), isA<Map>());
     });
   });
+
+  group('sync (review fixes)', () {
+    AppData copy(AppData d) => AppData.fromJson(jsonDecode(jsonEncode(d.toJson())) as Map<String, dynamic>);
+
+    test('H3: a category added on one device survives a newer settings change on another', () {
+      final phone = AppData()..categories.add(TaskCategory(id: 'work', name: 'Work'));
+      final pc = copy(phone);
+      phone.categories.add(TaskCategory(id: 'garden', name: 'Garden'));
+      phone.settingsUpdatedAt = DateTime.utc(2026, 11, 1, 10);
+      pc.hoursToRed = 24;
+      pc.settingsUpdatedAt = DateTime.utc(2026, 11, 1, 11);
+      final m = mergeData(phone, pc);
+      expect(m.categories.map((c) => c.name), ['Work', 'Garden']);
+      expect(m.hoursToRed, 24, reason: 'other settings still come from the newer copy');
+    });
+
+    test('H3: a category deleted on one device stays deleted', () {
+      final s = AppStore();
+      final work = s.addCategory('Work');
+      final other = copy(s.data);
+      s.deleteCategory(work);
+      other.settingsUpdatedAt = DateTime.now().toUtc().add(const Duration(minutes: 1));
+      expect(mergeData(s.data, other).categories, isEmpty);
+    });
+
+    test('H3: collapsing a heading or grouping is not a settings change', () {
+      final s = AppStore();
+      final before = s.data.settingsUpdatedAt;
+      s.toggleCollapsed('');
+      s.toggleGroupByCategory();
+      s.hideEmail('m1');
+      s.dismissEvent('e1');
+      expect(s.data.settingsUpdatedAt, before);
+    });
+
+    test('M7: a save is refused when another device saved first, and the sync merges again', () async {
+      final elsewhere = AppData()..active.add(Task.create('from the PC'));
+      final files = {DropboxClient.filePath: jsonEncode(elsewhere.toJson())};
+      var first = true;
+      final db = _RacingDropbox(files, () {
+        if (!first) return;
+        first = false;
+        // The PC saves again between this phone's download and upload.
+        elsewhere.active.add(Task.create('also from the PC'));
+        files[DropboxClient.filePath] = jsonEncode(elsewhere.toJson());
+      });
+      final s = AppStore()..dropbox = db;
+      s.addTask('from the phone');
+      await s.sync();
+      final saved = AppData.fromJson(jsonDecode(files[DropboxClient.filePath]!) as Map<String, dynamic>);
+      expect(saved.active.map((t) => t.title).toSet(), {'from the PC', 'also from the PC', 'from the phone'});
+    });
+  });
+}
+
+/// Runs [beforeUpload] just before each save of the main file, to act like another device.
+class _RacingDropbox extends FakeDropbox {
+  _RacingDropbox(super.files, this.beforeUpload);
+  final void Function() beforeUpload;
+
+  @override
+  Future<bool> uploadIfUnchanged(String path, String contents, String? rev) {
+    if (path == DropboxClient.filePath) beforeUpload();
+    return super.uploadIfUnchanged(path, contents, rev);
+  }
 }
 
 class _Paths extends Fake with MockPlatformInterfaceMixin implements PathProviderPlatform {
