@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models.dart';
+import '../pace.dart';
 import '../task_list.dart';
 import 'link_text.dart';
 
@@ -190,6 +191,9 @@ class TaskBlock extends StatelessWidget {
                                     ]),
                                   ),
                                 ),
+                              // Item 96: less done than the time gone says, or overdue.
+                              if (!archived && taskPace(task, DateTime.now()).verdict == Pace.behind)
+                                _badge(Icons.hourglass_bottom, 'Behind: less done than the time gone', ink),
                               if (task.repeat != null) _badge(Icons.repeat, task.repeat!.describe(), ink),
                               if (task.isSnoozed(DateTime.now())) _badge(Icons.snooze, 'Snoozed', ink),
                             ]),

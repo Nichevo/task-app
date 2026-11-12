@@ -1063,3 +1063,25 @@ Feedback: some tasks had no "Edit all steps" button on the task page.
   "Checklist 0/1") had only the Templates button. It now shows whenever the task has any step
   (still hidden for archived tasks). The Edit all steps screen already works with one step;
   "Chain in order" still asks for two or more ticked.
+
+## 96. Kanban cards shaded for progress and time left ☑ (version 1.10.12)
+
+Feedback: shade the board's cards to show progress and the time left to the due date. Mocked up
+as four styles; the owner chose to have three of them as options, and asked for the
+behind / on pace / ahead verdict on every task so it can be used to filter elsewhere.
+
+- `lib/pace.dart`: `taskPace` and `stepPace` give the work done (`Task.progressShare`: set by
+  hand, else the steps averaged, a step counting its own progress), the share of time gone from
+  the start to the due date (`timeUsed`, over 1 when overdue), and the verdict. A task's time
+  starts when its colour clock does (`colourStart`), or at its start day when it is on the Gantt
+  chart (moving into In progress fills in `startAt`, which mustn't restart the clock). Measured by
+  steps, half a step either way is on pace; by hand, ten percent. Overdue is always behind; no
+  due date, or nothing to measure work by, gives no verdict. Ticked steps and habits have none.
+- Settings, Kanban board, "Card shading" (`AppData.cardShading`: `fill`, `bars`, `pace` (default),
+  `off`). Fill: the done share of the card in full colour and the rest a pale wash, plus a strip
+  on the bottom edge for time left. Bars: labelled bars for steps and time. Pace: one bar with a
+  tick for time gone and the verdict. Steps on the board follow the same style from their own
+  progress and due date. Widgets in `lib/widgets/card_shading.dart`.
+- "Behind" filter: `QuickFilter.behind` (main list, board and matrix chips) and
+  `SearchFilter.behind`. The main list's block shows an hourglass badge when behind.
+

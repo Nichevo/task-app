@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models.dart';
+import '../pace.dart';
 import '../store.dart';
 import '../task_list.dart';
+import '../widgets/card_shading.dart';
 import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
@@ -728,6 +730,8 @@ class _KanbanPageState extends State<KanbanPage> {
       task: t,
       stage: s,
       color: _colour(t, now),
+      shading: data.cardShading,
+      pace: taskPace(t, now),
       categoryName: data.category(t.categoryId)?.name,
       now: now,
       onTap: () => _open(t),
@@ -755,6 +759,8 @@ class _KanbanPageState extends State<KanbanPage> {
     final card = _StepCard(
       step: st,
       color: _colour(t, now),
+      shading: data.cardShading,
+      pace: stepPace(t, st, now),
       under: under,
       details: [
         'step ${t.steps.indexOf(st) + 1} of ${t.steps.length}',
@@ -881,6 +887,8 @@ class _StepCard extends StatelessWidget {
     required this.color,
     required this.details,
     required this.onTap,
+    this.shading = CardShading.off,
+    this.pace = PaceInfo.none,
     this.under = false,
     this.onNext,
     this.nextName,
@@ -891,6 +899,10 @@ class _StepCard extends StatelessWidget {
   final String details;
   final VoidCallback onTap;
 
+  /// Item 96: shaded by its own progress and its own due date, like a task's card.
+  final CardShading shading;
+  final PaceInfo pace;
+
   /// Straight under its task's card: indented.
   final bool under;
   final VoidCallback? onNext;
@@ -900,10 +912,37 @@ class _StepCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface;
     final ink = Theme.of(context).colorScheme.onSurface;
+    final wash = Color.alphaBlend(color.withValues(alpha: 0.28), surface);
+    final open = !step.done;
+    final done = pace.done ?? 0, used = pace.used;
+    final rows = <Widget>[
+      if (open && shading == CardShading.bars) ...[
+        if (done > 0)
+          LabelledBar(label: 'Done', bar: ShadeBar(value: done, ink: ink, height: 4), trailing: '${(done * 100).round()}%', small: true, ink: ink),
+        if (used != null)
+          LabelledBar(label: 'Time', bar: TimeLeftBar(used: used, ink: ink, height: 4), trailing: timeLeftLabel(used), small: true, ink: ink),
+      ],
+      if (open && shading == CardShading.pace && (used != null || done > 0))
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(children: [
+            Expanded(child: ShadeBar(value: done, marker: used, height: 5, ink: ink)),
+            if (pace.verdict != null) ...[const SizedBox(width: 6), PaceChip(pace, small: true)],
+          ]),
+        ),
+      if (open && (shading == CardShading.fill || shading == CardShading.bars) && pace.verdict == Pace.behind)
+        Padding(padding: const EdgeInsets.only(top: 2), child: PaceChip(pace, small: true)),
+    ];
+    final fill = shading == CardShading.fill && open && done > 0;
+    final deep = Color.alphaBlend(color.withValues(alpha: 0.6), surface);
+    if (shading == CardShading.fill && open && used != null) {
+      rows.add(Padding(padding: const EdgeInsets.only(top: 3, right: 8), child: TimeLeftBar(used: used, ink: ink, height: 3)));
+    }
     return Padding(
       padding: EdgeInsets.fromLTRB(under ? 22 : 8, 2, 8, 2),
       child: Material(
-        color: Color.alphaBlend(color.withValues(alpha: 0.28), surface),
+        color: fill ? null : wash,
+        type: fill ? MaterialType.transparency : MaterialType.canvas,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
           side: BorderSide(color: color.withValues(alpha: 0.8)),
@@ -911,8 +950,17 @@ class _StepCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(border: Border(left: BorderSide(color: color, width: 4))),
+          child: Ink(
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: color, width: 4)),
+              // Fill: the done share a deeper wash of the task's colour.
+              gradient: fill
+                  ? LinearGradient(
+                      colors: [deep, deep, wash, wash],
+                      stops: [0, done, done, 1],
+                    )
+                  : null,
+            ),
             padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
             child: Row(children: [
               Icon(step.done ? Icons.check_box : Icons.check_box_outline_blank, size: 16, color: ink.withValues(alpha: 0.7)),
@@ -927,6 +975,7 @@ class _StepCard extends StatelessWidget {
                           decoration: step.done ? TextDecoration.lineThrough : null,
                           color: step.done ? ink.withValues(alpha: 0.6) : ink)),
                   Text(details, style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
+                  ...rows,
                 ]),
               ),
               if (onNext != null)
@@ -978,6 +1027,8 @@ class _KanbanCard extends StatelessWidget {
     required this.now,
     required this.onTap,
     required this.onMenu,
+    this.shading = CardShading.off,
+    this.pace = PaceInfo.none,
     this.categoryName,
     this.onNext,
     this.nextName,
@@ -990,6 +1041,10 @@ class _KanbanCard extends StatelessWidget {
   final Color color;
   final DateTime now;
   final String? categoryName;
+
+  /// Item 96: how the card shows work done and time left, and the pace it shows.
+  final CardShading shading;
+  final PaceInfo pace;
   final VoidCallback onTap;
   final VoidCallback onMenu;
   final VoidCallback? onNext;
@@ -1003,69 +1058,142 @@ class _KanbanCard extends StatelessWidget {
 
   static final _due = DateFormat('d MMM HH:mm');
 
+  /// Item 96: the bars under the details, for the bars and pace shadings.
+  List<Widget> _shadeRows(Color ink) {
+    final done = pace.done, used = pace.used;
+    final n = task.steps.length;
+    final byHand = task.progress != null;
+    switch (shading) {
+      case CardShading.bars:
+        return [
+          if (done != null)
+            LabelledBar(
+              label: byHand || n == 0 ? 'Done' : 'Steps',
+              bar: ShadeBar(value: done, ink: ink),
+              trailing: byHand || n == 0 ? '${(done * 100).round()}%' : '${task.stepsDone}/$n',
+              ink: ink,
+            ),
+          if (used != null)
+            LabelledBar(label: 'Time', bar: TimeLeftBar(used: used, ink: ink), trailing: timeLeftLabel(used), ink: ink),
+          if (pace.verdict != null) Padding(padding: const EdgeInsets.only(top: 3), child: PaceChip(pace)),
+        ];
+      case CardShading.pace:
+        if (done == null) {
+          return [
+            if (used != null)
+              LabelledBar(label: 'Time', bar: TimeLeftBar(used: used, ink: ink), trailing: timeLeftLabel(used), ink: ink),
+            if (pace.verdict != null) Padding(padding: const EdgeInsets.only(top: 3), child: PaceChip(pace)),
+          ];
+        }
+        return [
+          Padding(
+            padding: const EdgeInsets.only(top: 4, right: 6),
+            child: ShadeBar(value: done, marker: used, height: 7, ink: ink),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: 6),
+            child: Row(children: [
+              Expanded(
+                child: Text(byHand || n == 0 ? '${(done * 100).round()}% done' : '${task.stepsDone} of $n steps',
+                    style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
+              ),
+              PaceChip(pace),
+            ]),
+          ),
+        ];
+      case CardShading.fill:
+        return [if (pace.verdict != null) Padding(padding: const EdgeInsets.only(top: 3), child: PaceChip(pace))];
+      case CardShading.off:
+        return const [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const ink = Color(0xDD000000);
     const soft = TextStyle(fontSize: 12, color: Color(0xAA000000));
     final since = task.stageSince;
     final due = task.dueAt;
+    final fill = shading == CardShading.fill;
+    final done = pace.done, used = pace.used;
+    // Fill: the done share in the card's colour, the rest a pale wash of it.
+    final decoration = fill && done != null
+        ? BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: LinearGradient(
+              colors: [color, color, Color.lerp(color, Colors.white, 0.55)!, Color.lerp(color, Colors.white, 0.55)!],
+              stops: [0, done, done, 1],
+            ),
+          )
+        : BoxDecoration(color: color, borderRadius: BorderRadius.circular(4));
+    final countInMeta = task.steps.isNotEmpty && stepsChip == null && (shading == CardShading.off || shading == CardShading.fill);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: Material(
-        color: color,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 6, 0, 6),
-            child: DefaultTextStyle(
-              style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: ink),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(task.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
+        type: MaterialType.transparency,
+        child: Ink(
+          decoration: decoration,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: onTap,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 0, 6),
+                child: DefaultTextStyle(
+                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: ink),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          Expanded(
+                            child: Text(task.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ),
+                          if (task.starred) const Icon(Icons.star, size: 16, color: Color(0xFF8D6E00)),
+                        ]),
+                        const SizedBox(height: 2),
+                        Wrap(spacing: 8, children: [
+                          if (categoryName != null) Text(categoryName!, style: soft),
+                          if (due != null)
+                            Text('Due ${_due.format(due)}',
+                                style: soft.copyWith(fontWeight: due.isBefore(now) ? FontWeight.bold : null)),
+                          if (countInMeta) Text('${task.stepsDone}/${task.steps.length}', style: soft),
+                          if (task.estimate != null) Text(shortMinutes(task.estimate!), style: soft),
+                          // Item 75: only when any day this week is ticked.
+                          if (task.workedInWeek(now) > 0)
+                            Text('${task.workedInWeek(now)} ${task.workedInWeek(now) == 1 ? 'day' : 'days'} this week', style: soft),
+                        ]),
+                        if (since != null) Text('${stage.name} for ${describeSpell(now.difference(since))}', style: soft),
+                        if (stepOf != null) Text('Step of "$stepOf"', style: soft),
+                        ..._shadeRows(ink),
+                        ?stepsChip,
+                      ]),
+                    ),
+                    if (onNext != null)
+                      IconButton(
+                        tooltip: 'Move to $nextName',
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.arrow_forward, color: ink, size: 20),
+                        onPressed: onNext,
                       ),
-                      if (task.starred) const Icon(Icons.star, size: 16, color: Color(0xFF8D6E00)),
-                    ]),
-                    const SizedBox(height: 2),
-                    Wrap(spacing: 8, children: [
-                      if (categoryName != null) Text(categoryName!, style: soft),
-                      if (due != null)
-                        Text('Due ${_due.format(due)}',
-                            style: soft.copyWith(fontWeight: due.isBefore(now) ? FontWeight.bold : null)),
-                      if (task.steps.isNotEmpty && stepsChip == null)
-                        Text('${task.stepsDone}/${task.steps.length}', style: soft),
-                      if (task.estimate != null) Text(shortMinutes(task.estimate!), style: soft),
-                      // Item 75: only when any day this week is ticked.
-                      if (task.workedInWeek(now) > 0)
-                        Text('${task.workedInWeek(now)} ${task.workedInWeek(now) == 1 ? 'day' : 'days'} this week', style: soft),
-                    ]),
-                    if (since != null) Text('${stage.name} for ${describeSpell(now.difference(since))}', style: soft),
-                    if (stepOf != null) Text('Step of "$stepOf"', style: soft),
-                    ?stepsChip,
+                    IconButton(
+                      tooltip: 'Move to…, take off the board',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.more_vert, color: ink, size: 20),
+                      onPressed: onMenu,
+                    ),
                   ]),
                 ),
-                if (onNext != null)
-                  IconButton(
-                    tooltip: 'Move to $nextName',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.arrow_forward, color: ink, size: 20),
-                    onPressed: onNext,
-                  ),
-                IconButton(
-                  tooltip: 'Move to…, take off the board',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.more_vert, color: ink, size: 20),
-                  onPressed: onMenu,
+              ),
+              // Fill: a strip on the bottom edge drains as the due date gets closer.
+              if (fill && used != null)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
+                  child: TimeLeftBar(used: used, height: 4, ink: ink),
                 ),
-              ]),
-            ),
+            ]),
           ),
         ),
       ),
@@ -1234,6 +1362,29 @@ class KanbanSettingsPage extends StatelessWidget {
               ],
               onChanged: (v) {
                 data.kanbanDone = v ?? KanbanDone.ask;
+                store.changed(settings: true);
+              },
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Card shading'),
+            subtitle: Text(switch (data.cardShading) {
+              CardShading.off => 'Plain cards in their ageing colour.',
+              CardShading.fill => 'The done share of a card is in full colour, the rest pale. A strip on the bottom edge drains as the due date gets closer.',
+              CardShading.bars => 'Two bars under the details: work done, and time left before the due date.',
+              CardShading.pace => 'One bar for work done, with a tick for time gone, and whether it is behind, on pace or ahead.',
+            }),
+            trailing: DropdownButton<CardShading>(
+              value: data.cardShading,
+              items: const [
+                DropdownMenuItem(value: CardShading.off, child: Text('Off')),
+                DropdownMenuItem(value: CardShading.fill, child: Text('Fills up')),
+                DropdownMenuItem(value: CardShading.bars, child: Text('Two bars')),
+                DropdownMenuItem(value: CardShading.pace, child: Text('On pace')),
+              ],
+              onChanged: (v) {
+                data.cardShading = v ?? CardShading.pace;
                 store.changed(settings: true);
               },
             ),

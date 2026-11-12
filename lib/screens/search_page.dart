@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models.dart';
+import '../pace.dart';
 import '../store.dart';
 import '../task_list.dart';
 import 'task_page.dart';
@@ -13,6 +14,7 @@ enum SearchFilter {
   done('Done'),
   starred('Starred'),
   hasDate('Has a date'),
+  behind('Behind'),
   board('On the board'),
   matrix('On the matrix');
 
@@ -59,6 +61,7 @@ SearchResults searchAll(AppData data, String query,
     if (filters.contains(SearchFilter.done) && !filters.contains(SearchFilter.open) && !archived) return false;
     if (filters.contains(SearchFilter.starred) && !t.starred) return false;
     if (filters.contains(SearchFilter.hasDate) && t.dueAt == null) return false;
+    if (filters.contains(SearchFilter.behind) && taskPace(t, now ?? DateTime.now()).verdict != Pace.behind) return false;
     if (filters.contains(SearchFilter.board) && !t.kanban) return false;
     if (filters.contains(SearchFilter.matrix) && t.matrixBox == null) return false;
     if (categoryId != null && t.categoryId != categoryId) return false;
