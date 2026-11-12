@@ -1064,7 +1064,7 @@ Feedback: some tasks had no "Edit all steps" button on the task page.
   (still hidden for archived tasks). The Edit all steps screen already works with one step;
   "Chain in order" still asks for two or more ticked.
 
-## 96. Kanban cards shaded for progress and time left ☑ (version 1.10.12)
+## 96. Kanban cards shaded for progress and time left ☑ (version 1.10.13)
 
 Feedback: shade the board's cards to show progress and the time left to the due date. Mocked up
 as four styles; the owner chose to have three of them as options, and asked for the
