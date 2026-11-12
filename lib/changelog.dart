@@ -9,6 +9,18 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.13', 'November 2026', [
+    'Snoozing a reminder (1 hour, This evening, Tomorrow, or Snooze on a widget) now reminds you again when the snooze ends. Before, the task only came back in the list without a notification.',
+    'Tapping a task\'s reminder opens that task, not just the list.',
+    'The daily overdue summary is worked out fresh for each day, so it no longer repeats an old list.',
+    'If the saved tasks file is ever damaged, the app opens the newest backup instead of an empty list, keeps the damaged file, and tells you at the top of the list.',
+    'Sync: a category, board column or checklist template added on one device is no longer lost when another device changes a setting at the same time. Collapsing a heading or grouping by category no longer counts as a settings change.',
+    'Sync: when two devices save to Dropbox at the same moment, the second one now merges again instead of saving over the first. Lines in inbox.txt and files in the inbox folder are never lost or added twice.',
+    'An open task page now updates when a widget, a notification or a sync changes the task, and your edits are always kept.',
+    'Snoozed tasks come back on the home screen widgets when the snooze ends, without opening the app.',
+    'Archived tasks are read-only, with a Move back to tasks button on the task page.',
+    'Smaller fixes: device settings are saved more safely, a tick on a widget at the moment the app opens is no longer missed, deleted tasks stay deleted on a device that has not synced for months, a deleted email task is not made again from the same email, and less battery is used while event suggestions are on.',
+  ]),
   Release('1.10.9', 'November 2026', [
     'The "Edit all" button above a task\'s checklist now shows as soon as the task has one step, not only from two steps up.',
   ]),
