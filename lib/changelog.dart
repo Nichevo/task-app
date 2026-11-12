@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.9', 'November 2026', [
+    'The "Edit all" button above a task\'s checklist now shows as soon as the task has one step, not only from two steps up.',
+  ]),
   Release('1.10.8', 'November 2026', [
     'Kanban board: moving a task no longer reshuffles the board. A task you move goes to the top of its new column and everything else stays where it was, so the card you just moved is easy to find.',
     'Kanban lanes: a task\'s row stays in the same place as you move it between stages, instead of jumping up or down the board.',
