@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.12', 'November 2026', [
+    'Edit all steps: the Starts, Days of work and Progress columns (and the timeline under the steps) now show for every task, not only for tasks on the Gantt chart. Tap a step\'s start to set it, or tick several steps and tap Start.',
+    'A step\'s menu on the task page now always offers "Start, days of work and progress", not only on Gantt tasks.',
+  ]),
   Release('1.10.9', 'November 2026', [
     'The "Edit all" button above a task\'s checklist now shows as soon as the task has one step, not only from two steps up.',
   ]),

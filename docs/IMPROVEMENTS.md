@@ -1063,3 +1063,18 @@ Feedback: some tasks had no "Edit all steps" button on the task page.
   "Checklist 0/1") had only the Templates button. It now shows whenever the task has any step
   (still hidden for archived tasks). The Edit all steps screen already works with one step;
   "Chain in order" still asks for two or more ticked.
+
+## 94. Step start dates for every task ☑ (version 1.10.12)
+
+Feedback: in Edit all steps, step start dates could only be edited on some tasks.
+
+- The Starts, Days of work and Progress columns (cards: Start and Days chips), the Progress bulk
+  action and the timeline preview only showed when the task was on the Gantt chart or a step
+  already had one of those fields. They now always show. The bulk Start action already worked.
+- The task page step menu's "Start, days of work and progress" was Gantt-only; it now shows for
+  every task. The dialog says "timeline" instead of "chart" for tasks not on the Gantt chart.
+- Reviewed the other conditions on the screen and kept them: Stage only when the task's steps are
+  on the Kanban board (it means nothing otherwise); "Comes after" only with two or more steps;
+  the phone card's Reminder chip only once a step has a due date (reminders count back from it;
+  the wide table shows the cell greyed and says to set a due date first).
+
