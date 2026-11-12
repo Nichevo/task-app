@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:task_blocks/home_widgets.dart';
+import 'package:task_blocks/screens/task_page.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:task_blocks/dropbox.dart';
@@ -152,6 +155,39 @@ void main() {
       await s.sync();
       final saved = AppData.fromJson(jsonDecode(files[DropboxClient.filePath]!) as Map<String, dynamic>);
       expect(saved.active.map((t) => t.title).toSet(), {'from the PC', 'also from the PC', 'from the phone'});
+    });
+  });
+
+  group('screens and widgets (review fixes)', () {
+    testWidgets('M1: an open task page follows a newer copy from sync, and edits go to it', (tester) async {
+      final s = AppStore();
+      final t = s.addTask('Old name');
+      await tester.pumpWidget(MaterialApp(home: TaskPage(store: s, task: t)));
+      // A sync brings a newer copy of the task (a different object).
+      final newer = Task.fromJson(t.toJson())..title = 'Renamed on the PC';
+      s.data.active[0] = newer;
+      s.changed();
+      await tester.pump();
+      expect(find.text('Renamed on the PC'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).at(1), 'A note');
+      expect(newer.notes, 'A note', reason: 'not lost on the old copy');
+    });
+
+    test('M4: snoozed tasks go to the widgets with when the snooze ends', () {
+      final s = AppStore();
+      final until = DateTime.now().add(const Duration(hours: 2));
+      s.addTask('Later').snoozedUntil = until;
+      final j = jsonDecode(HomeWidgets.widgetJson(s.data, DateTime.now())) as Map;
+      final t = (j['tasks'] as List).single as Map;
+      expect(t['snoozed'], isTrue);
+      expect(t['snoozedUntil'], until.millisecondsSinceEpoch);
+    });
+
+    test('L7: a deleted email task is never made again from the same email', () {
+      final s = AppStore();
+      final t = s.addTask('From email', source: TaskSource.email)..sourceRef = 'gmail-1';
+      s.delete(t);
+      expect(s.data.hiddenEmails, contains('gmail-1'));
     });
   });
 }

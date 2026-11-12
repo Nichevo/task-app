@@ -1539,6 +1539,9 @@ class AppStore extends ChangeNotifier {
   }
 
   void delete(Task t) {
+    // L7: an email that became this task is never made into a task again, even if Gmail's label
+    // couldn't be changed.
+    if (t.source == TaskSource.email && t.sourceRef != null) data.hiddenEmails.add(t.sourceRef!);
     data.active.remove(t);
     data.archived.remove(t);
     data.deleted[t.id] = DateTime.now().toUtc();
@@ -2014,7 +2017,7 @@ class AppStore extends ChangeNotifier {
       final ids = await g.search('newer_than:14d -label:tasked (subject:task OR label:task)', max: 50);
       final ignored = <IgnoredEmail>[];
       for (final id in ids) {
-        if (data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
+        if (data.hiddenEmails.contains(id) || data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
         // Already looked at and not a task: don't fetch it again on every check.
         if (_notTasks.contains(id)) continue;
         final m = _ignoredMessages[id] ?? await g.message(id, checkSender: true);

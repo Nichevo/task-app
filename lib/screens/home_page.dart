@@ -128,6 +128,8 @@ class HomePageState extends State<HomePage> {
   }
 
   bool _checkingEvents = false;
+  DateTime? _eventsCheckedAt;
+  String? _eventsKey;
 
   /// Once a day or week (as chosen in Settings) looks for events to offer as tasks.
   Future<void> _checkEvents() async {
@@ -135,6 +137,13 @@ class HomePageState extends State<HomePage> {
     final last = store.eventPromptAt;
     final period = Duration(days: data.eventSuggest == EventSuggest.daily ? 1 : 7);
     if (last != null && DateTime.now().difference(last) < period) return;
+    // M5: this runs on every change (each key typed), so only ask the calendar again after half an
+    // hour, or when the setting or the dismissed events changed.
+    final key = '${data.eventSuggest.name}/${data.dismissedEvents.length}/${data.eventCalendars.length}/${data.eventDays}';
+    final at = _eventsCheckedAt;
+    if (at != null && key == _eventsKey && DateTime.now().difference(at) < const Duration(minutes: 30)) return;
+    _eventsCheckedAt = DateTime.now();
+    _eventsKey = key;
     _checkingEvents = true;
     try {
       final n = (await upcomingEvents(data)).length;

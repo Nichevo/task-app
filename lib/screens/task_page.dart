@@ -38,17 +38,36 @@ class _TaskPageState extends State<TaskPage> {
   late final _title = TextEditingController(text: widget.task.title);
   late final _notes = TextEditingController(text: widget.task.notes);
   final _newStep = TextEditingController();
+  final _titleFocus = FocusNode();
+  final _notesFocus = FocusNode();
   final _newStepFocus = FocusNode();
 
-  Task get task => widget.task;
+  /// M1 (review, Nov 2026): the task as the store has it now. A sync can swap in a newer copy
+  /// from another device; edits must go to that one, not to the copy this page was opened with.
+  Task get task => _current;
+  late Task _current = widget.task;
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Ticks on a widget or notification, and syncs, show here while the page is open.
+    widget.store.addListener(_refresh);
+  }
   bool get archived => task.closedAt != null;
 
   @override
   void dispose() {
+    widget.store.removeListener(_refresh);
     _title.dispose();
     _notes.dispose();
     _newStep.dispose();
     _newStepFocus.dispose();
+    _titleFocus.dispose();
+    _notesFocus.dispose();
     super.dispose();
   }
 
@@ -509,6 +528,13 @@ class _TaskPageState extends State<TaskPage> {
 
   @override
   Widget build(BuildContext context) {
+    final now = widget.store.data.task(widget.task.id);
+    if (now != null && !identical(now, _current)) {
+      _current = now;
+      // Show the newer copy's words unless they are being typed here right now.
+      if (_title.text != now.title && !_titleFocus.hasFocus) _title.text = now.title;
+      if (_notes.text != now.notes && !_notesFocus.hasFocus) _notes.text = now.notes;
+    }
     return Scaffold(
       appBar: AppBar(
         leading: widget.onClose == null
@@ -522,6 +548,12 @@ class _TaskPageState extends State<TaskPage> {
                 color: task.starred ? const Color(0xFFFFB300) : null),
             onPressed: () => _update(() => task.starred = !task.starred),
           ),
+          if (archived)
+            IconButton(
+              tooltip: 'Move back to tasks',
+              icon: const Icon(Icons.undo),
+              onPressed: () => setState(() => widget.store.restore(task)),
+            ),
           IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: _delete),
           if (!archived)
             PopupMenuButton<String>(
@@ -536,6 +568,9 @@ class _TaskPageState extends State<TaskPage> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         TextField(
           controller: _title,
+          focusNode: _titleFocus,
+          // L6: an archived task is read-only like its other fields; Move back to tasks reopens it.
+          readOnly: archived,
           decoration: const InputDecoration(labelText: 'Task', border: OutlineInputBorder()),
           textCapitalization: TextCapitalization.sentences,
           onChanged: (v) {
@@ -546,6 +581,8 @@ class _TaskPageState extends State<TaskPage> {
         const SizedBox(height: 12),
         TextField(
           controller: _notes,
+          focusNode: _notesFocus,
+          readOnly: archived,
           minLines: 3,
           maxLines: 8,
           decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder()),

@@ -196,7 +196,7 @@ class Reminders {
   /// Everything the scheduled reminders depend on: the settings, each open task's name, dates
   /// and reminder, how much is done (for the weekly review) and today's date.
   static String scheduleKey(AppData data, DateTime now) {
-    final j = data.toJson()
+    final j = data.toJson(lists: false)
       ..removeWhere((k, _) => const {
             'active', 'archived', 'done', 'deleted', 'skips', 'updatedAt', 'orderUpdatedAt', 'hiddenEmails',
           }.contains(k));

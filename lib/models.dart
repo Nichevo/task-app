@@ -1600,7 +1600,8 @@ class AppData {
     'matrixNames', 'urgentDays', 'quickWords', 'unreadable',
   };
 
-  Map<String, dynamic> toJson() => {
+  /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
+  Map<String, dynamic> toJson({bool lists = true}) => {
         ...extra,
         'version': 1,
         'newestApp': newerVersion(newestApp, currentAppVersion),
@@ -1625,10 +1626,10 @@ class AppData {
         if (ganttWeekends) 'ganttWeekends': true,
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
-        if (skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
+        if (lists && skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
-        'done': done.map((k, v) => MapEntry(k, v.toJson())),
+        if (lists) 'done': done.map((k, v) => MapEntry(k, v.toJson())),
         'autoCategory': autoCategory.name,
         'eventSuggest': eventSuggest.name,
         'eventCalendars': eventCalendars.toList(),
@@ -1651,9 +1652,9 @@ class AppData {
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         'orderUpdatedAt': orderUpdatedAt.toUtc().toIso8601String(),
         'settingsUpdatedAt': settingsUpdatedAt.toUtc().toIso8601String(),
-        'deleted': deleted.map((k, v) => MapEntry(k, v.toUtc().toIso8601String())),
-        'active': active.map((t) => t.toJson()).toList(),
-        'archived': archived.map((t) => t.toJson()).toList(),
+        if (lists) 'deleted': deleted.map((k, v) => MapEntry(k, v.toUtc().toIso8601String())),
+        if (lists) 'active': active.map((t) => t.toJson()).toList(),
+        if (lists) 'archived': archived.map((t) => t.toJson()).toList(),
         if (unreadable.isNotEmpty) 'unreadable': unreadable,
       };
 
