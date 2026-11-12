@@ -20,6 +20,7 @@ import '../widgets/task_block.dart';
 import '../widgets/task_colors.dart';
 import 'about_page.dart';
 import 'archive_page.dart';
+import 'backups_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
@@ -581,6 +582,23 @@ class HomePageState extends State<HomePage> {
             content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
                 'Everything keeps working, and nothing the newer version added is lost.'),
             actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
+          ),
+        // H2: a saved file couldn't be read at start-up; say what was done about it.
+        if (store.loadProblem case final problem?)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.warning_amber_outlined),
+            content: Text(problem),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  store.dismissLoadProblem();
+                  _open(context, BackupsPage(store: store));
+                },
+                child: const Text('Backups'),
+              ),
+              TextButton(onPressed: store.dismissLoadProblem, child: const Text('OK')),
+            ],
           ),
         if (store.restoreOffer case final b?)
           MaterialBanner(

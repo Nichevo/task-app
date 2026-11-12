@@ -173,7 +173,13 @@ class Reminders {
     if (!await f.exists()) return const [];
     try {
       final list = jsonDecode(await f.readAsString()) as List;
-      await f.delete();
+      // L4: a button may have been pressed since; keep anything added after what was read.
+      final again = jsonDecode(await f.readAsString()) as List;
+      if (again.length > list.length) {
+        await f.writeAsString(jsonEncode(again.sublist(list.length)), flush: true);
+      } else {
+        await f.delete();
+      }
       return [for (final j in list) PendingAction.fromJson(j as Map<String, dynamic>)];
     } catch (e) {
       debugPrint('Could not read notification actions: $e');

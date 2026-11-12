@@ -1,4 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:task_blocks/store.dart';
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/reminders.dart';
 
@@ -54,4 +60,49 @@ void main() {
       expect({for (final r in days) r.id}.length, 7, reason: 'each day has its own notification');
     });
   });
+
+  group('saving safety (review fixes)', () {
+    late Directory dir;
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('tb');
+      PathProviderPlatform.instance = _Paths(dir.path);
+    });
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    test('H2: one unreadable task is kept as it was, the rest load', () {
+      final j = AppData().toJson();
+      j['active'] = [Task.create('fine').toJson(), {'id': 'x', 'title': 'no created time'}];
+      final d = AppData.fromJson(j);
+      expect(d.active.map((t) => t.title), ['fine']);
+      expect(d.unreadable, [{'id': 'x', 'title': 'no created time'}]);
+      expect(d.toJson()['unreadable'], d.unreadable, reason: 'saved back unchanged');
+    });
+
+    test('H2: a file that cannot be read is put aside and the newest backup opens', () async {
+      final good = AppData()..active.add(Task.create('from the backup'));
+      Directory('${dir.path}/backups').createSync();
+      File('${dir.path}/backups/tasks-2026-11-11.json').writeAsStringSync(jsonEncode(good.toJson()));
+      File('${dir.path}/tasks.json').writeAsStringSync('{"active": [oops');
+      final s = AppStore();
+      await s.load();
+      expect(s.data.active.map((t) => t.title), ['from the backup']);
+      expect(s.loadProblem, contains('2026-11-11'));
+      expect(dir.listSync().map((f) => f.uri.pathSegments.last), contains(startsWith('tasks-unreadable-')));
+      expect(File('${dir.path}/tasks.json').existsSync(), isFalse, reason: 'nothing saved over it');
+    });
+
+    test('M3: quick settings saves never leave a broken file', () async {
+      final s = AppStore();
+      await s.load();
+      await Future.wait([for (var i = 0; i < 20; i++) s.saveDeviceSettings()]);
+      expect(jsonDecode(File('${dir.path}/device_settings.json').readAsStringSync()), isA<Map>());
+    });
+  });
+}
+
+class _Paths extends Fake with MockPlatformInterfaceMixin implements PathProviderPlatform {
+  _Paths(this.path);
+  final String path;
+  @override
+  Future<String?> getApplicationSupportPath() async => path;
 }

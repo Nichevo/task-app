@@ -189,8 +189,12 @@ class HomeWidgets {
     try {
       final raw = await HomeWidget.getWidgetData<String>(key);
       if (raw == null || raw.isEmpty || raw == '[]') return const [];
-      await HomeWidget.saveWidgetData<String>(key, '[]');
-      return jsonDecode(raw) as List;
+      final taken = jsonDecode(raw) as List;
+      // L4: a widget may have added more since; clear only what was read.
+      final now = await HomeWidget.getWidgetData<String>(key);
+      final all = now == null || now.isEmpty ? const [] : jsonDecode(now) as List;
+      await HomeWidget.saveWidgetData<String>(key, jsonEncode(all.length > taken.length ? all.sublist(taken.length) : const []));
+      return taken;
     } catch (e) {
       debugPrint('Could not read $key: $e');
       return const [];
