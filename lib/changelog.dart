@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.10', 'November 2026', [
+    'Each task with two or more steps and a date to finish by now has its own burn-down: steps left each day against a dashed ideal line, and when it will be done at this pace. Open "Burn-down" on the task page (under the checklist) or in Edit all steps. Count steps or days of work. The task doesn\'t need to be on the Gantt chart.',
+    'On the Gantt chart, zoom to one task and the burn-down strip at the bottom shows that task; "All in category" goes back.',
+    'The burn-down widget can show one task: choose it when placing the widget (Android) or in the Chart widget\'s Task setting (iPad). Tapping it opens the task.',
+  ]),
   Release('1.10.9', 'November 2026', [
     'The "Edit all" button above a task\'s checklist now shows as soon as the task has one step, not only from two steps up.',
   ]),

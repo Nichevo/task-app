@@ -164,6 +164,9 @@ class HomeWidgets {
       'burn': {
         for (final id in [null, ...data.categories.map((c) => c.id)])
           if (burnDown(burnTasks(data, id), data, now) case final b?) id ?? '': _burn(b),
+        // Item 86: each open task's own burn-down, as "task:<id>", for widgets set to one task.
+        for (final t in data.active)
+          if (taskBurnDown(t, data, now) case final b?) 'task:${t.id}': _burn(b),
       },
     });
   }

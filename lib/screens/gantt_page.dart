@@ -100,6 +100,7 @@ class _GanttPageState extends State<GanttPage> {
   // Item 84: a day width picked to fit some bars on screen (null = the zoom's own), how wide the
   // dates area is, and its first day.
   double? _fitW;
+  String? _burnTaskId;
   double _viewW = 0;
   DateTime? _first;
 
@@ -127,8 +128,10 @@ class _GanttPageState extends State<GanttPage> {
       ];
 
   /// Item 84: zoom and scroll so [bars] fill the width of the chart, with a day spare each side.
-  void _focusOn(Iterable<GanttBar> bars) {
-    if (bars.isEmpty || _viewW <= 0) return;
+  /// Item 86: zoomed to one [task], the burn-down strip shows that task's; otherwise the filter's.
+  void _focusOn(Iterable<GanttBar> bars, {String? task}) {
+    _burnTaskId = task;
+    if (bars.isEmpty || _viewW <= 0) return setState(() {});
     var a = bars.first.start, b = bars.first.end;
     for (final x in bars) {
       if (x.start.isBefore(a)) a = x.start;
@@ -320,7 +323,10 @@ class _GanttPageState extends State<GanttPage> {
 
   /// Item 77: the burn-down for what the filter shows, folded away until opened.
   Widget _burnStrip(DateTime now) {
-    final burn = burnDown(burnTasks(data, _category), data, now, unit: _burnUnit);
+    final id = _burnTaskId;
+    final task = id == null ? null : anyTask(data, id);
+    final own = task == null ? null : taskBurnDown(task, data, now, unit: _burnUnit);
+    final burn = own ?? burnDown(burnTasks(data, _category), data, now, unit: _burnUnit);
     if (burn == null) return const SizedBox();
     final late = burn.daysLate;
     return Material(
@@ -336,13 +342,22 @@ class _GanttPageState extends State<GanttPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _burnOpen ? 'Burn-down' : burnSummary(burn),
+                  _burnOpen ? (own != null ? 'Burn-down · ${task!.title}' : 'Burn-down') : burnSummary(burn),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: late != null && late > 0 && burn.now > 0 ? Theme.of(context).colorScheme.error : null),
                 ),
               ),
+              if (own != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    label: const Text('All in category'),
+                    onPressed: () => setState(() => _burnTaskId = null),
+                  ),
+                ),
               Icon(_burnOpen ? Icons.expand_more : Icons.expand_less),
             ]),
           ),
@@ -354,9 +369,9 @@ class _GanttPageState extends State<GanttPage> {
               SegmentedButton<BurnUnit>(
                 showSelectedIcon: false,
                 style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                segments: const [
-                  ButtonSegment(value: BurnUnit.items, label: Text('Tasks and steps')),
-                  ButtonSegment(value: BurnUnit.days, label: Text('Days of work')),
+                segments: [
+                  ButtonSegment(value: BurnUnit.items, label: Text(own != null ? 'Steps' : 'Tasks and steps')),
+                  const ButtonSegment(value: BurnUnit.days, label: Text('Days of work')),
                 ],
                 selected: {_burnUnit},
                 onSelectionChanged: (v) => setState(() => _burnUnit = v.first),
@@ -433,7 +448,7 @@ class _GanttPageState extends State<GanttPage> {
     if (!mounted) return;
     final id = widget.focusTaskId;
     final focus = id == null ? null : tasks.where((t) => t.id == id).firstOrNull;
-    if (focus != null) return _focusOn(_barsOf([focus], steps: true));
+    if (focus != null) return _focusOn(_barsOf([focus], steps: true), task: focus.id);
     final from = addDays(dayOf(now), -2), to = addDays(from, (_viewW / _dayW).floor());
     final nearToday = bars.any((b) => !b.start.isAfter(to) && !b.end.isBefore(from));
     if (!nearToday && bars.isNotEmpty) return _focusOn(bars);
@@ -636,7 +651,7 @@ class _GanttPageState extends State<GanttPage> {
                     : '${fmt.format(bar.start)} to ${fmt.format(bar.end)}';
     void focus() {
       setState(() => _expanded.add(t.id));
-      _focusOn(_barsOf([t], steps: true));
+      _focusOn(_barsOf([t], steps: true), task: t.id);
     }
 
     return InkWell(

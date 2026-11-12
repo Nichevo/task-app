@@ -8,6 +8,7 @@ import '../models.dart';
 import '../step_bulk.dart';
 import '../store.dart';
 import '../widgets/step_links.dart';
+import '../widgets/task_burn_down.dart';
 import 'settings_page.dart' show askText, remindOptions;
 import 'task_page.dart' show TaskPage;
 
@@ -601,6 +602,8 @@ class _StepsEditPageState extends State<StepsEditPage> {
                 TextButton.icon(onPressed: _addStep, icon: const Icon(Icons.add), label: const Text('Add a step')),
                 // Folded, the chart sits under the steps and scrolls with them, showing every row.
                 if (!wide && _showPlan && steps.isNotEmpty) ...[const SizedBox(height: 8), _preview(wide)],
+                // Item 86: the task's burn-down, folded until opened.
+                TaskBurnDownTile(task: task, data: data),
               ]),
               itemBuilder: (context, i) => wide ? _row(steps[i], i) : _card(steps[i], i),
             ),

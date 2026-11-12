@@ -12,6 +12,7 @@ import '../widgets/link_text.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/step_links.dart';
+import '../widgets/task_burn_down.dart';
 import '../widgets/worked_week.dart';
 import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
@@ -706,6 +707,8 @@ class _TaskPageState extends State<TaskPage> {
               IconButton(tooltip: 'Add step', icon: const Icon(Icons.add), onPressed: _addStep),
             ]),
           ),
+        // Item 86: the task's own burn-down, for tasks with two or more steps and a planned finish.
+        TaskBurnDownTile(task: task, data: data),
         ListTile(
           leading: const Icon(Icons.schedule),
           title: const Text('Created'),

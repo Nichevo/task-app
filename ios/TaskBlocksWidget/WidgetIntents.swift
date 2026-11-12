@@ -186,5 +186,7 @@ struct ChartIntent: WidgetConfigurationIntent {
   static var title: LocalizedStringResource { "Chart" }
   @Parameter(title: "Chart", default: .addedDone) var mode: ChartMode
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 86: a burn-down of one task's steps instead of a category.
+  @Parameter(title: "Task (burn-down)") var task: TaskEntity?
   init() {}
 }

@@ -814,7 +814,12 @@ struct ChartView: View {
     let snap = entry.snap
     let cat = entry.config.category?.id
     let key = cat ?? ""
-    if entry.config.mode == .burnDown {
+    if entry.config.mode == .burnDown, let task = entry.config.task {
+      // Item 86: one task's own burn-down; a tap opens the task.
+      burnDown(snap.burn["task:" + task.id], title: "Burn-down · \(task.title)",
+               empty: "This task needs two or more steps and a date to finish by.")
+        .widgetURL(W.open(task.id))
+    } else if entry.config.mode == .burnDown {
       burnDown(snap.burn[key], title: titled("Burn-down", snap, cat))
         .widgetURL(W.link("gantt", ["cat": key]))
     } else {
@@ -853,7 +858,8 @@ struct ChartView: View {
   }
 
   @ViewBuilder
-  private func burnDown(_ b: Burn?, title: String) -> some View {
+  private func burnDown(_ b: Burn?, title: String,
+                        empty: String = "Nothing with dates on the Gantt chart here yet.") -> some View {
     VStack(alignment: .leading, spacing: 4) {
       Header(title: title)
       if let b {
@@ -882,7 +888,7 @@ struct ChartView: View {
         .chartLegend(.hidden)
         Text(b.summary).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
       } else {
-        EmptyNote(text: "Nothing with dates on the Gantt chart here yet.")
+        EmptyNote(text: empty)
       }
     }
     .widgetCard()
@@ -895,7 +901,7 @@ struct ChartWidget: Widget {
       ChartView(entry: $0)
     }
     .configurationDisplayName("Chart")
-    .description("Added vs done for the last 4 weeks, or the Gantt chart's burn-down, for one category or all.")
+    .description("Added vs done for the last 4 weeks, or a burn-down for one category, all, or one task.")
     .supportedFamilies([.systemMedium, .systemLarge])
   }
 }
