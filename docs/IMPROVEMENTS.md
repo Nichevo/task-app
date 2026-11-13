@@ -1162,3 +1162,23 @@ the task cards and the step cards.
 - `AppData.stepShading` (null = same as the task cards; `stepCardShading` resolves it), also in
   Settings, Kanban board, "Step card shading". The task one is now titled "Task card shading".
 
+
+## 99. iPad check: snoozes and widgets ☑ (version 1.10.16)
+
+Feedback: check the iPad has everything, then a bug check. Every feature since 1.10.7 reaches the
+iPad (shared code, and the burn-down and snooze widget changes were already in Swift). Fixes:
+
+- **Snooze from a reminder's button with the app closed** (both platforms): the button handler
+  (`_recordAction`, also in the background) now schedules the snooze-end reminder itself
+  (`Reminders.snoozeEnded`, same id as the planned one, so the app's next scheduling replaces it).
+  Reminder payloads carry the task's title and whether it repeats for this.
+- **iPad widgets, snooze timing:** `Snapshot.at(date)` works out snoozes for each timeline entry,
+  and timelines add an entry at each snooze end (`W.redrawTimes`). Snooze on an iPad widget keeps
+  the task (hidden until 8am, then back) and schedules a "Snoozed task" notification shaped like
+  the plugin's, so its buttons and tap work. Android widget snooze is unchanged (the app reminds
+  once it applies it).
+- **iPad update moves the app folder:** a reminder button whose saved folder no longer exists
+  asks `getApplicationSupportDirectory()` instead of losing the press.
+- **Chart widget task picker** lists only tasks with a burn-down (`BurnTaskOptions`).
+- docs/IPAD.md: Chart row mentions the per-task burn-down; widget snooze reminder.
+- Not changed: on the iPad the Kanban board needs a press and hold to drag even with a trackpad.

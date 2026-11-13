@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -45,8 +47,9 @@ Future<void> _recordAction(NotificationResponse r) async {
   if (payload == null || payload.isEmpty) return;
   final j = jsonDecode(payload) as Map<String, dynamic>;
   final taskId = j['task'] as String?;
-  final dir = j['dir'] as String?;
-  if (taskId == null || dir == null) return;
+  if (taskId == null) return;
+  final dir = await _filesDir(j['dir'] as String?);
+  if (dir == null) return;
   final now = DateTime.now();
   final action = switch (r.actionId) {
     'done' => PendingAction(taskId: taskId, action: 'done', at: now),
@@ -68,6 +71,20 @@ Future<void> _recordAction(NotificationResponse r) async {
   final list = await f.exists() ? jsonDecode(await f.readAsString()) as List : [];
   list.add(action.toJson());
   await f.writeAsString(jsonEncode(list), flush: true);
+  final until = action.snoozeUntil;
+  if (until != null) await Reminders.snoozeEnded(taskId, j['title'] as String?, until, repeat: j['repeat'] == true, dir: dir);
+}
+
+/// The app's folder, from a notification. An iPad update moves the app's folder, so a reminder
+/// set before the update names the old one: then ask where it is now.
+Future<String?> _filesDir(String? saved) async {
+  if (saved != null && saved.isNotEmpty && await Directory(saved).exists()) return saved;
+  try {
+    return (await getApplicationSupportDirectory()).path;
+  } catch (e) {
+    debugPrint('No app folder for a notification button: $e');
+    return null;
+  }
 }
 
 @pragma('vm:entry-point')
@@ -283,6 +300,41 @@ class Reminders {
   /// The first of a task's notification ids (16 each: due, early, nudges, habit, snooze end).
   static int taskBase(String id) => (id.hashCode & 0x07ffffff) * 16;
 
+  /// What a task's reminder carries: the task, the app's folder and, for its snooze buttons,
+  /// the task's name and whether it repeats.
+  static String payloadFor(PlannedReminder r, String? dir) => jsonEncode({
+        'task': r.task!.id,
+        'dir': dir,
+        if (r.kind == ReminderKind.due || r.kind == ReminderKind.dueRepeat) 'title': r.task!.title,
+        if (r.kind == ReminderKind.dueRepeat) 'repeat': true,
+      });
+
+  /// A snooze from a reminder's button reminds again when it ends, set right away, so it comes
+  /// even if the app isn't opened before then (the app sets the same one when it next opens).
+  /// Runs where the button was pressed, also in the background with the app closed.
+  static Future<void> snoozeEnded(String taskId, String? title, DateTime until,
+      {required bool repeat, required String dir}) async {
+    if (title == null || title.isEmpty || !until.isAfter(DateTime.now())) return;
+    try {
+      // In the background the plugins may not be set up yet.
+      DartPluginRegistrant.ensureInitialized();
+      tzdata.initializeTimeZones();
+      final r = PlannedReminder(taskBase(taskId) + 8, until, 'Snoozed task', title, null,
+          repeat ? ReminderKind.dueRepeat : ReminderKind.due);
+      await FlutterLocalNotificationsPlugin().zonedSchedule(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        payload: jsonEncode({'task': taskId, 'dir': dir, 'title': title, if (repeat) 'repeat': true}),
+        scheduledDate: tz.TZDateTime.from(until.toUtc(), tz.UTC),
+        notificationDetails: repeat ? _dueRepeat : _due,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    } catch (e) {
+      debugPrint('Could not set the snooze reminder: $e');
+    }
+  }
+
   /// Replaces all scheduled reminders with [plan], plus the weekly review.
   Future<void> schedule(AppData data) async {
     if (!_ready) return;
@@ -299,7 +351,7 @@ class Reminders {
           id: r.id,
           title: r.title,
           body: r.body,
-          payload: r.task == null ? null : jsonEncode({'task': r.task!.id, 'dir': dir}),
+          payload: r.task == null ? null : payloadFor(r, dir),
           // A UTC time is the same moment wherever the phone is.
           scheduledDate: tz.TZDateTime.from(r.when.toUtc(), tz.UTC),
           notificationDetails: switch (r.kind) {

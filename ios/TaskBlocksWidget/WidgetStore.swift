@@ -34,6 +34,8 @@ struct WTask {
   var since: Date? = nil
   var box: String? = nil
   var snoozed = false
+  /** When a snooze ends (nil: not snoozed, or an older app version that sent no end). */
+  var snoozedUntil: Date? = nil
   var worked: Set<String> = []
   var streak = 0
   var streakUnit = "day"
@@ -70,6 +72,22 @@ struct Snapshot {
   var addedDone: [String: AddedDone] = [:]
   var burn: [String: Burn] = [:]
 
+  /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
+  func at(_ date: Date) -> Snapshot {
+    var s = self
+    s.all = all.map { t in
+      var t = t
+      if let until = t.snoozedUntil { t.snoozed = until > date }
+      return t
+    }
+    return s
+  }
+
+  /** When snoozes end between [from] and [to], so the widgets can redraw then. */
+  func snoozeEnds(from: Date, to: Date) -> [Date] {
+    Array(Set(all.compactMap { $0.snoozedUntil }.filter { $0 > from && $0 < to })).sorted()
+  }
+
   /** Open tasks that aren't snoozed: what the list widgets show. */
   var tasks: [WTask] { all.filter { !$0.snoozed } }
 
@@ -103,7 +121,11 @@ struct Snapshot {
 
     // Things done on a widget that the app hasn't picked up yet (item 79, step B writes them).
     let done = Set(array(d, "widget_done").compactMap { $0["id"] as? String })
-    let snoozed = Set(array(d, "widget_snoozed").compactMap { $0["id"] as? String })
+    // Snoozed on a widget: hidden until the snooze ends, then back even if the app wasn't opened.
+    var widgetSnoozed: [String: Date] = [:]
+    for o in array(d, "widget_snoozed") {
+      if let id = o["id"] as? String { widgetSnoozed[id] = date(o["until"]) ?? Date.distantFuture }
+    }
     let stepTicks = Set(array(d, "widget_steps").map { "\(str($0["task"]))/\(str($0["step"]))" })
     var moves: [String: (String, Date)] = [:]
     for o in array(d, "widget_moves") {
@@ -127,7 +149,7 @@ struct Snapshot {
     s.categories = ((root["categories"] as? [[String: Any]]) ?? []).map { (str($0["id"]), str($0["name"])) }
     for o in (root["tasks"] as? [[String: Any]]) ?? [] {
       let id = str(o["id"])
-      if done.contains(id) || snoozed.contains(id) { continue }
+      if done.contains(id) { continue }
       let steps: [WStep] = ((o["steps"] as? [[String: Any]]) ?? []).map { st in
         let sid = str(st["id"])
         let moved = moves["\(id)/\(sid)"]
@@ -145,8 +167,16 @@ struct Snapshot {
       t.since = moved?.1 ?? date(o["since"])
       t.box = o["box"] as? String
       // Still snoozed only until the time the app sent (older app versions send none).
-      let until = date(o["snoozedUntil"])
-      t.snoozed = ((o["snoozed"] as? Bool) ?? false) && (until == nil || until! > Date())
+      // The redraws ask for the snapshot at their own time (Snapshot.at), so a snooze that ends
+      // between the hourly redraws shows the task again then, not at the next reload.
+      let snoozed = (o["snoozed"] as? Bool) ?? false
+      let until = snoozed ? date(o["snoozedUntil"]) : nil
+      t.snoozedUntil = until
+      t.snoozed = snoozed && (until == nil || until! > Date())
+      if let w = widgetSnoozed[id], w > Date() {
+        t.snoozedUntil = w
+        t.snoozed = true
+      }
       t.worked = worked(id, o)
       s.all.append(t)
     }
@@ -292,6 +322,13 @@ enum W {
   }
 
   static func open(_ id: String) -> URL { link("open", ["id": id]) }
+
+  /** Hourly redraws for [hours] hours, plus one at each snooze end in between. */
+  static func redrawTimes(_ snap: Snapshot, now: Date, hours: Int) -> [Date] {
+    let hourly = (0..<hours).map { now.addingTimeInterval(Double($0) * 3600) }
+    let end = now.addingTimeInterval(Double(hours) * 3600)
+    return (hourly + snap.snoozeEnds(from: now, to: end)).sorted()
+  }
 
   /** A light tile colour for a stage: its own colour washed out, else one from a set. */
   static func tile(_ s: WStage, _ i: Int) -> Color {

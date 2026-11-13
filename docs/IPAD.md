@@ -56,7 +56,7 @@ From version 1.9.5 the iPad has home screen widgets (eleven from 1.10.6), plus L
 | Kanban board | How many tasks in each stage, or the cards in one stage | Small, Medium, Large |
 | Matrix | The four boxes and the top tasks in each | Medium, Large, Extra large |
 | Worked today | A category's tasks, or your habits, with this week's worked days | Medium, Large |
-| Chart | Added vs done for 4 weeks, or the Gantt burn-down | Medium, Large |
+| Chart | Added vs done for 4 weeks, or a burn-down for one category, all, or one task (1.10.10: pick it under "Task (burn-down)") | Medium, Large |
 | Quick add | Opens the app ready to type a task | Small, Lock Screen |
 | Calendar (1.10.6) | This month on the left; overdue, the next two weeks and today's events on the right | Large, Extra large |
 | At a glance (1.10.6) | Open and overdue counts and what's due next | Lock Screen only |
@@ -71,7 +71,8 @@ Tapping a task opens it in the app; tapping a widget's title opens that page. Fr
 have buttons too: the circle before a task ticks it off (the moon snoozes it until tomorrow, on large
 widgets), Done on Focus, tap a step to tick it, the arrow or Next moves a board card or step on, and
 the circle on Worked today ticks today. The widget changes at once; the app applies it when you next
-open it.
+open it. A task snoozed with the moon comes back on the widgets at 8am the next day, and you get a
+reminder then, even if you haven't opened the app (from 1.10.16).
 
 The widgets redraw when you change something in the app, and every hour by themselves (iPadOS limits
 how often). A change synced from another device shows after you next open the app on the iPad.

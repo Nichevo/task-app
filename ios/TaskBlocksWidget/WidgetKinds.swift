@@ -28,9 +28,8 @@ struct SnapProvider<I: WidgetConfigurationIntent>: AppIntentTimelineProvider {
   func timeline(for configuration: I, in context: Context) async -> Timeline<SnapEntry<I>> {
     let snap = Snapshot.load()
     let now = Date()
-    let entries = (0..<6).map {
-      SnapEntry(date: now.addingTimeInterval(Double($0) * 3600), snap: snap, config: configuration)
-    }
+    let times = W.redrawTimes(snap, now: now, hours: 6)
+    let entries = times.map { SnapEntry(date: $0, snap: snap.at($0), config: configuration) }
     return Timeline(entries: entries, policy: .atEnd)
   }
 }
@@ -57,11 +56,14 @@ struct PlainProvider: TimelineProvider {
     let now = Date()
     let next = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now.addingTimeInterval(3600)
     if hourly {
-      let entries = (0..<6).map { PlainEntry(date: now.addingTimeInterval(Double($0) * 3600), snap: snap) }
+      let entries = W.redrawTimes(snap, now: now, hours: 6).map { PlainEntry(date: $0, snap: snap.at($0)) }
       completion(Timeline(entries: entries, policy: .atEnd))
       return
     }
-    completion(Timeline(entries: [PlainEntry(date: now, snap: snap)], policy: .after(next.addingTimeInterval(60))))
+    // Also when a snooze ends before midnight, so that task shows again then.
+    let times = [now] + snap.snoozeEnds(from: now, to: next)
+    completion(Timeline(entries: times.map { PlainEntry(date: $0, snap: snap.at($0)) },
+                        policy: .after(next.addingTimeInterval(60))))
   }
 }
 

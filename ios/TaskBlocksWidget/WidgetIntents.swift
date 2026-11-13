@@ -61,6 +61,14 @@ struct TaskQuery: EntityQuery {
   func suggestedEntities() async throws -> [TaskEntity] { all() }
 }
 
+/** Only the tasks that have their own burn-down (two or more steps and a finish date), as on Android. */
+struct BurnTaskOptions: DynamicOptionsProvider {
+  func results() async throws -> [TaskEntity] {
+    let snap = Snapshot.load()
+    return snap.all.filter { snap.burn["task:" + $0.id] != nil }.map { TaskEntity(id: $0.id, title: $0.title) }
+  }
+}
+
 // MARK: - Choices
 
 enum ListShow: String, AppEnum {
@@ -187,6 +195,6 @@ struct ChartIntent: WidgetConfigurationIntent {
   @Parameter(title: "Chart", default: .addedDone) var mode: ChartMode
   @Parameter(title: "Category") var category: CategoryEntity?
   // Item 86: a burn-down of one task's steps instead of a category.
-  @Parameter(title: "Task (burn-down)") var task: TaskEntity?
+  @Parameter(title: "Task (burn-down)", optionsProvider: BurnTaskOptions()) var task: TaskEntity?
   init() {}
 }
