@@ -418,6 +418,59 @@ BurnDown? burnDown(List<Task> tasks, AppData data, DateTime now, {BurnUnit unit 
     }
   }
   if (start == null || end == null) return null;
+  return _burnOf(pieces, start, end, now, unit);
+}
+
+/// Item 86: the burn-down of one task's steps, for tasks with two or more steps and a planned
+/// finish (the task's bar end, else its steps' latest end), on the Gantt chart or not. Starts
+/// at the first plan start, the task's or a step's start, or when the task was added.
+/// Counting days of work, a step counts its own days when it has a bar, and steps without
+/// share what is left of the task's days.
+BurnDown? taskBurnDown(Task t, AppData data, DateTime now, {BurnUnit unit = BurnUnit.items}) {
+  if (t.steps.length < 2) return null;
+  final weekends = weekendsFor(t, data);
+  final taskBar = barFor(t, data);
+  final stepBars = {for (final st in t.steps) st.id: stepBar(t, st, data)};
+  DateTime? end = taskBar?.end;
+  DateTime? start = t.planStart != null ? dayOf(t.planStart!) : taskBar?.start;
+  for (final b in stepBars.values) {
+    if (b == null) continue;
+    if (taskBar == null && (end == null || b.end.isAfter(end))) end = b.end;
+    if (start == null || b.start.isBefore(start)) start = b.start;
+  }
+  if (end == null) return null;
+  start ??= dayOf(t.createdAt);
+  if (start.isAfter(end)) start = end;
+  final weights = <String, double>{};
+  if (unit == BurnUnit.days) {
+    var own = 0.0;
+    final without = <String>[];
+    for (final st in t.steps) {
+      final b = stepBars[st.id];
+      if (b != null && !stepIsPoint(st)) {
+        final w = workDays(b.start, b.end, weekends: weekends).toDouble();
+        weights[st.id] = w;
+        own += w;
+      } else {
+        without.add(st.id);
+      }
+    }
+    if (without.isNotEmpty) {
+      final rest = workDays(start, end, weekends: weekends) - own;
+      final each = rest > without.length ? rest / without.length : 1.0;
+      for (final id in without) {
+        weights[id] = each;
+      }
+    }
+  }
+  final pieces = [
+    for (final st in t.steps)
+      (weights[st.id] ?? 1.0, st.done ? (st.doneAt ?? t.closedAt ?? DateTime(2000)) : t.closedAt),
+  ];
+  return _burnOf(pieces, start, end, now, unit);
+}
+
+BurnDown _burnOf(List<(double, DateTime?)> pieces, DateTime start, DateTime end, DateTime now, BurnUnit unit) {
   final today = dayOf(now);
   if (start.isAfter(today)) start = today;
   final total = pieces.fold(0.0, (a, p) => a + p.$1);

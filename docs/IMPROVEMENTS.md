@@ -1063,3 +1063,19 @@ Feedback: some tasks had no "Edit all steps" button on the task page.
   "Checklist 0/1") had only the Templates button. It now shows whenever the task has any step
   (still hidden for archived tasks). The Edit all steps screen already works with one step;
   "Chain in order" still asks for two or more ticked.
+
+## 86. Burn-down for each task ☑ (version 1.10.10)
+
+The burn-down (item 77) was only for all Gantt tasks in a category. Now each task has its own too.
+- `taskBurnDown` (lib/gantt.dart): tasks with 2+ steps and a planned finish (the task's bar end:
+  due date or start + Takes; else the steps' latest end), on the Gantt chart or not. Starts at the
+  plan start, the task's or a step's start, or when the task was added. Steps count 1 each, or
+  days of work: a step with a bar counts its own days, the rest share what is left of the task's.
+  Ticked steps count from when they were ticked.
+- Shown folded as "Burn-down" on the task page (under the checklist) and in Edit all steps
+  (`TaskBurnDownTile`), with the Steps / Days of work switch.
+- Gantt chart: zooming to one task (item 84) switches the bottom strip to that task, with an
+  "All in category" chip; Fit, a category or a category heading switch it back.
+- Widgets: the widget JSON's `burn` map also has `task:<id>` for each open task with one. Android
+  burn-down widget config lists those tasks after the categories; iPad Chart widget has a
+  "Task (burn-down)" setting. A tap opens the task.

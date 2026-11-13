@@ -34,8 +34,8 @@ class WidgetConfigActivity : Activity() {
           provider.endsWith("StageListWidget") ||
           provider.endsWith("BoardStepsWidget") ||
           provider.endsWith("MatrixWidget") ||
-          provider.endsWith("AddedDoneWidget") ||
-          provider.endsWith("BurnDownWidget") -> pickCategoryFilter(snap)
+          provider.endsWith("AddedDoneWidget") -> pickCategoryFilter(snap)
+      provider.endsWith("BurnDownWidget") -> pickBurn(snap)
       provider.endsWith("TodayWidget") || provider.endsWith("StatsWidget") || provider.endsWith("MonthWidget") ||
           provider.endsWith("CalendarWidget") ->
           pickLook(showRows = false)
@@ -119,6 +119,35 @@ class WidgetConfigActivity : Activity() {
     for ((id, name) in snap.categories) {
       keys.add("cat:$id")
       labels.add("Only $name")
+    }
+    AlertDialog.Builder(this)
+        .setTitle("Show in this widget")
+        .setItems(labels.toTypedArray()) { _, which ->
+          WidgetData.setFilter(this, widgetId, keys[which])
+          pickLook(showRows = false)
+        }
+        .setOnCancelListener { done() }
+        .show()
+  }
+
+  /** Burn-down: everything, one category, or (item 86) one task that has its own burn-down. */
+  private fun pickBurn(snap: Snapshot) {
+    val burn = snap.root.optJSONObject("burn")
+    val keys = mutableListOf("all")
+    val labels = mutableListOf("All categories")
+    for ((id, name) in snap.categories) {
+      keys.add("cat:$id")
+      labels.add("Only $name")
+    }
+    for (t in snap.all) {
+      if (burn?.has("task:" + t.id) != true) continue
+      keys.add("task:" + t.id)
+      labels.add("Task: ${t.title}")
+    }
+    if (keys.size == 1) {
+      WidgetData.setFilter(this, widgetId, "all")
+      pickLook(showRows = false)
+      return
     }
     AlertDialog.Builder(this)
         .setTitle("Show in this widget")

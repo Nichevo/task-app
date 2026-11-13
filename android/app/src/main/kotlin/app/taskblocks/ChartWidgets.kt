@@ -221,14 +221,24 @@ class BurnDownWidget : BaseWidget() {
     val look = WidgetData.look(c, id)
     val f = WidgetData.filter(c, id)
     look.apply(views, R.id.c_root, intArrayOf(R.id.c_title), intArrayOf(R.id.c_note))
-    views.setTextViewText(R.id.c_title, BoardLook.categoryTitle(snap, "Burn-down", f))
-    val key = chartKey(f)
-    views.setOnClickPendingIntent(R.id.c_root, BoardLook.launch(c, "taskblocks://gantt?cat=" + Uri.encode(key)))
+    // Item 86: set to one task, it shows that task's steps and a tap opens the task.
+    val taskId = if (f.startsWith("task:")) f.removePrefix("task:") else null
+    if (taskId != null) {
+      val name = snap.all.firstOrNull { it.id == taskId }?.title ?: "task"
+      views.setTextViewText(R.id.c_title, "Burn-down · $name")
+      views.setOnClickPendingIntent(R.id.c_root, BoardLook.launch(c, "taskblocks://open?id=" + Uri.encode(taskId)))
+    } else {
+      views.setTextViewText(R.id.c_title, BoardLook.categoryTitle(snap, "Burn-down", f))
+      views.setOnClickPendingIntent(R.id.c_root, BoardLook.launch(c, "taskblocks://gantt?cat=" + Uri.encode(chartKey(f))))
+    }
+    val key = if (taskId != null) f else chartKey(f)
     val o = snap.root.optJSONObject("burn")?.optJSONObject(key)
     val bmp = chartBitmap(c, m, id)
     if (o == null) {
       views.setImageViewBitmap(R.id.c_chart, bmp)
-      views.setTextViewText(R.id.c_note, "Nothing with dates on the Gantt chart here yet.")
+      views.setTextViewText(R.id.c_note,
+          if (taskId != null) "This task needs two or more steps and a date to finish by."
+          else "Nothing with dates on the Gantt chart here yet.")
     } else {
       drawBurn(Canvas(bmp), bmp.width.toFloat(), bmp.height.toFloat(), c.resources.displayMetrics.density, o, look)
       views.setImageViewBitmap(R.id.c_chart, bmp)
