@@ -90,6 +90,7 @@ class Snapshot(
           o.getString("id") to o.optString("name")
         }
     val arr = root.optJSONArray("tasks") ?: JSONArray()
+    val nowMs = System.currentTimeMillis()
     val out = ArrayList<WidgetTask>()
     for (i in 0 until arr.length()) {
       val o = arr.getJSONObject(i)
@@ -130,7 +131,8 @@ class Snapshot(
               stage = moved?.first ?: o.optString("stage").ifEmpty { null },
               since = moved?.second ?: if (o.has("since")) o.optLong("since") else null,
               box = o.optString("box").ifEmpty { null },
-              snoozed = o.optBoolean("snoozed"),
+              // Still snoozed only until the time the app sent (older app versions send none).
+              snoozed = o.optBoolean("snoozed") && (!o.has("snoozedUntil") || o.optLong("snoozedUntil") > nowMs),
               worked = worked,
           ))
     }

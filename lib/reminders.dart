@@ -90,6 +90,23 @@ class Reminders {
   /// The app was started by tapping the weekly review notification.
   bool startedFromReview = false;
 
+  /// Called when a task's reminder (not one of its buttons) is tapped while the app is running.
+  void Function(String taskId)? onOpenTask;
+
+  /// The task whose reminder was tapped to start the app, if any.
+  String? startedFromTask;
+
+  /// The task a tapped reminder is about (none for the summaries and button presses).
+  static String? tappedTask(NotificationResponse? r) {
+    final payload = r?.payload;
+    if (r == null || r.actionId != null || payload == null || payload.isEmpty) return null;
+    try {
+      return (jsonDecode(payload) as Map)['task'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static bool _isReview(String? payload) {
     if (payload == null || payload.isEmpty) return false;
     try {
@@ -128,6 +145,12 @@ class Reminders {
           onOpenReview?.call();
           return;
         }
+        // M2 (review, Nov 2026): tapping a task's reminder opens that task.
+        final open = tappedTask(r);
+        if (open != null) {
+          onOpenTask?.call(open);
+          return;
+        }
         await _recordAction(r);
         onAction?.call();
       },
@@ -136,6 +159,7 @@ class Reminders {
     final launch = await _plugin.getNotificationAppLaunchDetails();
     startedFromReview =
         (launch?.didNotificationLaunchApp ?? false) && _isReview(launch?.notificationResponse?.payload);
+    if (launch?.didNotificationLaunchApp ?? false) startedFromTask = tappedTask(launch?.notificationResponse);
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
@@ -149,7 +173,13 @@ class Reminders {
     if (!await f.exists()) return const [];
     try {
       final list = jsonDecode(await f.readAsString()) as List;
-      await f.delete();
+      // L4: a button may have been pressed since; keep anything added after what was read.
+      final again = jsonDecode(await f.readAsString()) as List;
+      if (again.length > list.length) {
+        await f.writeAsString(jsonEncode(again.sublist(list.length)), flush: true);
+      } else {
+        await f.delete();
+      }
       return [for (final j in list) PendingAction.fromJson(j as Map<String, dynamic>)];
     } catch (e) {
       debugPrint('Could not read notification actions: $e');
@@ -166,7 +196,7 @@ class Reminders {
   /// Everything the scheduled reminders depend on: the settings, each open task's name, dates
   /// and reminder, how much is done (for the weekly review) and today's date.
   static String scheduleKey(AppData data, DateTime now) {
-    final j = data.toJson()
+    final j = data.toJson(lists: false)
       ..removeWhere((k, _) => const {
             'active', 'archived', 'done', 'deleted', 'skips', 'updatedAt', 'orderUpdatedAt', 'hiddenEmails',
           }.contains(k));
@@ -187,8 +217,73 @@ class Reminders {
     ]);
   }
 
-  /// Replaces all scheduled reminders: one at each open task's due time, an earlier one if
-  /// asked for, and the overdue summary or nudges chosen in Settings.
+  /// Every one-off reminder to set, worked out from the data: one at each open task's due time,
+  /// an earlier one if asked for, overdue nudges, a reminder when a snooze ends, steps with their
+  /// own date, habits, and the daily overdue summary for the coming week. Kept apart from the
+  /// plugin so it can be tested.
+  static List<PlannedReminder> plan(AppData data, DateTime now) {
+    final out = <PlannedReminder>[];
+    // Android allows ~500 alarms per app; stay well inside it. iOS keeps the soonest 64.
+    var budget = 200;
+    bool add(int id, DateTime when, String title, String body, Task t, ReminderKind kind) {
+      if (!when.isAfter(now)) return false;
+      out.add(PlannedReminder(id, when, title, body, t, kind));
+      budget--;
+      return true;
+    }
+
+    for (final t in data.active) {
+      final due = t.dueAt;
+      if (due == null) continue;
+      final before = t.remindBefore ?? data.defaultRemindBefore;
+      final base = taskBase(t.id);
+      final snoozed = t.snoozedUntil;
+      // Snoozed past a reminder's time: that reminder waits for the snooze to end instead.
+      bool hidden(DateTime when) => snoozed != null && when.isBefore(snoozed);
+      final kind = t.repeat == null ? ReminderKind.due : ReminderKind.dueRepeat;
+      if (!hidden(due)) add(base, due, 'Task due', t.title, t, kind);
+      final early = due.subtract(Duration(minutes: before));
+      if (before > 0 && !hidden(early)) add(base + 1, early, 'Due ${_describe(before)}', t.title, t, kind);
+      // Item H1 (review, Nov 2026): a snooze that ends after the due time reminds again then.
+      if (snoozed != null && snoozed.isAfter(due)) add(base + 8, snoozed, 'Snoozed task', t.title, t, kind);
+      if (data.overdueMode == OverdueMode.nudge) {
+        var when = snoozed != null && snoozed.isAfter(due) ? snoozed : due;
+        for (var k = 2; k < 8 && budget > 0; k++) {
+          when = _afterQuiet(when.add(Duration(hours: data.nudgeHours)), data);
+          add(base + k, when, 'Still to do', t.title, t, kind);
+        }
+      }
+      if (budget <= 0) break;
+    }
+    // Item 61: steps with their own date, reminded with the task's name.
+    for (final t in data.active) {
+      for (final st in t.steps) {
+        final due = st.dueAt;
+        if (due == null || st.done || budget <= 0) continue;
+        final before = st.remindBefore ?? data.defaultRemindBefore;
+        // Negative ids, so they never meet a task's (0 and up).
+        final base = -2 - (st.id.hashCode & 0x0fffffff) * 2;
+        final body = '${st.title}\nPart of: ${t.title}';
+        add(base, due, 'Step due', body, t, ReminderKind.step);
+        if (before > 0) {
+          add(base + 1, due.subtract(Duration(minutes: before)), 'Step due ${_describe(before)}', body, t, ReminderKind.step);
+        }
+      }
+    }
+    // Item 78: each habit's next reminder, only on a day it isn't ticked yet.
+    for (final t in data.habits) {
+      final at = nextHabitReminder(t, now);
+      if (at == null || budget <= 0) continue;
+      add(taskBase(t.id) + 7, at, 'Habit', t.title, t, ReminderKind.step);
+    }
+    if (data.overdueMode == OverdueMode.daily) out.addAll(dailySummaries(data, now));
+    return out;
+  }
+
+  /// The first of a task's notification ids (16 each: due, early, nudges, habit, snooze end).
+  static int taskBase(String id) => (id.hashCode & 0x07ffffff) * 16;
+
+  /// Replaces all scheduled reminders with [plan], plus the weekly review.
   Future<void> schedule(AppData data) async {
     if (!_ready) return;
     final now = DateTime.now();
@@ -199,52 +294,23 @@ class Reminders {
     _lastKey = key;
     try {
       await _plugin.cancelAllPendingNotifications();
-      // Android allows ~500 alarms per app; stay well inside it. iOS keeps the soonest 64.
-      var budget = 200;
-      for (final t in data.active) {
-        final due = t.dueAt;
-        if (due == null) continue;
-        final before = t.remindBefore ?? data.defaultRemindBefore;
-        final base = (t.id.hashCode & 0x0fffffff) * 8;
-        if (await _at(base, due, 'Task due', t.title, now, t)) budget--;
-        if (before > 0 &&
-            await _at(base + 1, due.subtract(Duration(minutes: before)), 'Due ${_describe(before)}', t.title, now, t)) {
-          budget--;
-        }
-        if (data.overdueMode == OverdueMode.nudge) {
-          var when = due;
-          for (var k = 2; k < 8 && budget > 0; k++) {
-            when = _afterQuiet(when.add(Duration(hours: data.nudgeHours)), data);
-            if (t.snoozedUntil != null && when.isBefore(t.snoozedUntil!)) continue;
-            if (await _at(base + k, when, 'Still to do', t.title, now, t)) budget--;
-          }
-        }
-        if (budget <= 0) break;
+      for (final r in plan(data, now)) {
+        await _plugin.zonedSchedule(
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          payload: r.task == null ? null : jsonEncode({'task': r.task!.id, 'dir': dir}),
+          // A UTC time is the same moment wherever the phone is.
+          scheduledDate: tz.TZDateTime.from(r.when.toUtc(), tz.UTC),
+          notificationDetails: switch (r.kind) {
+            ReminderKind.due => _due,
+            ReminderKind.dueRepeat => _dueRepeat,
+            ReminderKind.step => _stepDue,
+            ReminderKind.summary => _summary(r.body),
+          },
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
       }
-      // Item 61: steps with their own date, reminded with the task's name.
-      for (final t in data.active) {
-        for (final st in t.steps) {
-          final due = st.dueAt;
-          if (due == null || st.done || budget <= 0) continue;
-          final before = st.remindBefore ?? data.defaultRemindBefore;
-          // Negative ids, so they never meet a task's (0 and up).
-          final base = -2 - (st.id.hashCode & 0x0fffffff) * 2;
-          final body = '${st.title}\nPart of: ${t.title}';
-          if (await _at(base, due, 'Step due', body, now, t, step: true)) budget--;
-          if (before > 0 &&
-              await _at(base + 1, due.subtract(Duration(minutes: before)), 'Step due ${_describe(before)}', body, now, t,
-                  step: true)) {
-            budget--;
-          }
-        }
-      }
-      // Item 78: each habit's next reminder, only on a day it isn't ticked yet.
-      for (final t in data.habits) {
-        final at = nextHabitReminder(t, now);
-        if (at == null || budget <= 0) continue;
-        if (await _at((t.id.hashCode & 0x0fffffff) * 8 + 7, at, 'Habit', t.title, now, t, step: true)) budget--;
-      }
-      if (data.overdueMode == OverdueMode.daily) await _dailySummary(data, now);
       if (data.weeklyReview) await _weeklyReview(data, now);
     } catch (e) {
       _lastKey = null; // Try again on the next change.
@@ -252,32 +318,36 @@ class Reminders {
     }
   }
 
-  /// One notification a day listing what is overdue at that moment.
-  Future<void> _dailySummary(AppData data, DateTime now) async {
+  /// One notification a day listing what is overdue at that moment, for the next 7 days. Each
+  /// day is worked out on its own (L3: a repeating one kept showing the list from when it was set),
+  /// and the app sets them again whenever anything changes or a new day starts.
+  static List<PlannedReminder> dailySummaries(AppData data, DateTime now) {
+    final out = <PlannedReminder>[];
     var at = DateTime(now.year, now.month, now.day, data.overdueAt ~/ 60, data.overdueAt % 60);
-    if (!at.isAfter(now)) at = at.add(const Duration(days: 1));
-    final overdue = data.active.where((t) => t.dueAt != null && t.dueAt!.isBefore(at) && !t.isSnoozed(at)).toList();
-    if (overdue.isEmpty) return;
-    final names = overdue.take(4).map((t) => t.title).join(', ');
-    await _plugin.zonedSchedule(
-      id: 1,
-      title: '${overdue.length} task${overdue.length == 1 ? '' : 's'} overdue',
-      body: overdue.length > 4 ? '$names…' : names,
-      scheduledDate: tz.TZDateTime.from(at.toUtc(), tz.UTC),
-      notificationDetails: const NotificationDetails(
-        iOS: DarwinNotificationDetails(),
+    if (!at.isAfter(now)) at = DateTime(at.year, at.month, at.day + 1, at.hour, at.minute);
+    for (var i = 0; i < 7; i++) {
+      final day = DateTime(at.year, at.month, at.day + i, at.hour, at.minute);
+      final overdue =
+          data.active.where((t) => t.dueAt != null && t.dueAt!.isBefore(day) && !t.isSnoozed(day)).toList();
+      if (overdue.isEmpty) continue;
+      final names = overdue.take(4).map((t) => t.title).join(', ');
+      out.add(PlannedReminder(i == 0 ? 1 : 2 + i, day, '${overdue.length} task${overdue.length == 1 ? '' : 's'} overdue',
+          overdue.length > 4 ? '$names…' : names, null, ReminderKind.summary));
+    }
+    return out;
+  }
+
+  static NotificationDetails _summary(String body) => NotificationDetails(
+        iOS: const DarwinNotificationDetails(),
         android: AndroidNotificationDetails(
           'overdue',
           'Overdue tasks',
           channelDescription: 'A daily summary of overdue tasks',
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
+          styleInformation: BigTextStyleInformation(body),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
-  }
+      );
 
   /// Next time the weekly review is due: the chosen weekday and time, after [now].
   static DateTime nextReview(AppData data, DateTime now) {
@@ -394,18 +464,21 @@ class Reminders {
     ),
   );
 
-  Future<bool> _at(int id, DateTime when, String title, String body, DateTime now, Task t, {bool step = false}) async {
-    if (!when.isAfter(now)) return false;
-    await _plugin.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      payload: jsonEncode({'task': t.id, 'dir': dir}),
-      // A UTC time is the same moment wherever the phone is.
-      scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-      notificationDetails: step ? _stepDue : t.repeat == null ? _due : _dueRepeat,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-    );
-    return true;
-  }
+}
+
+enum ReminderKind { due, dueRepeat, step, summary }
+
+/// One reminder to set: when, what it says and the task it opens (none for the daily summary).
+class PlannedReminder {
+  const PlannedReminder(this.id, this.when, this.title, this.body, this.task, this.kind);
+
+  final int id;
+  final DateTime when;
+  final String title;
+  final String body;
+  final Task? task;
+  final ReminderKind kind;
+
+  @override
+  String toString() => '$title at $when ($body)';
 }

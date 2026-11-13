@@ -92,8 +92,8 @@ class HomeWidgets {
     }
   }
 
-  /// What the widgets are given (read by WidgetData.kt). Snoozed tasks are sent only when on
-  /// the board, marked `snoozed`, so the board widgets count them like the board does.
+  /// What the widgets are given (read by WidgetData.kt). Snoozed tasks are marked `snoozed` with
+  /// `snoozedUntil`: list widgets hide them until then, board widgets count them like the board does.
   static String widgetJson(AppData data, DateTime now) {
     final stats = Stats(data, now);
     final fortnight = dayKey(now.subtract(const Duration(days: 14)));
@@ -109,7 +109,9 @@ class HomeWidgets {
       'boxes': {for (final b in MatrixBox.values) b.id: data.boxName(b)},
       'tasks': [
         for (final t in [...data.active.where((t) => t.starred), ...data.active.where((t) => !t.starred)])
-          if (!t.habit && (!t.isSnoozed(now) || t.kanban))
+          // M4: snoozed tasks are sent too, with when the snooze ends, so the widgets show them
+          // again then without waiting for the app to be opened.
+          if (!t.habit)
             {
               'id': t.id,
               'title': t.title,
@@ -119,6 +121,7 @@ class HomeWidgets {
               'locked': data.isLocked(t),
               'star': t.starred,
               if (t.isSnoozed(now)) 'snoozed': true,
+              if (t.isSnoozed(now)) 'snoozedUntil': t.snoozedUntil!.millisecondsSinceEpoch,
               if (t.kanban) 'stage': (data.stage(t.stageId) ?? data.stages.firstOrNull)?.id,
               if (t.stageSince != null) 'since': t.stageSince!.millisecondsSinceEpoch,
               if (t.matrixBox != null) 'box': t.matrixBox,
@@ -192,8 +195,12 @@ class HomeWidgets {
     try {
       final raw = await HomeWidget.getWidgetData<String>(key);
       if (raw == null || raw.isEmpty || raw == '[]') return const [];
-      await HomeWidget.saveWidgetData<String>(key, '[]');
-      return jsonDecode(raw) as List;
+      final taken = jsonDecode(raw) as List;
+      // L4: a widget may have added more since; clear only what was read.
+      final now = await HomeWidget.getWidgetData<String>(key);
+      final all = now == null || now.isEmpty ? const [] : jsonDecode(now) as List;
+      await HomeWidget.saveWidgetData<String>(key, jsonEncode(all.length > taken.length ? all.sublist(taken.length) : const []));
+      return taken;
     } catch (e) {
       debugPrint('Could not read $key: $e');
       return const [];

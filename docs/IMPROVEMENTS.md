@@ -1115,3 +1115,39 @@ behind / on pace / ahead verdict on every task so it can be used to filter elsew
 - "Behind" filter: `QuickFilter.behind` (main list, board and matrix chips) and
   `SearchFilter.behind`. The main list's block shows an hourglass badge when behind.
 
+## 97. Review fixes ☑ (version 1.10.14)
+
+A review of the whole app (November 2026) found 3 high, 7 medium and 9 low issues. Fixed here,
+one commit per group:
+
+- **Reminders.** H1: a snooze that ends after the due time reminds again then ("Snoozed task", same
+  buttons); a snooze before the due time moves the due reminder to the snooze end; nudges start
+  after it. `Reminders.plan` works out every reminder without the plugin, so it is tested. M2:
+  tapping a task's reminder opens the task (also from a cold start, `startedFromTask`). L3: the
+  daily overdue summary is set for each of the next 7 days, worked out per day, instead of one
+  repeating notification with a fixed list. Task notification ids are 16 per task now.
+- **Saving.** H2: a task that can't be read is kept as it was in `AppData.unreadable` and saved
+  back; a tasks.json that can't be read at all is renamed `tasks-unreadable-<time>.json` and the
+  newest readable backup is opened, with a banner (`AppStore.loadProblem`); the same for
+  device_settings.json. M3: device settings are written one at a time through a temporary file.
+  L4: widget and notification queues clear only what was read.
+- **Sync.** H3: categories, board columns and checklist templates merge by id (`_mergeById`):
+  the newer settings' items in their order, then any only the older copy has, unless deleted
+  (their ids go in `deleted` like tasks). Collapsing a heading, Group by category, hiding an email
+  and dismissing an event no longer bump `settingsUpdatedAt`. M7: tasks.json is uploaded only if
+  Dropbox still has the revision that was read; otherwise the sync reads and merges again (up to
+  5 times). M6: inbox.txt is emptied with a revision check before its lines are added; inbox
+  folder files are deleted before they are added, and skipped when another device took them. L1:
+  deletions are kept for a year instead of 90 days.
+- **Screens and widgets.** M1: the task page looks its task up in the store on each change, so a
+  newer copy from sync is shown and edited (title and notes follow unless being typed in). M4:
+  snoozed tasks are sent to the widgets with `snoozedUntil`; Android and iPad widgets show them
+  again once it passes. M5: the calendar check for event suggestions runs at most every 30
+  minutes unless its settings change. L6: archived tasks' title and notes are read-only, with
+  Move back to tasks on the task page. L7: deleting an email task hides that email from email
+  tasks. L8: the reminders' change check no longer encodes every task.
+- Not changed: L5 (the Google client secret in the Dropbox device backup) is what lets a new
+  device restore Google sign-in (item 69), and this kind of client's secret isn't confidential.
+  L9 (moving to `package:material_ui`): that package is a separate copy of the Material library,
+  so mixing it with plugins and tests that still use `package:flutter/material.dart` needs its
+  own careful PR; the old import still works.

@@ -118,13 +118,35 @@ class AppStore extends ChangeNotifier {
     _dir = await getApplicationSupportDirectory();
     final dataFile = File('${_dir!.path}/tasks.json');
     if (await dataFile.exists()) {
-      data = AppData.fromJson(jsonDecode(await dataFile.readAsString()));
       hadData = true;
+      try {
+        data = AppData.fromJson(jsonDecode(await dataFile.readAsString()) as Map<String, dynamic>);
+      } catch (e) {
+        // H2: never save over a file that couldn't be read. Put it aside and start from the newest
+        // backup that can be read.
+        debugPrint('tasks.json unreadable: $e');
+        final aside = (await _putAside(dataFile)).split('/').last;
+        final from = await _loadNewestBackup();
+        loadProblem = 'Your saved tasks couldn\'t be read, so ${from == null ? 'the list started empty' : 'the backup from $from was opened'}. '
+            'The file was kept as $aside. If you use Dropbox, the next sync brings back anything newer.';
+      }
     }
     var filterSaved = false;
     final settingsFile = File('${_dir!.path}/device_settings.json');
+    Map<String, dynamic>? s;
     if (await settingsFile.exists()) {
-      final s = jsonDecode(await settingsFile.readAsString()) as Map<String, dynamic>;
+      try {
+        s = jsonDecode(await settingsFile.readAsString()) as Map<String, dynamic>;
+      } catch (e) {
+        debugPrint('device_settings.json unreadable: $e');
+        await _putAside(settingsFile);
+        loadProblem = [
+          ?loadProblem,
+          'This device\'s own settings couldn\'t be read (sign-ins, places, view choices); connect Dropbox to restore them, or set them again.',
+        ].join(' ');
+      }
+    }
+    if (s case final s?) {
       dropboxAppKey = s['dropboxAppKey'] as String? ?? '';
       final refresh = s['dropboxRefreshToken'] as String?;
       if (dropboxAppKey.isNotEmpty && refresh != null) {
@@ -168,6 +190,39 @@ class AppStore extends ChangeNotifier {
     unawaited(widgets?.push(data));
     _startEmailTimer();
     unawaited(sync());
+  }
+
+  /// H2: why start-up couldn't read a saved file, shown once at the top of the list; null when fine.
+  String? loadProblem;
+
+  void dismissLoadProblem() {
+    loadProblem = null;
+    notifyListeners();
+  }
+
+  /// Renames an unreadable file so nothing saves over it. Returns the new path.
+  Future<String> _putAside(File f) async {
+    final stamp = DateTime.now().toIso8601String().replaceAll(RegExp(r'[^0-9]'), '').substring(0, 14);
+    final path = f.path.replaceFirst(RegExp(r'\.json$'), '-unreadable-$stamp.json');
+    try {
+      await f.rename(path);
+    } catch (e) {
+      debugPrint('put aside: $e');
+    }
+    return path;
+  }
+
+  /// Loads the newest backup that can be read; returns its day, or null when there is none.
+  Future<String?> _loadNewestBackup() async {
+    for (final f in await backups()) {
+      try {
+        data = AppData.fromJson(jsonDecode(await f.readAsString()) as Map<String, dynamic>);
+        return RegExp(r'\d{4}-\d{2}-\d{2}').firstMatch(f.uri.pathSegments.last)?.group(0) ?? 'a backup';
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
   }
 
   /// Where the app keeps its files; reminders use it to leave notes from the background.
@@ -273,9 +328,21 @@ class AppStore extends ChangeNotifier {
 
   Future<void> _writing = Future.value();
 
-  Future<void> saveDeviceSettings() async {
-    if (_dir == null) return;
-    await File('${_dir!.path}/device_settings.json').writeAsString(jsonEncode({
+  /// M3: one write at a time, through a temporary file, so two quick changes (a filter chip and a
+  /// pane drag, say) can't leave a half-written file that loses the sign-ins.
+  Future<void> saveDeviceSettings() {
+    final dir = _dir;
+    if (dir == null) return Future.value();
+    return _settingsWriting = _settingsWriting.catchError((_) {}).then((_) async {
+      final tmp = File('${dir.path}/device_settings.json.tmp');
+      await tmp.writeAsString(_deviceSettingsText(), flush: true);
+      await tmp.rename('${dir.path}/device_settings.json');
+    });
+  }
+
+  Future<void> _settingsWriting = Future.value();
+
+  String _deviceSettingsText() => jsonEncode({
       'dropboxAppKey': dropboxAppKey,
       'dropboxRefreshToken': dropbox?.refreshToken,
       'eventPromptAt': eventPromptAt?.toIso8601String(),
@@ -296,8 +363,7 @@ class AppStore extends ChangeNotifier {
       if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
       if (google?.email != null) 'googleEmail': google!.email,
-    }));
-  }
+    });
 
   /// Call after any change to [data]. Pass the [task] that changed, [order] if the
   /// active list's order changed, or [settings] if a setting changed.
@@ -365,9 +431,11 @@ class AppStore extends ChangeNotifier {
     _setStatus('Syncing…');
     try {
       await flush();
+      var tries = 0;
       do {
         _syncAgain = false;
-        final remoteText = await db.download();
+        final got = await db.downloadWithRev(DropboxClient.filePath);
+        final remoteText = got?.$1;
         final remote = remoteText == null ? null : AppData.fromJson(jsonDecode(remoteText));
         final merged = remote == null ? data : mergeData(data, remote);
         // Item 54: the merge first, so a task another device already made from an email is known.
@@ -388,9 +456,10 @@ class AppStore extends ChangeNotifier {
         if (remoteText == null || mine != jsonEncode(remote!.toJson())) {
           // Item 62: a newer version wrote the Dropbox copy; keep it before this one saves over it.
           if (remote != null && remote.newerAppElsewhere) await db.backup(remoteText!, DateTime.now());
-          await db.upload(mine);
+          // M7: another device saved in the meantime; read its copy and merge again.
+          if (!await db.uploadIfUnchanged(DropboxClient.filePath, mine, got?.$2)) _syncAgain = true;
         }
-      } while (_syncAgain);
+      } while (_syncAgain && ++tries < 5);
       _lastSync = DateTime.now();
       _setStatus('Synced ${_now()}');
     } catch (e) {
@@ -633,6 +702,8 @@ class AppStore extends ChangeNotifier {
     for (final path in files) {
       final text = await db.downloadPath(path);
       if (text == null) continue;
+      // M6: take the file by deleting it first; when another device already took it, skip it.
+      if (await db.delete(path) == null) continue;
       List<Task> added;
       try {
         added = addInboxFile(data, text, DateTime.now());
@@ -640,11 +711,10 @@ class AppStore extends ChangeNotifier {
       } catch (e) {
         // Not a task file (bad JSON, no title, wrong types): set it aside, don't retry forever.
         debugPrint('inbox $path: $e');
-        await db.moveToFailed(path);
+        await db.uploadPath('${DropboxClient.inboxFolder}/failed/${path.split('/').last}', text);
         continue;
       }
       any = any || added.isNotEmpty;
-      await db.delete(path);
     }
     if (any) {
       notifyListeners();
@@ -656,7 +726,14 @@ class AppStore extends ChangeNotifier {
 
   /// Adds any lines written to the inbox file in Dropbox as tasks, then empties it.
   Future<bool> _takeInbox(DropboxClient db) async {
-    final text = await db.downloadInbox();
+    // M6: empty the file first, only if it is still what was read, so a line added meanwhile
+    // isn't lost and two devices never both take the same lines.
+    String? text;
+    for (var i = 0; i < 3 && text == null; i++) {
+      final got = await db.downloadWithRev(DropboxClient.inboxPath);
+      if (got == null || got.$1.trim().isEmpty) return false;
+      if (await db.uploadIfUnchanged(DropboxClient.inboxPath, '', got.$2)) text = got.$1;
+    }
     if (text == null) return false;
     final lines = splitLines(text);
     if (lines.isEmpty) return false;
@@ -669,7 +746,6 @@ class AppStore extends ChangeNotifier {
       _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
-    await db.clearInbox();
     notifyListeners();
     return true;
   }
@@ -1402,6 +1478,7 @@ class AppStore extends ChangeNotifier {
       }
     }
     data.stages.remove(s);
+    data.deleted[s.id] = DateTime.now().toUtc();
     changed(settings: true);
   }
 
@@ -1462,6 +1539,9 @@ class AppStore extends ChangeNotifier {
   }
 
   void delete(Task t) {
+    // L7: an email that became this task is never made into a task again, even if Gmail's label
+    // couldn't be changed.
+    if (t.source == TaskSource.email && t.sourceRef != null) data.hiddenEmails.add(t.sourceRef!);
     data.active.remove(t);
     data.archived.remove(t);
     data.deleted[t.id] = DateTime.now().toUtc();
@@ -1844,6 +1924,7 @@ class AppStore extends ChangeNotifier {
 
   void deleteTemplate(ChecklistTemplate tpl) {
     data.templates.remove(tpl);
+    data.deleted[tpl.id] = DateTime.now().toUtc();
     changed(settings: true);
   }
 
@@ -1936,7 +2017,7 @@ class AppStore extends ChangeNotifier {
       final ids = await g.search('newer_than:14d -label:tasked (subject:task OR label:task)', max: 50);
       final ignored = <IgnoredEmail>[];
       for (final id in ids) {
-        if (data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
+        if (data.hiddenEmails.contains(id) || data.taskForEmail(id) != null || data.allTasks.any((t) => t.sourceRef == id)) continue;
         // Already looked at and not a task: don't fetch it again on every check.
         if (_notTasks.contains(id)) continue;
         final m = _ignoredMessages[id] ?? await g.message(id, checkSender: true);
@@ -2046,7 +2127,7 @@ class AppStore extends ChangeNotifier {
 
   void hideEmail(String id) {
     data.hiddenEmails.add(id);
-    changed(settings: true);
+    changed(); // Joined from both copies on sync, so not a settings change (H3).
   }
 
   /// What the Starred emails setting says to do with the star once the email is used.
@@ -2074,7 +2155,7 @@ class AppStore extends ChangeNotifier {
 
   void dismissEvent(String eventId) {
     data.dismissedEvents.add(eventId);
-    changed(settings: true);
+    changed(); // Joined from both copies on sync, so not a settings change (H3).
   }
 
   // --- Categories ---
@@ -2142,6 +2223,7 @@ class AppStore extends ChangeNotifier {
   /// Removes a category; its tasks become uncategorised.
   void deleteCategory(TaskCategory c) {
     data.categories.remove(c);
+    data.deleted[c.id] = DateTime.now().toUtc();
     for (final t in data.allTasks.where((t) => t.categoryId == c.id)) {
       t.categoryId = null;
       t.touch();
@@ -2149,9 +2231,16 @@ class AppStore extends ChangeNotifier {
     changed(settings: true);
   }
 
+  /// A view choice: saved and synced, but it doesn't count as a settings change, so it can't make
+  /// this device's older settings win over another's on sync (H3).
+  void toggleGroupByCategory() {
+    data.groupByCategory = !data.groupByCategory;
+    changed();
+  }
+
   void toggleCollapsed(String categoryKey) {
     if (!data.collapsed.remove(categoryKey)) data.collapsed.add(categoryKey);
-    changed(settings: true);
+    changed();
   }
 }
 
