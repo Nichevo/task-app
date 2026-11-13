@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.16', 'November 2026', [
+    'Snoozing from a reminder\'s buttons now sets the "Snoozed task" reminder straight away, so it comes when the snooze ends even if you don\'t open the app in between.',
+    'iPad widgets: a snoozed task comes back at the time its snooze ends, not up to a few hours later. Snooze on a widget also reminds you at 8am, and the task returns to the widgets then without opening the app.',
+    'iPad: the Done and snooze buttons on a reminder keep working right after you install a new version, before the app is opened.',
+    'iPad Chart widget: "Task (burn-down)" lists only the tasks that have a burn-down, as on Android.',
+  ]),
   Release('1.10.15', 'November 2026', [
     'Kanban board: a new shading button in the top bar picks the card shading right there, without going to Settings.',
     'Step cards can be shaded differently from task cards, for example On pace for tasks and Off for steps. Choose under "Step cards" on the same button, or Settings, Kanban board, "Step card shading". They follow the task cards until you pick.',
