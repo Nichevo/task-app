@@ -1,4 +1,5 @@
 import 'models.dart';
+import 'pace.dart';
 import 'widgets/task_colors.dart';
 
 /// The chips above the main list. Remembered on each device.
@@ -9,6 +10,7 @@ enum QuickFilter {
   twoWeeks('Next 2 weeks'),
   month('Next 30 days'),
   overdue('Overdue'),
+  behind('Behind'),
   starred('Starred'),
   noDate('No date');
 
@@ -45,6 +47,8 @@ bool passesFilter(Task t, QuickFilter f, DateTime now) {
   }
   return switch (f) {
     QuickFilter.overdue => due != null && due.isBefore(now),
+    // Item 96: overdue, or less done than the time gone says it should be.
+    QuickFilter.behind => taskPace(t, now).verdict == Pace.behind,
     QuickFilter.starred => t.starred,
     QuickFilter.noDate => due == null,
     _ => true,

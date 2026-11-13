@@ -53,7 +53,8 @@ void main() {
       expect(step['id'], st.id);
       expect(step['stage'], 'backlog');
       expect(tasks['Later']['snoozed'], isTrue, reason: 'the board counts snoozed tasks');
-      expect(tasks.containsKey('Hidden'), isFalse, reason: 'snoozed and not on the board');
+      expect(tasks['Hidden']['snoozed'], isTrue, reason: 'sent, so list widgets can show it once the snooze ends (M4)');
+      expect(tasks['Hidden']['snoozedUntil'], DateTime(2026, 11, 10).millisecondsSinceEpoch);
     });
 
     test('a widget move is saved as a board move made by "Widget"', () {

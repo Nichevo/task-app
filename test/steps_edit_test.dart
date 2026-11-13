@@ -68,8 +68,9 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(home: StepsEditPage(store: store, task: t)));
-      expect(find.text('Measure up'), findsOneWidget);
-      expect(find.text('Order cabinets'), findsOneWidget);
+      // Once in the table and once beside the timeline under it.
+      expect(find.text('Measure up'), findsNWidgets(2));
+      expect(find.text('Order cabinets'), findsNWidgets(2));
       expect(find.text('Line up in order'), findsNothing);
       await tester.tap(find.byType(Checkbox).at(1));
       await tester.pump();
@@ -101,7 +102,39 @@ void main() {
       await tester.pump();
       expect(find.text('2 selected'), findsOneWidget);
       expect(find.text('Line up'), findsOneWidget);
-      expect(find.text('Timeline'), findsNothing);
+    });
+
+    testWidgets('start dates can be set on a task that is not on the Gantt chart', (tester) async {
+      final store = AppStore();
+      final t = store.addTask('Kitchen');
+      store.addStep(t, 'Measure up');
+      store.addStep(t, 'Order cabinets');
+      expect(t.gantt, isFalse);
+      tester.view.physicalSize = const Size(400, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: StepsEditPage(store: store, task: t)));
+      expect(find.widgetWithText(ActionChip, 'Start'), findsNWidgets(2));
+      expect(find.widgetWithText(ActionChip, 'Days'), findsNWidgets(2));
+      await tester.tap(find.widgetWithText(ActionChip, 'Start').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(t.steps.first.startAt, isNotNull);
+      expect(t.steps.last.startAt, isNull);
+    });
+
+    testWidgets('unfolded: Starts column shows for a task that is not on the Gantt chart', (tester) async {
+      final store = AppStore();
+      final t = store.addTask('Kitchen');
+      store.addStep(t, 'Measure up');
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: StepsEditPage(store: store, task: t)));
+      expect(find.text('STARTS'), findsOneWidget);
+      expect(find.text('Set start'), findsOneWidget);
+      expect(find.text('Timeline'), findsOneWidget);
     });
 
     testWidgets('a narrow task pane keeps the checklist title on one line', (tester) async {

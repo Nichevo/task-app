@@ -1079,3 +1079,75 @@ The burn-down (item 77) was only for all Gantt tasks in a category. Now each tas
 - Widgets: the widget JSON's `burn` map also has `task:<id>` for each open task with one. Android
   burn-down widget config lists those tasks after the categories; iPad Chart widget has a
   "Task (burn-down)" setting. A tap opens the task.
+
+## 94. Step start dates for every task ☑ (version 1.10.12)
+
+Feedback: in Edit all steps, step start dates could only be edited on some tasks.
+
+- The Starts, Days of work and Progress columns (cards: Start and Days chips), the Progress bulk
+  action and the timeline preview only showed when the task was on the Gantt chart or a step
+  already had one of those fields. They now always show. The bulk Start action already worked.
+- The task page step menu's "Start, days of work and progress" was Gantt-only; it now shows for
+  every task. The dialog says "timeline" instead of "chart" for tasks not on the Gantt chart.
+- Reviewed the other conditions on the screen and kept them: Stage only when the task's steps are
+  on the Kanban board (it means nothing otherwise); "Comes after" only with two or more steps;
+  the phone card's Reminder chip only once a step has a due date (reminders count back from it;
+  the wide table shows the cell greyed and says to set a due date first).
+
+## 96. Kanban cards shaded for progress and time left ☑ (version 1.10.13)
+
+Feedback: shade the board's cards to show progress and the time left to the due date. Mocked up
+as four styles; the owner chose to have three of them as options, and asked for the
+behind / on pace / ahead verdict on every task so it can be used to filter elsewhere.
+
+- `lib/pace.dart`: `taskPace` and `stepPace` give the work done (`Task.progressShare`: set by
+  hand, else the steps averaged, a step counting its own progress), the share of time gone from
+  the start to the due date (`timeUsed`, over 1 when overdue), and the verdict. A task's time
+  starts when its colour clock does (`colourStart`), or at its start day when it is on the Gantt
+  chart (moving into In progress fills in `startAt`, which mustn't restart the clock). Measured by
+  steps, half a step either way is on pace; by hand, ten percent. Overdue is always behind; no
+  due date, or nothing to measure work by, gives no verdict. Ticked steps and habits have none.
+- Settings, Kanban board, "Card shading" (`AppData.cardShading`: `fill`, `bars`, `pace` (default),
+  `off`). Fill: the done share of the card in full colour and the rest a pale wash, plus a strip
+  on the bottom edge for time left. Bars: labelled bars for steps and time. Pace: one bar with a
+  tick for time gone and the verdict. Steps on the board follow the same style from their own
+  progress and due date. Widgets in `lib/widgets/card_shading.dart`.
+- "Behind" filter: `QuickFilter.behind` (main list, board and matrix chips) and
+  `SearchFilter.behind`. The main list's block shows an hourglass badge when behind.
+
+## 97. Review fixes ☑ (version 1.10.14)
+
+A review of the whole app (November 2026) found 3 high, 7 medium and 9 low issues. Fixed here,
+one commit per group:
+
+- **Reminders.** H1: a snooze that ends after the due time reminds again then ("Snoozed task", same
+  buttons); a snooze before the due time moves the due reminder to the snooze end; nudges start
+  after it. `Reminders.plan` works out every reminder without the plugin, so it is tested. M2:
+  tapping a task's reminder opens the task (also from a cold start, `startedFromTask`). L3: the
+  daily overdue summary is set for each of the next 7 days, worked out per day, instead of one
+  repeating notification with a fixed list. Task notification ids are 16 per task now.
+- **Saving.** H2: a task that can't be read is kept as it was in `AppData.unreadable` and saved
+  back; a tasks.json that can't be read at all is renamed `tasks-unreadable-<time>.json` and the
+  newest readable backup is opened, with a banner (`AppStore.loadProblem`); the same for
+  device_settings.json. M3: device settings are written one at a time through a temporary file.
+  L4: widget and notification queues clear only what was read.
+- **Sync.** H3: categories, board columns and checklist templates merge by id (`_mergeById`):
+  the newer settings' items in their order, then any only the older copy has, unless deleted
+  (their ids go in `deleted` like tasks). Collapsing a heading, Group by category, hiding an email
+  and dismissing an event no longer bump `settingsUpdatedAt`. M7: tasks.json is uploaded only if
+  Dropbox still has the revision that was read; otherwise the sync reads and merges again (up to
+  5 times). M6: inbox.txt is emptied with a revision check before its lines are added; inbox
+  folder files are deleted before they are added, and skipped when another device took them. L1:
+  deletions are kept for a year instead of 90 days.
+- **Screens and widgets.** M1: the task page looks its task up in the store on each change, so a
+  newer copy from sync is shown and edited (title and notes follow unless being typed in). M4:
+  snoozed tasks are sent to the widgets with `snoozedUntil`; Android and iPad widgets show them
+  again once it passes. M5: the calendar check for event suggestions runs at most every 30
+  minutes unless its settings change. L6: archived tasks' title and notes are read-only, with
+  Move back to tasks on the task page. L7: deleting an email task hides that email from email
+  tasks. L8: the reminders' change check no longer encodes every task.
+- Not changed: L5 (the Google client secret in the Dropbox device backup) is what lets a new
+  device restore Google sign-in (item 69), and this kind of client's secret isn't confidential.
+  L9 (moving to `package:material_ui`): that package is a separate copy of the Material library,
+  so mixing it with plugins and tests that still use `package:flutter/material.dart` needs its
+  own careful PR; the old import still works.

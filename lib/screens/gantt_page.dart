@@ -1303,12 +1303,12 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
             if (s.dueAt != null) Text('Due ${fmt.format(s.dueAt!)}'),
             if (preview != null && (start != null || takes != null))
               Text(
-                'On the chart: ${fmt.format(preview.start)} to ${fmt.format(preview.end)}'
+                '${t.gantt ? 'On the chart' : 'On the timeline'}: ${fmt.format(preview.start)} to ${fmt.format(preview.end)}'
                 '${preview.late ? ', ${preview.lateDays} day${preview.lateDays == 1 ? '' : 's'} after due' : ''}',
                 style: Theme.of(c).textTheme.bodySmall,
               ),
             if (preview == null)
-              Text('Give it a start date (or a due date) to show it on the chart.', style: Theme.of(c).textTheme.bodySmall),
+              Text('Give it a start date (or a due date) to show it on the ${t.gantt ? 'chart' : 'timeline'}.', style: Theme.of(c).textTheme.bodySmall),
           ]),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),

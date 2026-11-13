@@ -144,7 +144,9 @@ struct Snapshot {
       t.stage = moved?.0 ?? (o["stage"] as? String)
       t.since = moved?.1 ?? date(o["since"])
       t.box = o["box"] as? String
-      t.snoozed = (o["snoozed"] as? Bool) ?? false
+      // Still snoozed only until the time the app sent (older app versions send none).
+      let until = date(o["snoozedUntil"])
+      t.snoozed = ((o["snoozed"] as? Bool) ?? false) && (until == nil || until! > Date())
       t.worked = worked(id, o)
       s.all.append(t)
     }

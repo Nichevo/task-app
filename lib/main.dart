@@ -25,14 +25,17 @@ void main() {
     reminders.schedule(store.data);
     if (reminders.startedFromReview) store.setQuickFilter(QuickFilter.week);
   });
-  runApp(TaskApp(store: store, widgets: widgets, ready: ready));
+  runApp(TaskApp(store: store, widgets: widgets, reminders: reminders, ready: ready));
 }
 
 class TaskApp extends StatefulWidget {
-  const TaskApp({super.key, required this.store, this.widgets, this.ready});
+  const TaskApp({super.key, required this.store, this.widgets, this.reminders, this.ready});
 
   final AppStore store;
   final HomeWidgets? widgets;
+
+  /// Tapping a task's reminder opens that task.
+  final Reminders? reminders;
 
   /// Completes once the saved tasks are loaded; then "What's new" may show.
   final Future<void>? ready;
@@ -64,7 +67,12 @@ class _TaskAppState extends State<TaskApp> {
       onPause: widget.store.flush,
     );
     _takeShared();
-    widget.ready?.then((_) => _onHome((home) => home.maybeShowWhatsNew()));
+    widget.reminders?.onOpenTask = (id) => _onHome((home) => home.openTask(id));
+    widget.ready?.then((_) => _onHome((home) {
+          home.maybeShowWhatsNew();
+          final id = widget.reminders?.startedFromTask;
+          if (id != null) home.openTask(id);
+        }));
   }
 
   @override

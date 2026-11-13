@@ -40,8 +40,6 @@ class _StepsEditPageState extends State<StepsEditPage> {
 
   List<TaskStep> get _selected => [for (final s in task.steps) if (_sel.contains(s.id)) s];
 
-  bool get _showPlan =>
-      task.gantt || task.steps.any((s) => s.startAt != null || s.takesDays != null || s.progress != null);
   bool get _showStage => task.boardSteps.isNotEmpty && data.stages.isNotEmpty;
 
   /// Runs [change] with a copy kept for Undo, then saves.
@@ -601,14 +599,14 @@ class _StepsEditPageState extends State<StepsEditPage> {
               footer: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 TextButton.icon(onPressed: _addStep, icon: const Icon(Icons.add), label: const Text('Add a step')),
                 // Folded, the chart sits under the steps and scrolls with them, showing every row.
-                if (!wide && _showPlan && steps.isNotEmpty) ...[const SizedBox(height: 8), _preview(wide)],
+                if (!wide && steps.isNotEmpty) ...[const SizedBox(height: 8), _preview(wide)],
                 // Item 86: the task's burn-down, folded until opened.
                 TaskBurnDownTile(task: task, data: data),
               ]),
               itemBuilder: (context, i) => wide ? _row(steps[i], i) : _card(steps[i], i),
             ),
           ),
-          if (wide && _showPlan && steps.isNotEmpty) _preview(wide),
+          if (wide && steps.isNotEmpty) _preview(wide),
         ]),
       );
     });
@@ -653,7 +651,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
         (Icons.subdirectory_arrow_right, 'Chain in order', () => _chain(sel)),
         if (_showStage) (Icons.view_kanban_outlined, 'Stage', () => _setStage(sel)),
         (Icons.notifications_outlined, 'Reminder', () => _setReminder(sel)),
-        if (_showPlan) (Icons.percent, 'Progress', () => _setProgress(sel)),
+        (Icons.percent, 'Progress', () => _setProgress(sel)),
         (Icons.more_horiz, 'More', () => _more(sel)),
       ];
 
@@ -755,13 +753,16 @@ class _StepsEditPageState extends State<StepsEditPage> {
   static const _wStart = 124.0, _wDays = 112.0, _wDue = 150.0, _wRemind = 128.0, _wStage = 124.0, _wProg = 92.0;
 
   List<Widget> _columns(List<Widget> plan, Widget due, Widget remind, Widget? stage) => [
-        if (_showPlan) ...[SizedBox(width: _wStart, child: plan[0]), const SizedBox(width: 8)],
-        if (_showPlan) ...[SizedBox(width: _wDays, child: plan[1]), const SizedBox(width: 8)],
+        SizedBox(width: _wStart, child: plan[0]),
+        const SizedBox(width: 8),
+        SizedBox(width: _wDays, child: plan[1]),
+        const SizedBox(width: 8),
         SizedBox(width: _wDue, child: due),
         const SizedBox(width: 8),
         SizedBox(width: _wRemind, child: remind),
         if (stage != null) ...[const SizedBox(width: 8), SizedBox(width: _wStage, child: stage)],
-        if (_showPlan) ...[const SizedBox(width: 8), SizedBox(width: _wProg, child: plan[2])],
+        const SizedBox(width: 8),
+        SizedBox(width: _wProg, child: plan[2]),
       ];
 
   Widget _header() {
@@ -1008,11 +1009,9 @@ class _StepsEditPageState extends State<StepsEditPage> {
                 ),
               const SizedBox(height: 6),
               Wrap(spacing: 6, runSpacing: 6, children: [
-                if (_showPlan)
-                  chip(Icons.play_arrow_outlined, s.startAt == null ? 'Start' : _day.format(s.startAt!), s.startAt == null,
+                chip(Icons.play_arrow_outlined, s.startAt == null ? 'Start' : _day.format(s.startAt!), s.startAt == null,
                       () => _setStart([s])),
-                if (_showPlan)
-                  chip(Icons.timelapse, s.takesDays == null ? 'Days' : '${s.takesDays} day${s.takesDays == 1 ? '' : 's'}',
+                chip(Icons.timelapse, s.takesDays == null ? 'Days' : '${s.takesDays} day${s.takesDays == 1 ? '' : 's'}',
                       s.takesDays == null, () => _setDays([s])),
                 chip(Icons.event, s.dueAt == null ? 'Due' : _dayTime.format(s.dueAt!), s.dueAt == null, () => _setDue([s])),
                 if (s.dueAt != null) chip(Icons.notifications_outlined, _remindText(s), false, () => _setReminder([s])),

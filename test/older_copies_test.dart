@@ -19,11 +19,20 @@ class FakeDropbox extends DropboxClient {
   @override
   Future<void> upload(String contents) async => files[DropboxClient.filePath] = contents;
 
+  /// Each save is a new revision, so a stale upload is refused like Dropbox does.
   @override
-  Future<String?> downloadInbox() async => null;
+  Future<(String, String)?> downloadWithRev(String path) async {
+    final t = files[path];
+    return t == null ? null : (t, '${t.hashCode}');
+  }
 
   @override
-  Future<void> clearInbox() async {}
+  Future<bool> uploadIfUnchanged(String path, String contents, String? rev) async {
+    final now = files[path];
+    if (rev == null ? now != null : rev.isNotEmpty && '${now.hashCode}' != rev) return false;
+    files[path] = contents;
+    return true;
+  }
 
   @override
   Future<void> backup(String contents, DateTime now) async => backups.add(contents);

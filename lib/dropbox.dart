@@ -102,19 +102,49 @@ class DropboxClient {
 
   Future<String?> downloadPath(String path) => _download(path);
 
+  /// M6/M7: a file with its revision, or null when it doesn't exist.
+  Future<(String, String)?> downloadWithRev(String path) async {
+    final res = await http.post(Uri.https('content.dropboxapi.com', '/2/files/download'), headers: {
+      'Authorization': 'Bearer ${await _token()}',
+      'Dropbox-API-Arg': jsonEncode({'path': path}),
+    });
+    if (res.statusCode == 409 && res.body.contains('not_found')) return null;
+    _checkOk(res);
+    var rev = '';
+    try {
+      rev = (jsonDecode(res.headers['dropbox-api-result'] ?? '{}') as Map)['rev'] as String? ?? '';
+    } catch (_) {}
+    return (utf8.decode(res.bodyBytes), rev);
+  }
+
+  /// M6/M7: saves [contents] only if the file is still at [rev] (or, with no rev, still doesn't
+  /// exist). False when someone else changed it in between; read it again and retry.
+  Future<bool> uploadIfUnchanged(String path, String contents, String? rev) async {
+    final mode = rev == null || rev.isEmpty ? (rev == null ? 'add' : 'overwrite') : null;
+    final res = await http.post(Uri.https('content.dropboxapi.com', '/2/files/upload'),
+        headers: {
+          'Authorization': 'Bearer ${await _token()}',
+          'Content-Type': 'application/octet-stream',
+          'Dropbox-API-Arg': jsonEncode({
+            'path': path,
+            'mode': mode ?? {'.tag': 'update', 'update': rev},
+            'autorename': false,
+            'mute': true,
+          }),
+        },
+        body: utf8.encode(contents));
+    if (res.statusCode == 409 && res.body.contains('conflict')) return false;
+    _checkOk(res);
+    return true;
+  }
+
   Future<void> uploadPath(String path, String contents) => _upload(path, contents);
 
   /// Item 69: each device's own settings, one file per kind of device.
   static const devicesFolder = '/devices';
 
-  Future<void> delete(String path) => _rpc('/2/files/delete_v2', {'path': path}, notFoundOk: true);
-
-  /// Moves a file that couldn't be read to inbox/failed, so it isn't tried again and again.
-  Future<void> moveToFailed(String path) => _rpc('/2/files/move_v2', {
-        'from_path': path,
-        'to_path': '$inboxFolder/failed/${path.split('/').last}',
-        'autorename': true,
-      }, notFoundOk: true);
+  /// Null when the file was already gone.
+  Future<Map<String, dynamic>?> delete(String path) => _rpc('/2/files/delete_v2', {'path': path}, notFoundOk: true);
 
   Future<Map<String, dynamic>?> _rpc(String endpoint, Map<String, dynamic> body, {bool notFoundOk = false}) async {
     final res = await http.post(Uri.https('api.dropboxapi.com', endpoint),
@@ -124,15 +154,6 @@ class DropboxClient {
     _checkOk(res);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
-
-  /// The inbox file, or null when it is missing or empty.
-  Future<String?> downloadInbox() async {
-    final text = await _download(inboxPath);
-    return text == null || text.trim().isEmpty ? null : text;
-  }
-
-  /// Empties the inbox (keeps the file so it's easy to find and write to again).
-  Future<void> clearInbox() => _upload(inboxPath, '');
 
   Future<String?> _download(String path) async {
     final res = await http.post(Uri.https('content.dropboxapi.com', '/2/files/download'), headers: {

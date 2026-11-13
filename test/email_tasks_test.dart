@@ -25,10 +25,16 @@ class FolderDropbox extends DropboxClient {
   Future<void> upload(String contents) async => main = contents;
 
   @override
-  Future<String?> downloadInbox() async => null;
+  Future<(String, String)?> downloadWithRev(String path) async {
+    final t = path == DropboxClient.filePath ? main : null;
+    return t == null ? null : (t, '${t.hashCode}');
+  }
 
   @override
-  Future<void> clearInbox() async {}
+  Future<bool> uploadIfUnchanged(String path, String contents, String? rev) async {
+    if (path == DropboxClient.filePath) main = contents;
+    return true;
+  }
 
   @override
   Future<List<String>> inboxFiles() async {
@@ -43,16 +49,13 @@ class FolderDropbox extends DropboxClient {
   Future<String?> downloadPath(String path) async => inbox[path] ?? other[path];
 
   @override
-  Future<void> uploadPath(String path, String contents) async => other[path] = contents;
-
-  @override
-  Future<void> delete(String path) async => inbox.remove(path);
-
-  @override
-  Future<void> moveToFailed(String path) async {
-    inbox.remove(path);
-    failed.add(path);
+  Future<void> uploadPath(String path, String contents) async {
+    if (path.startsWith('${DropboxClient.inboxFolder}/failed/')) failed.add(path.replaceFirst('/failed', ''));
+    other[path] = contents;
   }
+
+  @override
+  Future<Map<String, dynamic>?> delete(String path) async => inbox.remove(path) == null ? null : {};
 }
 
 Map<String, dynamic> mail(String id, String subject, String from,

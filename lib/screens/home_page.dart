@@ -20,6 +20,7 @@ import '../widgets/task_block.dart';
 import '../widgets/task_colors.dart';
 import 'about_page.dart';
 import 'archive_page.dart';
+import 'backups_page.dart';
 import 'calendar_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart';
@@ -127,6 +128,8 @@ class HomePageState extends State<HomePage> {
   }
 
   bool _checkingEvents = false;
+  DateTime? _eventsCheckedAt;
+  String? _eventsKey;
 
   /// Once a day or week (as chosen in Settings) looks for events to offer as tasks.
   Future<void> _checkEvents() async {
@@ -134,6 +137,13 @@ class HomePageState extends State<HomePage> {
     final last = store.eventPromptAt;
     final period = Duration(days: data.eventSuggest == EventSuggest.daily ? 1 : 7);
     if (last != null && DateTime.now().difference(last) < period) return;
+    // M5: this runs on every change (each key typed), so only ask the calendar again after half an
+    // hour, or when the setting or the dismissed events changed.
+    final key = '${data.eventSuggest.name}/${data.dismissedEvents.length}/${data.eventCalendars.length}/${data.eventDays}';
+    final at = _eventsCheckedAt;
+    if (at != null && key == _eventsKey && DateTime.now().difference(at) < const Duration(minutes: 30)) return;
+    _eventsCheckedAt = DateTime.now();
+    _eventsKey = key;
     _checkingEvents = true;
     try {
       final n = (await upcomingEvents(data)).length;
@@ -175,8 +185,12 @@ class HomePageState extends State<HomePage> {
     if (show && mounted) await showWhatsNew(context, releases.first);
   }
 
-  /// Opens a task (e.g. from the home screen widget).
-  void openTask(String id) => _select(id);
+  /// Opens a task (e.g. from the home screen widget or a reminder), on top of whatever page is open.
+  void openTask(String id) {
+    if (data.task(id) == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    _select(id);
+  }
 
   /// Puts the cursor in the add box (e.g. from the quick-add widget), with [text] filled in
   /// and [categoryId] already chosen.
@@ -515,10 +529,7 @@ class HomePageState extends State<HomePage> {
             ),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
-              'group' => () {
-                  data.groupByCategory = !data.groupByCategory;
-                  store.changed(settings: true);
-                }(),
+              'group' => store.toggleGroupByCategory(),
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'stats' => openStats(),
@@ -577,6 +588,23 @@ class HomePageState extends State<HomePage> {
             content: Text('Another device has a newer Task Blocks (${data.newestApp}). Please update this one. '
                 'Everything keeps working, and nothing the newer version added is lost.'),
             actions: [TextButton(onPressed: () => setState(() => _updateNoteHidden = true), child: const Text('OK'))],
+          ),
+        // H2: a saved file couldn't be read at start-up; say what was done about it.
+        if (store.loadProblem case final problem?)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: const Icon(Icons.warning_amber_outlined),
+            content: Text(problem),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  store.dismissLoadProblem();
+                  _open(context, BackupsPage(store: store));
+                },
+                child: const Text('Backups'),
+              ),
+              TextButton(onPressed: store.dismissLoadProblem, child: const Text('OK')),
+            ],
           ),
         if (store.restoreOffer case final b?)
           MaterialBanner(
