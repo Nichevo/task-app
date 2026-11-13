@@ -102,13 +102,12 @@ class _TaskPageState extends State<TaskPage> {
               onPressed: () => Navigator.pop(c, 'note'),
               child: Text(s.note.isEmpty ? 'Add a note' : 'Edit the note'),
             ),
-            if (task.gantt)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(c, 'plan'),
-                child: Text(s.startAt == null && s.takesDays == null && s.progress == null
-                    ? 'Start, days of work and progress (Gantt chart)'
-                    : 'Change its start, days of work or progress'),
-              ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'plan'),
+              child: Text(s.startAt == null && s.takesDays == null && s.progress == null
+                  ? 'Start, days of work and progress'
+                  : 'Change its start, days of work or progress'),
+            ),
             if (task.steps.length > 1)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'after'),
