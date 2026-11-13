@@ -425,6 +425,7 @@ class _KanbanPageState extends State<KanbanPage> {
             icon: Icon(store.boardLanes ? Icons.view_week_outlined : Icons.view_stream_outlined),
             onPressed: () => store.setBoardView(lanes: !store.boardLanes),
           ),
+        if (!_searching) _shadingMenu(anySteps),
         if (!_searching)
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => setState(() => _searching = true)),
       ],
@@ -442,6 +443,47 @@ class _KanbanPageState extends State<KanbanPage> {
                   ),
               ],
             ),
+    );
+  }
+
+  /// Item 98: picks the card shading from the board, for task cards and step cards apart.
+  Widget _shadingMenu(bool anySteps) {
+    const names = {
+      CardShading.fill: 'Fills up',
+      CardShading.bars: 'Two bars',
+      CardShading.pace: 'On pace',
+      CardShading.off: 'Off',
+    };
+    final order = [CardShading.pace, CardShading.bars, CardShading.fill, CardShading.off];
+    PopupMenuItem<String> heading(String text) => PopupMenuItem<String>(
+          enabled: false,
+          height: 32,
+          child: Text(text, style: Theme.of(context).textTheme.labelLarge),
+        );
+    return PopupMenuButton<String>(
+      tooltip: 'Card shading',
+      icon: const Icon(Icons.gradient),
+      onSelected: (v) {
+        final (which, name) = (v[0], v.substring(2));
+        if (which == 't') {
+          data.cardShading = CardShading.values.byName(name);
+        } else {
+          data.stepShading = name == 'same' ? null : CardShading.values.byName(name);
+        }
+        store.changed(settings: true);
+      },
+      itemBuilder: (_) => [
+        heading('Task cards'),
+        for (final c in order)
+          CheckedPopupMenuItem(value: 't:${c.name}', checked: data.cardShading == c, child: Text(names[c]!)),
+        if (anySteps) ...[
+          const PopupMenuDivider(),
+          heading('Step cards'),
+          CheckedPopupMenuItem(value: 's:same', checked: data.stepShading == null, child: const Text('Same as task cards')),
+          for (final c in order)
+            CheckedPopupMenuItem(value: 's:${c.name}', checked: data.stepShading == c, child: Text(names[c]!)),
+        ],
+      ],
     );
   }
 
@@ -759,7 +801,7 @@ class _KanbanPageState extends State<KanbanPage> {
     final card = _StepCard(
       step: st,
       color: _colour(t, now),
-      shading: data.cardShading,
+      shading: data.stepCardShading,
       pace: stepPace(t, st, now),
       under: under,
       details: [
@@ -1368,7 +1410,7 @@ class KanbanSettingsPage extends StatelessWidget {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Card shading'),
+            title: const Text('Task card shading'),
             subtitle: Text(switch (data.cardShading) {
               CardShading.off => 'Plain cards in their ageing colour.',
               CardShading.fill => 'The done share of a card is in full colour, the rest pale. A strip on the bottom edge drains as the due date gets closer.',
@@ -1385,6 +1427,25 @@ class KanbanSettingsPage extends StatelessWidget {
               ],
               onChanged: (v) {
                 data.cardShading = v ?? CardShading.pace;
+                store.changed(settings: true);
+              },
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Step card shading'),
+            subtitle: const Text('Steps on the board, by their own progress and due date. Also on the board\'s shading button.'),
+            trailing: DropdownButton<CardShading?>(
+              value: data.stepShading,
+              items: const [
+                DropdownMenuItem(value: null, child: Text('Same as tasks')),
+                DropdownMenuItem(value: CardShading.off, child: Text('Off')),
+                DropdownMenuItem(value: CardShading.fill, child: Text('Fills up')),
+                DropdownMenuItem(value: CardShading.bars, child: Text('Two bars')),
+                DropdownMenuItem(value: CardShading.pace, child: Text('On pace')),
+              ],
+              onChanged: (v) {
+                data.stepShading = v;
                 store.changed(settings: true);
               },
             ),
