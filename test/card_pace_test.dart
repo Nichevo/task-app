@@ -141,4 +141,41 @@ void main() {
       }
     });
   }
+
+  test('step cards can have their own shading, else they follow the task cards', () {
+    final d = AppData()..cardShading = CardShading.fill;
+    expect(d.stepCardShading, CardShading.fill);
+    expect(d.toJson().containsKey('stepShading'), isFalse);
+    d.stepShading = CardShading.off;
+    expect(d.stepCardShading, CardShading.off);
+    expect(AppData.fromJson(d.toJson()).stepShading, CardShading.off);
+  });
+
+  testWidgets('the board\'s shading button sets task and step cards apart', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final s = AppStore();
+    final t = s.addTask('Renew insurance')..dueAt = DateTime.now().add(const Duration(days: 3));
+    t.steps.add(TaskStep(id: 'a', title: 'Get quotes'));
+    s.setOnBoard(t, true, stage: s.data.stage('doing'));
+    s.setStepsOnBoard(t, true);
+    await tester.pumpWidget(MaterialApp(home: KanbanPage(store: s)));
+
+    await tester.tap(find.byTooltip('Card shading'));
+    await tester.pumpAndSettle();
+    expect(find.text('Step cards'), findsOneWidget);
+    await tester.tap(find.text('Two bars').first, warnIfMissed: false); // under Task cards
+    await tester.pumpAndSettle();
+    expect(s.data.cardShading, CardShading.bars);
+    expect(s.data.stepShading, isNull);
+
+    await tester.tap(find.byTooltip('Card shading'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Off').last, warnIfMissed: false); // under Step cards
+    await tester.pumpAndSettle();
+    expect(s.data.cardShading, CardShading.bars);
+    expect(s.data.stepShading, CardShading.off);
+    expect(tester.takeException(), isNull);
+  });
 }

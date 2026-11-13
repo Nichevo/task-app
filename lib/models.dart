@@ -1354,6 +1354,7 @@ class AppData {
     this.kanbanHideFromList = false,
     this.boardSortLikeList = false,
     this.cardShading = CardShading.pace,
+    this.stepShading,
     this.ganttWeekends = false,
     this.ganttPush = GanttPush.ask,
     this.ganttStartOnProgress = true,
@@ -1460,6 +1461,12 @@ class AppData {
 
   /// Item 96: how board cards show work done and time left.
   CardShading cardShading;
+
+  /// Item 98: the same for step cards on the board; null = like the task cards.
+  CardShading? stepShading;
+
+  /// How step cards are shaded.
+  CardShading get stepCardShading => stepShading ?? cardShading;
 
   /// Item 72: whether a task's "Takes N days" counts Saturdays and Sundays unless the task says.
   bool ganttWeekends;
@@ -1601,7 +1608,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -1634,6 +1641,7 @@ class AppData {
         if (kanbanHideFromList) 'kanbanHideFromList': true,
         if (boardSortLikeList) 'boardSortLikeList': true,
         if (cardShading != CardShading.pace) 'cardShading': cardShading.name,
+        if (stepShading != null) 'stepShading': stepShading!.name,
         if (ganttWeekends) 'ganttWeekends': true,
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
@@ -1732,6 +1740,7 @@ class AppData {
         kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
         boardSortLikeList: j['boardSortLikeList'] as bool? ?? false,
         cardShading: _enum(CardShading.values, j['cardShading'], CardShading.pace),
+        stepShading: CardShading.values.where((v) => v.name == j['stepShading']).firstOrNull,
         ganttWeekends: j['ganttWeekends'] as bool? ?? false,
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
@@ -1928,6 +1937,7 @@ AppData mergeData(AppData a, AppData b) {
     kanbanHideFromList: settingsFrom.kanbanHideFromList,
     boardSortLikeList: settingsFrom.boardSortLikeList,
     cardShading: settingsFrom.cardShading,
+    stepShading: settingsFrom.stepShading,
     ganttWeekends: settingsFrom.ganttWeekends,
     ganttPush: settingsFrom.ganttPush,
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,

@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.15', 'November 2026', [
+    'Kanban board: a new shading button in the top bar picks the card shading right there, without going to Settings.',
+    'Step cards can be shaded differently from task cards, for example On pace for tasks and Off for steps. Choose under "Step cards" on the same button, or Settings, Kanban board, "Step card shading". They follow the task cards until you pick.',
+  ]),
   Release('1.10.14', 'November 2026', [
     'Snoozing a reminder (1 hour, This evening, Tomorrow, or Snooze on a widget) now reminds you again when the snooze ends. Before, the task only came back in the list without a notification.',
     'Tapping a task\'s reminder opens that task, not just the list.',

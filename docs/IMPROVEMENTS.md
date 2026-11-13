@@ -1151,3 +1151,14 @@ one commit per group:
   L9 (moving to `package:material_ui`): that package is a separate copy of the Material library,
   so mixing it with plugins and tests that still use `package:flutter/material.dart` needs its
   own careful PR; the old import still works.
+
+## 98. Card shading from the board, and apart for steps ☑ (version 1.10.15)
+
+Feedback: a control for the card shading on the Kanban page itself, and a different shading for
+the task cards and the step cards.
+
+- A shading button (gradient icon) in the board's top bar: a menu with Task cards and, when any
+  task has steps on the board, Step cards, each with On pace, Two bars, Fills up and Off.
+- `AppData.stepShading` (null = same as the task cards; `stepCardShading` resolves it), also in
+  Settings, Kanban board, "Step card shading". The task one is now titled "Task card shading".
+
