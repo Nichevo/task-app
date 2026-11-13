@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.13', 'November 2026', [
+    'Kanban board: cards now show how far a task has got and how much time is left before it is due. Pick the look in Settings, Kanban board, "Card shading": Fills up (the done part of the card in full colour, a strip along the bottom for time left), Two bars (work done and time left), On pace (one bar with a tick for time gone; the default) or Off.',
+    'Each card says whether the task is behind, on pace or ahead: the work done (steps ticked, with half-done steps counting for their progress) against the time gone since it started. Overdue tasks say Overdue.',
+    'Steps on the board are shaded the same way, by their own progress and their own due date.',
+    'New "Behind" filter above the main list, the board and the matrix, and in search, for tasks that are overdue or have less done than the time gone. In the main list they show a small hourglass.',
+  ]),
   Release('1.10.12', 'November 2026', [
     'Edit all steps: the Starts, Days of work and Progress columns (and the timeline under the steps) now show for every task, not only for tasks on the Gantt chart. Tap a step\'s start to set it, or tick several steps and tap Start.',
     'A step\'s menu on the task page now always offers "Start, days of work and progress", not only on Gantt tasks.',

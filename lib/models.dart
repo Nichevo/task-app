@@ -1138,6 +1138,12 @@ enum ListSort { manual, due, age, newest, categoryDue }
 /// [keepSort]: the sort always stays; a drag only changes the category.
 enum DragInSort { auto, handMade, keepSort }
 
+/// Item 96: how Kanban cards are shaded to show work done and time left (Settings, Kanban board).
+/// [fill]: the done share of the card in full colour, the rest pale, a strip for time left.
+/// [bars]: two labelled bars, work done and time left. [pace]: one bar with a tick for time
+/// gone and a verdict (behind, on pace, ahead). [off]: plain cards as before.
+enum CardShading { off, fill, bars, pace }
+
 /// What happens to the category of a task added without one.
 enum AutoCategory { off, suggest, apply }
 
@@ -1344,6 +1350,7 @@ class AppData {
     this.kanbanDone = KanbanDone.ask,
     this.kanbanHideFromList = false,
     this.boardSortLikeList = false,
+    this.cardShading = CardShading.pace,
     this.ganttWeekends = false,
     this.ganttPush = GanttPush.ask,
     this.ganttStartOnProgress = true,
@@ -1445,6 +1452,9 @@ class AppData {
   /// Item 92: sort each board column like the main list. Off: a task moved into a column goes
   /// to its top and the rest keep their places, so a move never reshuffles the column.
   bool boardSortLikeList;
+
+  /// Item 96: how board cards show work done and time left.
+  CardShading cardShading;
 
   /// Item 72: whether a task's "Takes N days" counts Saturdays and Sundays unless the task says.
   bool ganttWeekends;
@@ -1582,7 +1592,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'skips',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -1613,6 +1623,7 @@ class AppData {
         'kanbanDone': kanbanDone.name,
         if (kanbanHideFromList) 'kanbanHideFromList': true,
         if (boardSortLikeList) 'boardSortLikeList': true,
+        if (cardShading != CardShading.pace) 'cardShading': cardShading.name,
         if (ganttWeekends) 'ganttWeekends': true,
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
@@ -1690,6 +1701,7 @@ class AppData {
         kanbanDone: _enum(KanbanDone.values, j['kanbanDone'], KanbanDone.ask),
         kanbanHideFromList: j['kanbanHideFromList'] as bool? ?? false,
         boardSortLikeList: j['boardSortLikeList'] as bool? ?? false,
+        cardShading: _enum(CardShading.values, j['cardShading'], CardShading.pace),
         ganttWeekends: j['ganttWeekends'] as bool? ?? false,
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
@@ -1882,6 +1894,7 @@ AppData mergeData(AppData a, AppData b) {
     kanbanDone: settingsFrom.kanbanDone,
     kanbanHideFromList: settingsFrom.kanbanHideFromList,
     boardSortLikeList: settingsFrom.boardSortLikeList,
+    cardShading: settingsFrom.cardShading,
     ganttWeekends: settingsFrom.ganttWeekends,
     ganttPush: settingsFrom.ganttPush,
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
