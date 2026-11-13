@@ -9,7 +9,7 @@ class Release {
 }
 
 const releases = [
-  Release('1.10.13', 'November 2026', [
+  Release('1.10.14', 'November 2026', [
     'Snoozing a reminder (1 hour, This evening, Tomorrow, or Snooze on a widget) now reminds you again when the snooze ends. Before, the task only came back in the list without a notification.',
     'Tapping a task\'s reminder opens that task, not just the list.',
     'The daily overdue summary is worked out fresh for each day, so it no longer repeats an old list.',

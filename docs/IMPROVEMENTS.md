@@ -1064,7 +1064,7 @@ Feedback: some tasks had no "Edit all steps" button on the task page.
   (still hidden for archived tasks). The Edit all steps screen already works with one step;
   "Chain in order" still asks for two or more ticked.
 
-## 93. Review fixes ☑ (version 1.10.13)
+## 93. Review fixes ☑ (version 1.10.14)
 
 A review of the whole app (November 2026) found 3 high, 7 medium and 9 low issues. Fixed here,
 one commit per group:
