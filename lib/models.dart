@@ -1144,8 +1144,9 @@ enum DragInSort { auto, handMade, keepSort }
 /// Item 96: how Kanban cards are shaded to show work done and time left (Settings, Kanban board).
 /// [fill]: the done share of the card in full colour, the rest pale, a strip for time left.
 /// [bars]: two labelled bars, work done and time left. [pace]: one bar with a tick for time
-/// gone and a verdict (behind, on pace, ahead). [off]: plain cards as before.
-enum CardShading { off, fill, bars, pace }
+/// gone and a verdict (behind, on pace, ahead). [ring] (item 100): a small ring, time left round
+/// the outside and work done as a pie inside. [off]: plain cards as before.
+enum CardShading { off, fill, bars, pace, ring }
 
 /// What happens to the category of a task added without one.
 enum AutoCategory { off, suggest, apply }

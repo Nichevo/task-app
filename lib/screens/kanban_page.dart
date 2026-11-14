@@ -452,9 +452,10 @@ class _KanbanPageState extends State<KanbanPage> {
       CardShading.fill: 'Fills up',
       CardShading.bars: 'Two bars',
       CardShading.pace: 'On pace',
+      CardShading.ring: 'Ring',
       CardShading.off: 'Off',
     };
-    final order = [CardShading.pace, CardShading.bars, CardShading.fill, CardShading.off];
+    final order = [CardShading.pace, CardShading.bars, CardShading.fill, CardShading.ring, CardShading.off];
     PopupMenuItem<String> heading(String text) => PopupMenuItem<String>(
           enabled: false,
           height: 32,
@@ -953,10 +954,16 @@ class _StepCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface;
-    final ink = Theme.of(context).colorScheme.onSurface;
-    final wash = Color.alphaBlend(color.withValues(alpha: 0.28), surface);
     final open = !step.done;
     final done = pace.done ?? 0, used = pace.used;
+    // Item 100: Fills up colours the whole step card like a task's (full colour for the done
+    // share, pale for the rest, dark text), so it reads as a fill, not a thin bar. A ticked
+    // step is full.
+    final fill = shading == CardShading.fill;
+    final ink = fill ? const Color(0xDD000000) : Theme.of(context).colorScheme.onSurface;
+    final wash = Color.alphaBlend(color.withValues(alpha: 0.28), surface);
+    final pale = Color.lerp(color, Colors.white, 0.6)!;
+    final share = step.done ? 1.0 : done;
     final rows = <Widget>[
       if (open && shading == CardShading.bars) ...[
         if (done > 0)
@@ -972,63 +979,68 @@ class _StepCard extends StatelessWidget {
             if (pace.verdict != null) ...[const SizedBox(width: 6), PaceChip(pace, small: true)],
           ]),
         ),
-      if (open && (shading == CardShading.fill || shading == CardShading.bars) && pace.verdict == Pace.behind)
+      if (open && shading != CardShading.pace && shading != CardShading.off && pace.verdict == Pace.behind)
         Padding(padding: const EdgeInsets.only(top: 2), child: PaceChip(pace, small: true)),
     ];
-    final fill = shading == CardShading.fill && open && done > 0;
-    final deep = Color.alphaBlend(color.withValues(alpha: 0.6), surface);
-    if (shading == CardShading.fill && open && used != null) {
-      rows.add(Padding(padding: const EdgeInsets.only(top: 3, right: 8), child: TimeLeftBar(used: used, ink: ink, height: 3)));
-    }
+    final ring = shading == CardShading.ring && open && (done > 0 || used != null);
     return Padding(
       padding: EdgeInsets.fromLTRB(under ? 22 : 8, 2, 8, 2),
       child: Material(
-        color: fill ? null : wash,
-        type: fill ? MaterialType.transparency : MaterialType.canvas,
+        type: MaterialType.transparency,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
           side: BorderSide(color: color.withValues(alpha: 0.8)),
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Ink(
-            decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: color, width: 4)),
-              // Fill: the done share a deeper wash of the task's colour.
-              gradient: fill
-                  ? LinearGradient(
-                      colors: [deep, deep, wash, wash],
-                      stops: [0, done, done, 1],
-                    )
-                  : null,
-            ),
-            padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
-            child: Row(children: [
-              Icon(step.done ? Icons.check_box : Icons.check_box_outline_blank, size: 16, color: ink.withValues(alpha: 0.7)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(step.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 13,
-                          decoration: step.done ? TextDecoration.lineThrough : null,
-                          color: step.done ? ink.withValues(alpha: 0.6) : ink)),
-                  Text(details, style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
-                  ...rows,
-                ]),
-              ),
-              if (onNext != null)
-                IconButton(
-                  tooltip: 'Move to $nextName',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  onPressed: onNext,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: fill ? null : wash,
+            gradient: fill
+                ? LinearGradient(colors: [color, color, pale, pale], stops: [0, share, share, 1])
+                : null,
+          ),
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(border: Border(left: BorderSide(color: color, width: 4))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
+                  child: Row(children: [
+                    Icon(step.done ? Icons.check_box : Icons.check_box_outline_blank, size: 16, color: ink.withValues(alpha: 0.7)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(step.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 13,
+                                decoration: step.done ? TextDecoration.lineThrough : null,
+                                color: step.done ? ink.withValues(alpha: 0.6) : ink)),
+                        Text(details, style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
+                        ...rows,
+                      ]),
+                    ),
+                    if (ring)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: RingGauge(done: done, used: used, size: 28, ink: ink),
+                      ),
+                    if (onNext != null)
+                      IconButton(
+                        tooltip: 'Move to $nextName',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.arrow_forward, size: 18, color: ink),
+                        onPressed: onNext,
+                      ),
+                    if (onNext == null) const SizedBox(width: 8),
+                  ]),
                 ),
-              if (onNext == null) const SizedBox(width: 8),
-            ]),
+                // Fill: time left as a strip on the bottom edge, as on a task's card.
+                if (fill && open && used != null) TimeLeftBar(used: used, height: 3, ink: ink),
+              ]),
+            ),
           ),
         ),
       ),
@@ -1144,6 +1156,7 @@ class _KanbanCard extends StatelessWidget {
           ),
         ];
       case CardShading.fill:
+      case CardShading.ring:
         return [if (pace.verdict != null) Padding(padding: const EdgeInsets.only(top: 3), child: PaceChip(pace))];
       case CardShading.off:
         return const [];
@@ -1168,7 +1181,7 @@ class _KanbanCard extends StatelessWidget {
             ),
           )
         : BoxDecoration(color: color, borderRadius: BorderRadius.circular(4));
-    final countInMeta = task.steps.isNotEmpty && stepsChip == null && (shading == CardShading.off || shading == CardShading.fill);
+    final countInMeta = task.steps.isNotEmpty && stepsChip == null && (shading == CardShading.off || shading == CardShading.fill || shading == CardShading.ring);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       child: Material(
@@ -1213,6 +1226,11 @@ class _KanbanCard extends StatelessWidget {
                         ?stepsChip,
                       ]),
                     ),
+                    if (shading == CardShading.ring && (done != null || used != null))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, left: 4),
+                        child: RingGauge(done: done, used: used, ink: ink),
+                      ),
                     if (onNext != null)
                       IconButton(
                         tooltip: 'Move to $nextName',
@@ -1416,6 +1434,7 @@ class KanbanSettingsPage extends StatelessWidget {
               CardShading.fill => 'The done share of a card is in full colour, the rest pale. A strip on the bottom edge drains as the due date gets closer.',
               CardShading.bars => 'Two bars under the details: work done, and time left before the due date.',
               CardShading.pace => 'One bar for work done, with a tick for time gone, and whether it is behind, on pace or ahead.',
+              CardShading.ring => 'A small ring by the menu button: time left round the outside, work done filling the inside.',
             }),
             trailing: DropdownButton<CardShading>(
               value: data.cardShading,
@@ -1424,6 +1443,7 @@ class KanbanSettingsPage extends StatelessWidget {
                 DropdownMenuItem(value: CardShading.fill, child: Text('Fills up')),
                 DropdownMenuItem(value: CardShading.bars, child: Text('Two bars')),
                 DropdownMenuItem(value: CardShading.pace, child: Text('On pace')),
+                DropdownMenuItem(value: CardShading.ring, child: Text('Ring')),
               ],
               onChanged: (v) {
                 data.cardShading = v ?? CardShading.pace;
@@ -1443,6 +1463,7 @@ class KanbanSettingsPage extends StatelessWidget {
                 DropdownMenuItem(value: CardShading.fill, child: Text('Fills up')),
                 DropdownMenuItem(value: CardShading.bars, child: Text('Two bars')),
                 DropdownMenuItem(value: CardShading.pace, child: Text('On pace')),
+                DropdownMenuItem(value: CardShading.ring, child: Text('Ring')),
               ],
               onChanged: (v) {
                 data.stepShading = v;

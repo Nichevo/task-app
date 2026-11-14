@@ -9,6 +9,10 @@ class Release {
 }
 
 const releases = [
+  Release('1.10.17', 'November 2026', [
+    'Kanban board: new "Ring" card shading. A small ring by the menu button shows time left round the outside (dashed once overdue) and work done filling the inside like a pie. Pick it from the board\'s shading button or Settings, Kanban board, for task cards, step cards or both.',
+    'Fills up now fills step cards the same way as task cards: the done part of the step in its task\'s colour, the rest pale, with the time strip along the bottom edge. A ticked step is full. A step fills from its own "how far along", so a step with none set stays pale until it is ticked.',
+  ]),
   Release('1.10.16', 'November 2026', [
     'Snoozing from a reminder\'s buttons now sets the "Snoozed task" reminder straight away, so it comes when the snooze ends even if you don\'t open the app in between.',
     'iPad widgets: a snoozed task comes back at the time its snooze ends, not up to a few hours later. Snooze on a widget also reminds you at 8am, and the task returns to the widgets then without opening the app.',
