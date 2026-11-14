@@ -1182,3 +1182,18 @@ iPad (shared code, and the burn-down and snooze widget changes were already in S
 - **Chart widget task picker** lists only tasks with a burn-down (`BurnTaskOptions`).
 - docs/IPAD.md: Chart row mentions the per-task burn-down; widget snooze reminder.
 - Not changed: on the iPad the Kanban board needs a press and hold to drag even with a trackpad.
+
+## 100. Ring shading, and step cards that really fill up ☑ (version 1.10.17)
+
+Feedback: "Fills up" filled task cards but on step cards it looked like a bar along the bottom,
+and the ring (pie) style from the mock-up wasn't one of the choices.
+
+- Step cards in Fills up now shade the whole card like a task card: the task's colour for the done
+  share (`TaskStep.share`, ticked = full) and a pale tint for the rest, dark text, and the
+  time-left strip on the bottom edge instead of a bar among the text. Before, the done share
+  was only a slightly deeper wash and steps with no progress showed just the time bar.
+- `CardShading.ring`: `RingGauge` (lib/widgets/card_shading.dart) by the menu button on task
+  cards (38 px) and at the end of step cards (28 px, open steps with progress or a due date).
+  Outer ring = time left, dashed when overdue; inner pie = work done. The verdict chip shows as
+  in Fills up. Offered in the board's shading menu and both Settings dropdowns.
+
