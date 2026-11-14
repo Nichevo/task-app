@@ -6,6 +6,7 @@ import 'package:task_blocks/screens/kanban_page.dart';
 import 'package:task_blocks/screens/search_page.dart';
 import 'package:task_blocks/store.dart';
 import 'package:task_blocks/task_list.dart';
+import 'package:task_blocks/widgets/card_shading.dart';
 
 /// Item 96: card shading and the pace verdict (behind, on pace, ahead).
 void main() {
@@ -136,6 +137,9 @@ void main() {
           expect(find.text('Overdue'), findsNWidgets(2)); // the filter chip and the card's verdict
         case CardShading.fill:
           expect(find.text('Overdue'), findsNWidgets(2)); // the filter chip and the card's verdict
+        case CardShading.ring:
+          expect(find.text('Overdue'), findsNWidgets(2));
+          expect(find.byType(RingGauge), findsNWidgets(3)); // two task cards and the step with a due date
         case CardShading.off:
           expect(find.text('Overdue'), findsOneWidget); // only the filter chip
       }

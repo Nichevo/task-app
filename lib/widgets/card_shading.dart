@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../pace.dart';
@@ -171,4 +173,80 @@ class LabelledBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Item 100: a small ring. The outer ring is time left, draining clockwise (dashed once
+/// overdue); the inside fills like a pie with the work done. Either part is left out when null.
+class RingGauge extends StatelessWidget {
+  const RingGauge({super.key, this.done, this.used, this.size = 38, this.ink = const Color(0xFF000000)});
+
+  final double? done;
+  final double? used;
+  final double size;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = [
+      if (done != null) '${(done! * 100).round()}% done',
+      if (used != null) timeLeftLabel(used!),
+    ];
+    return Semantics(
+      label: parts.join(', '),
+      child: SizedBox.square(dimension: size, child: CustomPaint(painter: _RingPainter(done, used, ink))),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter(this.done, this.used, this.ink);
+
+  final double? done;
+  final double? used;
+  final Color ink;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final stroke = size.width * 0.105;
+    final outer = size.width / 2 - stroke / 2;
+    final inner = outer - stroke * 1.4;
+    const start = -pi / 2;
+    final u = used;
+    if (u != null) {
+      final track = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = ink.withValues(alpha: 0.14);
+      canvas.drawCircle(c, outer, track);
+      final arc = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = ink.withValues(alpha: u >= 1 ? 0.75 : 0.6);
+      final rect = Rect.fromCircle(center: c, radius: outer);
+      if (u >= 1) {
+        // Overdue: dashes all the way round.
+        const dashes = 16;
+        for (var i = 0; i < dashes; i++) {
+          canvas.drawArc(rect, start + i * 2 * pi / dashes, pi / dashes, false, arc);
+        }
+      } else if (u < 1) {
+        canvas.drawArc(rect, start, 2 * pi * (1 - max(0.0, u)), false, arc);
+      }
+    }
+    final d = done;
+    if (d != null) {
+      final r = u == null ? outer + stroke / 2 : inner;
+      canvas.drawCircle(c, r, Paint()..color = const Color(0x80FFFFFF));
+      final fill = Paint()..color = ink.withValues(alpha: 0.55);
+      if (d >= 1) {
+        canvas.drawCircle(c, r, fill);
+      } else if (d > 0) {
+        canvas.drawArc(Rect.fromCircle(center: c, radius: r), start, 2 * pi * d, true, fill);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) => old.done != done || old.used != used || old.ink != ink;
 }
