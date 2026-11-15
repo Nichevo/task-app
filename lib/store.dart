@@ -1688,30 +1688,154 @@ class AppStore extends ChangeNotifier {
     return newest;
   }
 
+  /// Item 102: the saved place this device is at (checked while the app is open; null = none or
+  /// not known) and the calendar events happening now (id, title, start, end).
+  String? placeNow;
+  DateTime? _placeAt;
+  List<(String, String, DateTime, DateTime)> eventsNow = const [];
+  DateTime? _autoChecked;
+
+  /// A switch by place or calendar event waiting for a yes ("Ask before switching").
+  AutoMode? pendingAuto;
+  final _autoYes = <String>{}, _autoNo = <String>{};
+
+  /// Set after a place or event switched mode by itself, for the list to show once.
+  String? autoNote;
+
+  /// What the mode would be without a hand choice: a place or event's, else the schedule's.
+  String automaticMode = everythingId;
+
+  bool get _modesByPlace => data.modes.any((m) => m.places.isNotEmpty);
+  bool get _modesByEvent => data.modes.any((m) => m.events.isNotEmpty);
+
+  /// Looks at where the phone is and what is on the calendar, for modes that switch by place or
+  /// event; at most every 5 minutes unless [force]d.
+  Future<void> checkAutoModes({bool force = false}) async {
+    final now = DateTime.now();
+    if (!_modesByPlace && !_modesByEvent) {
+      if (placeNow == null && eventsNow.isEmpty) return;
+      placeNow = null;
+      eventsNow = const [];
+    } else {
+      if (!force && _autoChecked != null && now.difference(_autoChecked!) < const Duration(minutes: 5)) return;
+      _autoChecked = now;
+      if (_modesByPlace && location != null && places.isNotEmpty) {
+        final p = await location!.current();
+        if (p != null) {
+          placeNow = placeAt(places, p.lat, p.lng)?.name;
+          _placeAt = now;
+        } else if (_placeAt == null || now.difference(_placeAt!) > const Duration(minutes: 30)) {
+          // No fix for a while: don't stay "At Office" forever.
+          placeNow = null;
+        }
+      } else {
+        placeNow = null;
+      }
+      if (_modesByEvent && Native.supported) {
+        try {
+          final evs = await Native.events(
+              now.subtract(const Duration(days: 30)), now.add(const Duration(minutes: 1)), data.eventCalendars);
+          eventsNow = [
+            for (final e in evs)
+              (
+                e.id,
+                e.title,
+                e.start,
+                // An all-day event (or one from older native code) without a real end lasts the day.
+                e.end.isAfter(e.start) ? e.end : DateTime(e.start.year, e.start.month, e.start.day + 1),
+              ),
+          ];
+        } catch (e) {
+          debugPrint('mode events: $e');
+        }
+      } else {
+        eventsNow = const [];
+      }
+    }
+    if (!refreshMode()) notifyListeners();
+  }
+
+  /// Yes or no to [pendingAuto].
+  void answerAutoMode(bool yes) {
+    final a = pendingAuto;
+    if (a == null) return;
+    (yes ? _autoYes : _autoNo).add(a.key);
+    pendingAuto = null;
+    // Said yes just now: no "Switched to" note as well.
+    _noAutoNote = true;
+    if (!refreshMode()) notifyListeners();
+    _noAutoNote = false;
+  }
+
+  /// Undo on "Switched to …": that place or event no longer switches until it changes.
+  void answerAutoUndo() {
+    final k = _autoUsed;
+    if (k == null) return;
+    _autoYes.remove(k);
+    _autoNo.add(k);
+    refreshMode();
+  }
+
+  String? _autoUsed;
+  bool _noAutoNote = false;
+
+  /// Takes the note left by a switch by place or event, if any.
+  String? takeAutoNote() {
+    final n = autoNote;
+    autoNote = null;
+    return n;
+  }
+
   /// Works out the mode in force ([modeNow]) and logs a change for the statistics. With
   /// [applyStart], a change also picks the mode's starting filter chip and panel view.
+  /// Order: a hand choice, then a calendar event, then a place, then the weekly schedule.
   /// Returns whether the mode changed.
   bool refreshMode({DateTime? now, bool applyStart = true}) {
     final at = now ?? DateTime.now();
     final choice = _choiceAt(at);
     final scheduled = scheduledAt(data.modeSchedule, at);
-    final id = choice?.mode ?? (data.mode(scheduled) == null ? everythingId : scheduled);
+    final scheduledId = data.mode(scheduled) == null ? everythingId : scheduled;
+    final auto = autoModeAt(data, at, place: placeNow, events: eventsNow);
+    AutoMode? use, ask;
+    if (auto != null) {
+      if (_autoNo.contains(auto.key)) {
+        // Said no (or Undo) to this place or event.
+      } else if (!data.modeAsk || auto.mode == scheduledId || _autoYes.contains(auto.key)) {
+        use = auto;
+      } else {
+        ask = auto;
+      }
+    }
+    automaticMode = use?.mode ?? scheduledId;
+    _autoUsed = use?.key;
+    final askBefore = pendingAuto?.key;
+    pendingAuto = choice == null ? ask : null;
+    final id = choice?.mode ?? automaticMode;
     final mode = data.mode(id);
     final was = modeNow.mode?.id ?? everythingId;
     final byHand = choice != null;
-    DateTime? until;
+    final byAuto = !byHand && use != null;
+    final DateTime? until;
     if (choice != null) {
       until = choice.until;
+    } else if (byAuto) {
+      until = use.until;
     } else {
       until = nextScheduleChange(data.modeSchedule, at);
     }
     final changed = was != id;
+    final dataChanged = !identical(modeNow.data, data);
     modeNow
       ..mode = mode
       ..until = until
-      ..byHand = byHand;
+      ..byHand = byHand
+      ..reason = byAuto ? use.reason : null
+      ..reach = byAuto && until == null ? nextScheduleChange(data.modeSchedule, at) : until
+      ..data = data;
     if (changed) modeNow.peek = false;
-    final logged = _logMode(id, byHand ? 'hand' : (id == everythingId ? 'none' : 'schedule'), at);
+    if (changed && byAuto && mode != null && !_noAutoNote) autoNote = 'Switched to ${mode.name}: ${use.reason}';
+    final logged = _logMode(id, byHand ? 'hand' : (byAuto ? 'auto' : (id == everythingId ? 'none' : 'schedule')), at);
+    if (logged || dataChanged) modeNow.noonModes = noonModesFrom(data, at);
     if (changed && !shownPanelViews.contains(panelView)) panelView = shownPanelViews.first;
     if (changed && applyStart && mode != null) {
       final f = QuickFilter.values.where((f) => f.name == mode.filter).firstOrNull;
@@ -1720,6 +1844,8 @@ class AppStore extends ChangeNotifier {
       if (v != null && shownPanelViews.contains(v)) panelView = v;
     }
     if (logged) changed ? this.changed() : _markDirty();
+    if (!logged && changed) notifyListeners();
+    if (!changed && askBefore != pendingAuto?.key) notifyListeners();
     return changed;
   }
 
@@ -1745,7 +1871,9 @@ class AppStore extends ChangeNotifier {
     if (open.length == 1 && open.first.mode == id && open.first.how == how) {
       // Still the same, unless the schedule went somewhere else and back while the app was shut.
       final l = open.first;
-      if (how == 'hand' || scheduleSegments(data.modeSchedule, l.start, now).length <= 1) return false;
+      if (how == 'hand' || how == 'auto' || scheduleSegments(data.modeSchedule, l.start, now).length <= 1) {
+        return false;
+      }
     }
     DateTime? from;
     for (final l in open) {
@@ -1754,6 +1882,8 @@ class AppStore extends ChangeNotifier {
         final c = [deviceModeChoice, data.modeChoice].where((c) => c != null && c.mode == l.mode).firstOrNull;
         final until = c?.until;
         l.end = until != null && until.isBefore(now) && until.isAfter(l.start) ? until : now;
+      } else if (l.how == 'auto') {
+        l.end = now;
       } else {
         // A scheduled stretch lasted until the schedule changed.
         final segs = scheduleSegments(data.modeSchedule, l.start, now);
@@ -1762,7 +1892,7 @@ class AppStore extends ChangeNotifier {
       if (from == null || l.end!.isAfter(from)) from = l.end;
     }
     var start = now;
-    if (from != null && how != 'hand') {
+    if (from != null && how != 'hand' && how != 'auto') {
       // Fill in the schedule's changes while the app was closed.
       for (final (m, s, e) in scheduleSegments(data.modeSchedule, from, now)) {
         final mid = data.mode(m) == null ? everythingId : m;
@@ -1840,7 +1970,7 @@ class AppStore extends ChangeNotifier {
 
   /// Makes the starter modes (and, when there is no schedule yet, the starter schedule).
   void addStarterModes() {
-    final made = starterModes(data);
+    final made = starterModes(data, places: [for (final p in places) p.name]);
     data.modes.addAll(made);
     if (data.modeSchedule.isEmpty) data.modeSchedule.addAll(starterSchedule(data, made));
     refreshMode(applyStart: false);

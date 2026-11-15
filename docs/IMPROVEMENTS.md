@@ -1324,3 +1324,30 @@ modes in the statistics; the top bar has no room for more icons.
   Trip, WFH), Ask before switching, per-task Always show. 1.12.2 widgets follow the mode, a mode
   switch on a widget, Android quick settings tile. 1.12.3 focus timer (25/5, 15 after 4), 4x3 "Focus timer"
   widget (the existing Focus widget shows the top task) plus 2x2 and 4x2.
+
+### 102, part 2 of 4 ☑ (version 1.12.1)
+
+- Reminders: `Reminders.plan` holds back any reminder whose task the mode in force at that time
+  hides and that doesn't break through then (`heldBy`; the mode at a future time is
+  `forecastMode`: the current mode until `ModeNow.reach`, then the weekly schedule). One summary
+  per mode stretch at its end ("Work is over: 3 reminders held", `heldSummaries`, ids from
+  -900000000). `scheduleKey` includes the mode and its reach.
+- Habits: `FocusMode.pauseHabits` (on by default). A habit in a hidden category is paused today
+  (mode in force) and on past days whose noon fell in such a mode (`ModeNow.noonModes`, from the
+  log by `noonModesFrom`); `pausedOn` asks `habitModePaused`, so no reminder, not due, no broken
+  streak.
+- Switching by itself: `FocusMode.places` (saved place names, device-only places), `placeWhen`
+  (only while the schedule says that mode: Home office at Home while the schedule says Work) and
+  `events` (whole words in a calendar event's title). `autoModeAt`: events first, then places,
+  modes in list order. Order overall: hand choice > event > place > schedule > Everything.
+  `AppStore.checkAutoModes` (start, resume, each minute on screen, at most every 5 minutes): the
+  location (`placeAt`, no prompt) and events happening now from the chosen calendars.
+  `AppData.modeAsk` "Ask before switching by place or calendar": a banner on the list
+  (`pendingAuto`, `answerAutoMode`); otherwise a snackbar "Switched to Travel: Flight to Rome" with
+  Undo (`answerAutoUndo`, that occasion no longer switches). The sheet says why ("Now: At Office").
+  Starter modes: Work at a place named office/work, Home office at a place named home/house while
+  the schedule says Work and for WFH events, Travel for flight/trip/holiday/vacation/travel events.
+- `Task.alwaysShow` ("Always show in every mode", task page ⋮): shows in its category's place in
+  every mode and is never held.
+- The Day plan's "Start focus" button moves to part 4 with the timer.
+- Tests: test/modes_test.dart (part 2 group).

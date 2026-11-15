@@ -34,6 +34,7 @@ class Task {
     this.closedAt,
     this.categoryId,
     this.starred = false,
+    this.alwaysShow = false,
     this.snoozedUntil,
     this.afterTaskId,
     this.readyAt,
@@ -101,7 +102,7 @@ class Task {
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
-    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots',
+    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always',
   };
 
   final String id;
@@ -116,6 +117,9 @@ class Task {
 
   /// Starred tasks are kept at the top of their list or category.
   bool starred;
+
+  /// Item 102: shows in every focus mode, even one that hides its category.
+  bool alwaysShow;
 
   /// Hidden from the main list until this time.
   DateTime? snoozedUntil;
@@ -387,6 +391,7 @@ class Task {
         'updatedAt': updatedAt.toUtc().toIso8601String(),
         if (categoryId != null) 'categoryId': categoryId,
         if (starred) 'starred': true,
+        if (alwaysShow) 'always': true,
         if (snoozedUntil != null) 'snoozedUntil': snoozedUntil!.toIso8601String(),
         if (afterTaskId != null) 'afterTaskId': afterTaskId,
         if (readyAt != null) 'readyAt': readyAt!.toIso8601String(),
@@ -443,6 +448,7 @@ class Task {
         updatedAt: _date(j['updatedAt']),
         categoryId: j['categoryId'] as String?,
         starred: j['starred'] as bool? ?? false,
+        alwaysShow: j['always'] as bool? ?? false,
         snoozedUntil: _date(j['snoozedUntil']),
         afterTaskId: j['afterTaskId'] as String?,
         readyAt: _date(j['readyAt']),
@@ -1631,6 +1637,7 @@ class AppData {
     List<ModeSlot>? modeSchedule,
     this.modeChoice,
     List<ModeLog>? modeLog,
+    this.modeAsk = false,
   })  : active = active ?? [],
         modes = modes ?? [],
         modeSchedule = modeSchedule ?? [],
@@ -1885,6 +1892,9 @@ class AppData {
   /// Item 102: stretches of time in each mode, for the statistics.
   final List<ModeLog> modeLog;
 
+  /// Item 102: ask before a place or calendar event switches mode (otherwise it just switches).
+  bool modeAsk;
+
   FocusMode? mode(String? id) => modes.where((m) => m.id == id).firstOrNull;
 
   /// Another device has saved this data with a newer version of the app.
@@ -1899,7 +1909,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog',
+    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk',
   };
 
   /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
@@ -1964,6 +1974,7 @@ class AppData {
         if (modes.isNotEmpty) 'modes': [for (final m in modes) m.toJson()],
         if (modeSchedule.isNotEmpty) 'modeSchedule': [for (final m in modeSchedule) m.toJson()],
         if (modeChoice != null) 'modeChoice': modeChoice!.toJson(),
+        if (modeAsk) 'modeAsk': true,
         if (lists && modeLog.isNotEmpty) 'modeLog': [for (final l in modeLog) l.toJson()],
       };
 
@@ -2081,6 +2092,7 @@ class AppData {
         modeSchedule: [for (final m in j['modeSchedule'] as List? ?? []) ?ModeSlot.tryParse(m)],
         modeChoice: ModeChoice.tryParse(j['modeChoice']),
         modeLog: [for (final l in j['modeLog'] as List? ?? []) ?ModeLog.tryParse(l)],
+        modeAsk: j['modeAsk'] as bool? ?? false,
         extra: unknownFields(j, _known),
       );
   }
@@ -2276,6 +2288,7 @@ AppData mergeData(AppData a, AppData b) {
       (final x, final y) => x ?? y,
     },
     modeLog: mergeModeLogs(a.modeLog, b.modeLog),
+    modeAsk: settingsFrom.modeAsk,
     unreadable: {for (final u in [...a.unreadable, ...b.unreadable]) jsonEncode(u): u}.values.toList(),
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},

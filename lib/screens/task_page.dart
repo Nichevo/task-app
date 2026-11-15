@@ -568,9 +568,15 @@ class _TaskPageState extends State<TaskPage> {
             PopupMenuButton<String>(
               onSelected: (v) => switch (v) {
                 'step' => _makeStep(),
+                'always' => _update(() => task.alwaysShow = !task.alwaysShow),
                 _ => null,
               },
-              itemBuilder: (_) => const [PopupMenuItem(value: 'step', child: Text('Make into a step of…'))],
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'step', child: Text('Make into a step of…')),
+                // Item 102: shows in every focus mode, whatever it hides.
+                if (widget.store.data.modes.isNotEmpty || task.alwaysShow)
+                  CheckedPopupMenuItem(value: 'always', checked: task.alwaysShow, child: const Text('Always show in every mode')),
+              ],
             ),
         ],
       ),

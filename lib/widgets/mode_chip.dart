@@ -178,8 +178,8 @@ class _ModeSheetState extends State<_ModeSheet> {
       case _Until.schedule:
         until = nextScheduleChange(data.modeSchedule, now);
         // Picking what the schedule already says just goes back to the schedule.
-        if (scheduledAt(data.modeSchedule, now) == id ||
-            (id == everythingId && data.mode(scheduledAt(data.modeSchedule, now)) == null)) {
+        // (Or what a place or calendar event says.)
+        if (store.automaticMode == id) {
           store.chooseMode(null, everywhere: _everywhere);
           if (mounted) Navigator.pop(context);
           return;
@@ -201,8 +201,13 @@ class _ModeSheetState extends State<_ModeSheet> {
   }
 
   String _scheduleLine(DateTime now) {
-    if (data.modeSchedule.isEmpty) return 'No schedule yet: modes change only when you pick one.';
     String name(String id) => data.mode(id)?.name ?? 'Everything';
+    if (!modeNow.byHand && modeNow.reason != null) {
+      final until = modeNow.until;
+      return '${modeNow.reason}: ${name(store.automaticMode)}'
+          '${until == null ? '' : ' until ${DateFormat(until.day == now.day ? 'HH:mm' : 'EEE HH:mm').format(until)}'}.';
+    }
+    if (data.modeSchedule.isEmpty) return 'No schedule yet: modes change only when you pick one.';
     final nowId = scheduledAt(data.modeSchedule, now);
     final next = nextScheduleChange(data.modeSchedule, now);
     if (next == null) return 'Your schedule says ${name(nowId)}.';
@@ -236,7 +241,23 @@ class _ModeSheetState extends State<_ModeSheet> {
                     Text(sub, style: TextStyle(fontSize: 12, color: theme.hintColor), maxLines: 2, overflow: TextOverflow.ellipsis),
                   ]),
                 ),
-                if (on) Text(modeNow.byHand ? 'Now, by hand' : 'Now', style: TextStyle(color: theme.colorScheme.primary)),
+                if (on)
+                  Flexible(
+                    flex: 0,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                          modeNow.byHand
+                              ? 'Now, by hand'
+                              : modeNow.reason != null
+                                  ? 'Now: ${modeNow.reason}'
+                                  : 'Now',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(color: theme.colorScheme.primary)),
+                    ),
+                  ),
               ]),
             ),
           ),
@@ -291,7 +312,7 @@ class _ModeSheetState extends State<_ModeSheet> {
             for (final m in data.modes)
               row(m.id, m.name, '${describeMode(data, m)} · ${tasksInMode(data, m, now)} tasks', modeIcon(m.icon),
                   Color(m.colour)),
-            if (modeNow.byHand && data.modeSchedule.isNotEmpty)
+            if (modeNow.byHand && (data.modeSchedule.isNotEmpty || store.automaticMode != everythingId))
               TextButton.icon(
                 icon: const Icon(Icons.schedule),
                 label: const Text('Back to the schedule'),

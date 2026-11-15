@@ -54,6 +54,17 @@ class ModesPage extends StatelessWidget {
               title: const Text('Everything'),
               subtitle: const Text('Every category and tool. Used when no mode is picked or scheduled.'),
             ),
+            if (data.modes.any((m) => m.places.isNotEmpty || m.events.isNotEmpty))
+              SwitchListTile(
+                secondary: const Icon(Icons.help_outline),
+                title: const Text('Ask before switching by place or calendar'),
+                subtitle: Text(store.placeNow == null ? 'Otherwise it just switches, with Undo' : 'Now at ${store.placeNow}'),
+                value: data.modeAsk,
+                onChanged: (v) {
+                  data.modeAsk = v;
+                  store.modeChanged();
+                },
+              ),
             if (data.modes.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -123,6 +134,37 @@ Future<String?> _askName(BuildContext context, String title, String initial) asy
   return t == null || t.isEmpty ? null : t;
 }
 
+/// Words for calendar events, comma separated; null when cancelled.
+Future<List<String>?> _askWords(BuildContext context, List<String> words) async {
+  final field = TextEditingController(text: words.join(', '));
+  final text = await showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Calendar events with these words'),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        TextField(
+          controller: field,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Flight, Trip, WFH'),
+          onSubmitted: (v) => Navigator.pop(c, v),
+        ),
+        const SizedBox(height: 8),
+        const Text('Separate with commas. An event whose title has one of them switches to this mode until it '
+            'ends. The calendars are the ones chosen in Settings, Upcoming events (all of them if none).'),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(c, field.text), child: const Text('OK')),
+      ],
+    ),
+  );
+  if (text == null) return null;
+  return [
+    for (final w in text.split(','))
+      if (w.trim().isNotEmpty) w.trim(),
+  ];
+}
+
 /// Item 102: one mode's choices.
 class ModeEditPage extends StatelessWidget {
   const ModeEditPage({super.key, required this.store, required this.mode});
@@ -141,6 +183,12 @@ class ModeEditPage extends StatelessWidget {
         void set(VoidCallback f) {
           f();
           store.modeChanged();
+        }
+
+        // Places and events: look again straight away.
+        void setAuto(VoidCallback f) {
+          set(f);
+          store.checkAutoModes(force: true);
         }
 
         final theme = Theme.of(context);
@@ -306,6 +354,56 @@ class ModeEditPage extends StatelessWidget {
               subtitle: const Text('Ageing colour, or Behind on pace'),
               value: m.red,
               onChanged: (v) => set(() => m.red = v),
+            ),
+            Text('Any task can also be set to always show, from the menu on its page. Reminders for hidden tasks wait, and '
+                'one notification lists them when the mode ends.', style: hint),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Pause habits in hidden categories'),
+              subtitle: const Text('No reminders, and those days don\'t break a streak'),
+              value: m.pauseHabits,
+              onChanged: (v) => set(() => m.pauseHabits = v),
+            ),
+            heading('Switch on by itself'),
+            Text('Comes on at a saved place or during a calendar event, before the weekly schedule. Picking a mode '
+                'by hand still wins.', style: hint),
+            const SizedBox(height: 8),
+            if (store.places.isEmpty && m.places.isEmpty)
+              Text('No saved places on this device yet (Settings, Places).', style: hint)
+            else
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final name in {...store.places.map((p) => p.name), ...m.places})
+                  FilterChip(
+                    avatar: const Icon(Icons.place_outlined, size: 18),
+                    label: Text(name),
+                    selected: m.places.contains(name),
+                    onSelected: (on) => setAuto(() => on ? m.places.add(name) : m.places.remove(name)),
+                  ),
+              ]),
+            if (m.places.isNotEmpty)
+              _dropdown<String?>(
+                'At these places',
+                m.placeWhen,
+                {
+                  null: 'Any time',
+                  for (final o in data.modes)
+                    if (o.id != m.id) o.id: 'While the schedule says ${o.name}',
+                },
+                (v) => setAuto(() => m.placeWhen = v),
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_outlined),
+              title: const Text('Calendar events with these words'),
+              subtitle: Text(m.events.isEmpty ? 'None' : m.events.join(', ')),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: () async {
+                final words = await _askWords(context, m.events);
+                if (words == null) return;
+                setAuto(() => m.events
+                  ..clear()
+                  ..addAll(words));
+              },
             ),
           ]),
         );

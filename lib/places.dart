@@ -42,6 +42,29 @@ class Place {
   }
 }
 
+/// Item 102: the nearest saved place that ([lat], [lng]) is inside, if any.
+Place? placeAt(List<Place> places, double lat, double lng) {
+  Place? best;
+  var bestD = double.infinity;
+  for (final p in places) {
+    final d = metresBetween(lat, lng, p.lat, p.lng);
+    if (d <= p.radius && d < bestD) {
+      best = p;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/// Distance on the Earth's surface, in metres.
+double metresBetween(double lat1, double lng1, double lat2, double lng2) {
+  const r = 6371000.0;
+  double rad(double d) => d * pi / 180;
+  final dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+  final a = sin(dLat / 2) * sin(dLat / 2) + cos(rad(lat1)) * cos(rad(lat2)) * sin(dLng / 2) * sin(dLng / 2);
+  return 2 * r * asin(sqrt(a));
+}
+
 /// Choices for a place's radius, in metres.
 const placeRadiusOptions = [100, 150, 250, 500, 1000];
 

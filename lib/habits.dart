@@ -2,12 +2,15 @@ import 'dart:math';
 
 import 'gantt.dart';
 import 'models.dart';
+import 'modes.dart';
 
 /// Item 78: the habit tracker's arithmetic. A habit's ticks are its worked days (item 75).
 
 /// Whether [t] was paused on [day].
 bool pausedOn(Task t, DateTime day) {
   final k = dayKey(day);
+  // Item 102: a focus mode that hid its category that day.
+  if (modeNow.data != null && habitModePaused(t, k, dayKey(DateTime.now()))) return true;
   for (final p in t.habitPauses) {
     final i = p.indexOf('/');
     if (i < 0) continue;
