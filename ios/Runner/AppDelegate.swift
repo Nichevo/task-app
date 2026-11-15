@@ -115,6 +115,7 @@ final class NativeChannel {
         "start": Int64(e.startDate.timeIntervalSince1970 * 1000),
         "allDay": e.isAllDay,
         "location": (e.location as Any?) ?? NSNull(),
+        "end": Int64(e.endDate.timeIntervalSince1970 * 1000),
       ]
     }
   }

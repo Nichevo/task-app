@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show max;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding, AppLifecycleState;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'day_plan.dart' show PlanMove;
 import 'dropbox.dart';
 import 'gantt.dart';
 import 'google.dart';
@@ -750,7 +752,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
     notifyListeners();
@@ -820,14 +822,15 @@ class AppStore extends ChangeNotifier {
       bool board = false,
       bool star = false,
       bool gantt = false,
-      KanbanStage? stage}) {
+      KanbanStage? stage,
+      ({DateTime at, int? minutes})? plan}) {
     final t = Task.create(title.trim(), source: source)
       ..dueAt = due
       ..categoryId = categoryId
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
-    _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage);
+    _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage, plan: plan);
     changed(order: true);
     _locate([t]);
     return t;
@@ -836,8 +839,16 @@ class AppStore extends ChangeNotifier {
   /// A new task from a typed or sent line: what the quick-add words asked for (item 64), and the
   /// board if its category goes there by default (item 67).
   /// [stage] puts it straight into that stage (the + on a board column).
-  void _applyNew(Task t, {MatrixBox? box, bool board = false, bool star = false, bool gantt = false, KanbanStage? stage}) {
+  /// [plan] ("@14:00 45m", item 101) gives it a planned time on the Day plan.
+  void _applyNew(Task t,
+      {MatrixBox? box, bool board = false, bool star = false, bool gantt = false, KanbanStage? stage, ({DateTime at, int? minutes})? plan}) {
     if (box != null) t.matrixBox = box.id;
+    if (plan != null) {
+      final m = plan.minutes ?? data.dayPlan.length;
+      if (plan.minutes != null) t.estimate ??= m;
+      t.slots.add(TimeSlot.create(plan.at, m));
+      t.dayPlan = true;
+    }
     if (gantt) setOnGantt(t, true);
     if (star) t.starred = true;
     if (stage != null || board) {
@@ -882,7 +893,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan);
       added.add(t);
     }
     changed(order: true);
@@ -1365,6 +1376,61 @@ class AppStore extends ChangeNotifier {
   /// Item 101: the Day plan's settings changed.
   void dayPlanChanged() => changed(settings: true);
 
+  /// Moves planned times as [pushAfter] worked out; [back] puts them where they were (undo).
+  void applyPlanMoves(List<PlanMove> moves, {bool back = false}) {
+    for (final m in moves) {
+      m.slot.start = back ? m.from : m.to;
+    }
+    for (final t in {for (final m in moves) m.task}) {
+      changed(task: t);
+    }
+  }
+
+  /// Plans [t]'s open steps that have no time yet one after another from [start], in order
+  /// (a step that comes after another goes after it). Each takes [each] minutes (the default
+  /// length when null) with [gap] minutes between (the default gap when null). With [within]
+  /// they share that many minutes evenly, back to back, so they fit inside the task's own
+  /// block. Returns the new times.
+  List<TimeSlot> planStepsInOrder(Task t, DateTime start, {int? each, int? gap, int? within}) {
+    final s = data.dayPlan;
+    final todo = t.steps.where((x) => !x.done && t.slotsOf(x).every((sl) => sl.doneAt != null)).toList();
+    if (todo.isEmpty) return const [];
+    // List order, except that a step never goes before one it comes after.
+    final ordered = <TaskStep>[];
+    final left = [...todo];
+    while (left.isNotEmpty) {
+      final next = left.firstWhere(
+        (x) => !x.afterIds.any((id) => left.any((o) => o.id == id)),
+        orElse: () => left.first,
+      );
+      ordered.add(next);
+      left.remove(next);
+    }
+    var length = each ?? s.length;
+    var g = gap ?? s.gapMinutes;
+    if (within != null) {
+      length = max(s.snap, within ~/ ordered.length ~/ s.snap * s.snap);
+      g = 0;
+    }
+    final out = <TimeSlot>[];
+    var at = start;
+    for (final st in ordered) {
+      final sl = TimeSlot.create(at, length, stepId: st.id, gapAfter: within != null ? 0 : gap);
+      t.slots.add(sl);
+      out.add(sl);
+      at = at.add(Duration(minutes: length + g));
+    }
+    t.dayPlan = true;
+    changed(task: t);
+    return out;
+  }
+
+  /// Takes away times added by [planStepsInOrder] (undo).
+  void removeSlots(Task t, List<TimeSlot> slots) {
+    t.slots.removeWhere(slots.contains);
+    changed(task: t);
+  }
+
   // --- Gantt chart (item 72) ---
 
   /// Puts [t] on the Gantt chart (or takes it off). [start] sets its start day.
@@ -1530,7 +1596,7 @@ class AppStore extends ChangeNotifier {
   Task addToStage(String title, KanbanStage stage) {
     final p = parseInput(title, data, DateTime.now());
     return addTask(p.title,
-        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, gantt: p.gantt, stage: stage);
+        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, gantt: p.gantt, stage: stage, plan: p.plan);
   }
 
   KanbanStage addStage(String name) {
@@ -2156,7 +2222,7 @@ class AppStore extends ChangeNotifier {
         final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
         final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
         final t = addTask(p.title,
-            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star, gantt: p.gantt)
+            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan)
           ..sourceRef = id;
         t.emails.add(emailOf(m));
         changed(task: t);

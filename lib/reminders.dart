@@ -4,6 +4,7 @@ import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -231,6 +232,11 @@ class Reminders {
       // Item 78: a habit's reminder moves on once today is ticked.
       for (final t in data.habits)
         if (nextHabitReminder(t, now) case final at?) [t.id, t.title, at.toIso8601String()],
+      // Item 101: planned times on the Day plan.
+      for (final t in data.active)
+        for (final sl in t.slots)
+          if (sl.doneAt == null && sl.start.isAfter(now))
+            [sl.id, t.title, sl.stepId, sl.start.toIso8601String(), sl.minutes],
     ]);
   }
 
@@ -293,9 +299,29 @@ class Reminders {
       if (at == null || budget <= 0) continue;
       add(taskBase(t.id) + 7, at, 'Habit', t.title, t, ReminderKind.step);
     }
+    // Item 101: a reminder as each planned block on the Day plan starts (the coming week).
+    if (data.dayPlan.remindStart) {
+      final until = now.add(const Duration(days: 7));
+      final hm = DateFormat('HH:mm');
+      for (final t in data.active) {
+        if (t.habit) continue;
+        for (final sl in t.slots) {
+          if (budget <= 0) break;
+          if (sl.doneAt != null || !sl.start.isBefore(until)) continue;
+          final step = sl.stepId == null ? null : t.steps.where((x) => x.id == sl.stepId).firstOrNull;
+          if (sl.stepId != null && (step == null || step.done)) continue;
+          add(slotReminderId(sl.id), sl.start, 'Planned now, ${hm.format(sl.start)} to ${hm.format(sl.end)}',
+              step == null ? t.title : '${step.title}\nPart of: ${t.title}', t, ReminderKind.step);
+        }
+      }
+    }
     if (data.overdueMode == OverdueMode.daily) out.addAll(dailySummaries(data, now));
     return out;
   }
+
+  /// Item 101: a planned time's reminder id, below every step's (which go down to about
+  /// -537 million), so they never meet.
+  static int slotReminderId(String slotId) => -600000000 - (slotId.hashCode & 0x0fffffff);
 
   /// The first of a task's notification ids (16 each: due, early, nudges, habit, snooze end).
   static int taskBase(String id) => (id.hashCode & 0x07ffffff) * 16;

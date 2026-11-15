@@ -57,6 +57,7 @@ class MainActivity : FlutterActivity() {
                     "start" to it.start,
                     "allDay" to it.allDay,
                     "location" to it.location,
+                    "end" to it.end,
                 )
               })
         }

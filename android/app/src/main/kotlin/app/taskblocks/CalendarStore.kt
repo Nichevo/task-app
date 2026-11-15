@@ -13,6 +13,8 @@ data class DeviceEvent(
     val start: Long,
     val allDay: Boolean,
     val location: String?,
+    /** Item 101: when it ends (the Day plan draws events as long as they last). */
+    val end: Long = start,
 )
 
 /** Reads the phone's calendars through Android's calendar provider. Nothing leaves the phone. */
@@ -48,6 +50,7 @@ object CalendarStore {
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.EVENT_LOCATION,
             CalendarContract.Instances._ID,
+            CalendarContract.Instances.END,
         )
     c.contentResolver.query(builder.build(), projection, null, null, CalendarContract.Instances.BEGIN + " ASC")?.use {
         cur ->
@@ -66,6 +69,7 @@ object CalendarStore {
                 if (allDay) localMidnight(begin) else begin,
                 allDay,
                 cur.getString(5),
+                if (allDay) localMidnight(cur.getLong(7)) else cur.getLong(7),
             ))
       }
     }

@@ -589,6 +589,8 @@ class DayPlanSettings {
     this.trayInProgress = false,
     this.hiddenStrip = true,
     this.show = DayShow.both,
+    this.showEvents = true,
+    this.remindStart = true,
     Set<String>? hiddenCategories,
     Map<String, dynamic>? extra,
   })  : hiddenCategories = hiddenCategories ?? {},
@@ -621,6 +623,13 @@ class DayPlanSettings {
 
   DayShow show;
 
+  /// Item 101 (1.11.1): the phone's calendar events show on the timeline (read-only) and count
+  /// as busy time. Turned off in Settings or from the view's filter menu.
+  bool showEvents;
+
+  /// Item 101 (1.11.1): a reminder when a planned block is due to start.
+  bool remindStart;
+
   /// Categories hidden on the Day plan ('' = tasks with no category).
   final Set<String> hiddenCategories;
 
@@ -628,7 +637,7 @@ class DayPlanSettings {
 
   static const _known = {
     'dayStart', 'dayEnd', 'workStart', 'workEnd', 'snap', 'gap', 'length', 'trayDue', 'trayGantt',
-    'trayInProgress', 'hiddenStrip', 'show', 'hidden',
+    'trayInProgress', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart',
   };
 
   Map<String, dynamic> toJson() => {
@@ -645,6 +654,8 @@ class DayPlanSettings {
         'trayInProgress': trayInProgress,
         'hiddenStrip': hiddenStrip,
         'show': show.name,
+        'events': showEvents,
+        'remindStart': remindStart,
         if (hiddenCategories.isNotEmpty) 'hidden': hiddenCategories.toList()..sort(),
       };
 
@@ -665,6 +676,8 @@ class DayPlanSettings {
       trayInProgress: b('trayInProgress', false),
       hiddenStrip: b('hiddenStrip', true),
       show: DayShow.values.where((s) => s.name == v['show']).firstOrNull ?? DayShow.both,
+      showEvents: b('events', true),
+      remindStart: b('remindStart', true),
       hiddenCategories: {for (final c in v['hidden'] as List? ?? []) ?c as String?},
       extra: unknownFields(v, _known),
     );

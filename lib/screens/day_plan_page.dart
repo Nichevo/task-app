@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../day_plan.dart';
 import '../models.dart';
+import '../native.dart';
 import '../store.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_colors.dart';
@@ -18,11 +19,14 @@ import 'task_page.dart';
 ///
 /// Also the Calendar page's Day mode: [onMode] then switches back to 'month' or 'week'.
 class DayPlanPage extends StatefulWidget {
-  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode});
+  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events});
 
   final AppStore store;
   final DateTime? initialDay;
   final ValueChanged<String>? onMode;
+
+  /// Calendar events to show instead of reading the phone's (for tests and previews).
+  final List<CalendarEvent>? events;
 
   @override
   State<DayPlanPage> createState() => _DayPlanPageState();
@@ -39,6 +43,15 @@ class _DayPlanPageState extends State<DayPlanPage> {
   PlanBlock? _resizing;
   double _dy = 0;
 
+  // The phone's calendar events for the week shown (1.11.1), and whether reading them failed
+  // (no access yet).
+  late List<CalendarEvent> _events = widget.events ?? const [];
+  DateTime? _eventsWeek;
+  bool _eventsBlocked = false;
+
+  // Where each block was drawn this frame, for the "comes after" lines.
+  final _rects = <PlanBlock, Rect>{};
+
   AppStore get store => widget.store;
   AppData get data => store.data;
   DayPlanSettings get s => data.dayPlan;
@@ -54,6 +67,38 @@ class _DayPlanPageState extends State<DayPlanPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+    _loadEvents();
+  }
+
+  DateTime _monday(DateTime d) => dayStart(d).subtract(Duration(days: d.weekday - 1));
+
+  /// Reads the week's events from the phone's calendars, once per week shown.
+  Future<void> _loadEvents({bool force = false}) async {
+    if (!s.showEvents || !Native.supported || widget.events != null) return;
+    final monday = _monday(_day);
+    if (!force && _eventsWeek == monday) return;
+    _eventsWeek = monday;
+    try {
+      final list = await Native.events(monday, monday.add(const Duration(days: 7)), data.eventCalendars);
+      if (!mounted) return;
+      setState(() {
+        _events = list;
+        _eventsBlocked = false;
+      });
+    } catch (e) {
+      debugPrint('Day plan events: $e');
+      if (mounted) setState(() => _eventsBlocked = true);
+    }
+  }
+
+  Future<void> _allowCalendar() async {
+    if (await Native.requestCalendarAccess()) await _loadEvents(force: true);
+  }
+
+  void _toggleEvents() {
+    s.showEvents = !s.showEvents;
+    store.dayPlanChanged();
+    if (s.showEvents) _loadEvents(force: true);
   }
 
   @override
@@ -73,12 +118,17 @@ class _DayPlanPageState extends State<DayPlanPage> {
       a = min(a, st ~/ 60 * 60);
       b = max(b, min(24 * 60, (en + 59) ~/ 60 * 60));
     }
+    for (final e in l.events) {
+      final st = e.start.hour * 60 + e.start.minute;
+      a = min(a, st ~/ 60 * 60);
+      b = max(b, min(24 * 60, (st + e.minutes + 59) ~/ 60 * 60));
+    }
     return (a, max(b, a + 60));
   }
 
   void _scrollToStart() {
     if (!_scroll.hasClients || !mounted) return;
-    final l = layoutDay(data, _day);
+    final l = layoutDay(data, _day, events: _events);
     final (from, _) = _range(l);
     final now = DateTime.now();
     final target = DateUtils.isSameDay(now, _day)
@@ -92,6 +142,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
   void _goTo(DateTime d) {
     setState(() => _day = dayStart(d));
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+    _loadEvents();
   }
 
   Color _colour(Task t) => ageColor(t, data.hoursToRed, byDue: data.colourByDue);
@@ -102,7 +153,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
       listenable: store,
       builder: (context, _) => LayoutBuilder(builder: (context, box) {
         final wide = box.maxWidth >= 840;
-        final layout = layoutDay(data, _day);
+        final layout = layoutDay(data, _day, events: _events);
         final tray = trayFor(data, _day);
         return Scaffold(
           appBar: AppBar(
@@ -122,15 +173,17 @@ class _DayPlanPageState extends State<DayPlanPage> {
                   onPressed: () => widget.onMode!('month'),
                 ),
               ],
-              PopupMenuButton<DayShow>(
+              PopupMenuButton<Object>(
                 tooltip: 'Show',
                 icon: const Icon(Icons.filter_list),
-                initialValue: s.show,
                 onSelected: (v) {
-                  s.show = v;
+                  if (v == 'events') return _toggleEvents();
+                  s.show = v as DayShow;
                   store.dayPlanChanged();
                 },
                 itemBuilder: (_) => [
+                  CheckedPopupMenuItem(value: 'events', checked: s.showEvents, child: const Text('Calendar events')),
+                  const PopupMenuDivider(),
                   for (final v in DayShow.values)
                     CheckedPopupMenuItem(
                       value: v,
@@ -149,6 +202,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             _weekStrip(context),
             _summary(context, layout),
             _categoryChips(context),
+            _allDayRow(context, layout),
             Expanded(
               child: wide
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -190,7 +244,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             Expanded(child: Builder(builder: (context) {
               final d = monday.add(Duration(days: i));
               final selected = d == _day;
-              final load = dayLoad(data, d);
+              final load = dayLoad(data, d, events: _events);
               final fg = selected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurface;
               final over = load > 1;
               return InkWell(
@@ -257,6 +311,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
         chip('Free ${describeLength(l.freeMinutes)}'),
         if (l.sharedMinutes > 0) chip('Shared time ${describeLength(l.sharedMinutes)}'),
         if (l.clashes > 0) chip('${l.clashes} clashing', bad: true),
+        if (l.tooEarly > 0) chip('${l.tooEarly} too early', bad: true),
+        if (l.events.isNotEmpty) chip('Events ${describeLength(l.eventMinutes)}'),
         if (l.hiddenMinutes > 0) chip('Hidden ${describeLength(l.hiddenMinutes)}'),
       ]),
     );
@@ -294,6 +350,114 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
+  /// The day's all-day events, and a way to let the app read the calendar.
+  Widget _allDayRow(BuildContext context, DayLayout l) {
+    if (!s.showEvents) return const SizedBox();
+    final theme = Theme.of(context);
+    if (_eventsBlocked) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+        child: Row(children: [
+          Expanded(
+            child: Text('Your calendar events can show here too.', style: TextStyle(fontSize: 12.5, color: theme.hintColor)),
+          ),
+          TextButton(onPressed: _allowCalendar, child: const Text('Allow calendar')),
+          TextButton(onPressed: _toggleEvents, child: const Text('Not now')),
+        ]),
+      );
+    }
+    if (l.allDay.isEmpty) return const SizedBox();
+    return SizedBox(
+      height: 36,
+      child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(12, 2, 12, 4), children: [
+        for (final e in l.allDay)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: ActionChip(
+              visualDensity: VisualDensity.compact,
+              avatar: const Icon(Icons.event, size: 16),
+              label: Text(e.title),
+              onPressed: () => _eventInfo(e),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  /// A calendar event on the timeline: grey and striped, read-only.
+  Widget _eventBlock(BuildContext context, EventBlock e, double hh) {
+    final theme = Theme.of(context);
+    final hm = DateFormat('HH:mm');
+    final fg = theme.colorScheme.onSurfaceVariant;
+    return GestureDetector(
+      onTap: () => _eventInfo(e.event),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border(left: BorderSide(color: fg.withValues(alpha: 0.6), width: 4)),
+        ),
+        foregroundDecoration: e.clash
+            ? BoxDecoration(border: Border.all(color: const Color(0xFFD32F2F), width: 2.5), borderRadius: BorderRadius.circular(10))
+            : null,
+        padding: EdgeInsets.fromLTRB(8, hh < 40 ? 0 : 5, 6, 0),
+        alignment: hh < 40 ? Alignment.centerLeft : Alignment.topLeft,
+        child: CustomPaint(
+          painter: _Hatch(fg.withValues(alpha: 0.06)),
+          child: Row(crossAxisAlignment: hh < 40 ? CrossAxisAlignment.center : CrossAxisAlignment.start, children: [
+            Icon(Icons.event, size: 15, color: fg),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: e.event.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  TextSpan(
+                    text: '${hh < 40 ? '  ' : '\n'}${hm.format(e.start)} – ${hm.format(e.end)}'
+                        '${e.event.location?.isNotEmpty == true ? ' · ${e.event.location}' : ''}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ]),
+                maxLines: hh < 40 ? 1 : max(1, (hh - 8) ~/ 17),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.5, color: fg),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _eventInfo(CalendarEvent e) async {
+    final hm = DateFormat('HH:mm');
+    final fmt = DateFormat('EEE d MMM');
+    final hide = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.event),
+            title: Text(e.title),
+            subtitle: Text([
+              e.allDay ? 'All day, ${fmt.format(e.start)}' : '${fmt.format(e.start)}, ${hm.format(e.start)} – ${hm.format(e.end)}',
+              if (e.location?.isNotEmpty == true) e.location!,
+              'From your calendar; change it there',
+            ].join('\n')),
+            isThreeLine: true,
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_off_outlined),
+            title: const Text('Hide calendar events'),
+            subtitle: const Text('Turn them back on from the filter menu or Settings'),
+            onTap: () => Navigator.pop(c, true),
+          ),
+        ]),
+      ),
+    );
+    if (hide == true && mounted) _toggleEvents();
+  }
+
   // --- The timeline ---
 
   Widget _timeline(BuildContext context, DayLayout l) {
@@ -320,6 +484,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
           child: LayoutBuilder(builder: (context, box) {
             final x0 = _gutter, x1 = box.maxWidth - 10;
             final children = <Widget>[];
+            _rects.clear();
             // Hour lines.
             for (var m = (from + 59) ~/ 60 * 60; m <= to; m += 60) {
               final top = (m - from) * ppm + _top;
@@ -380,6 +545,19 @@ class _DayPlanPageState extends State<DayPlanPage> {
             for (final b in l.blocks.where((b) => b.shared && !b.hidden)) {
               children.add(_positioned(b, x0, x1, y, h, (w, hh) => _band(context, b, hh)));
             }
+            // The phone's calendar events, side by side with what they clash with.
+            for (final e in l.events) {
+              final left = e.inBand ? x0 + _bandBar + 6 : x0;
+              final colW = (x1 - left) / e.columns;
+              final hh = max(h(e.minutes) - 2, 14.0);
+              children.add(Positioned(
+                left: left + colW * e.column,
+                top: y(e.start) + 1,
+                width: max(colW - (e.column + 1 < e.columns ? 4 : 0), 20.0),
+                height: hh,
+                child: _eventBlock(context, e, hh),
+              ));
+            }
             for (final b in l.blocks.where((b) => !b.shared || b.hidden)) {
               if (b.hidden) {
                 children.add(_positioned(b, x0, x1, y, h, (w, hh) => _hiddenStrip(context, b, hh)));
@@ -393,6 +571,23 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 children.add(_positioned(st, left + colW * b.column + _frameBar + 4, left + colW * (b.column + 1) - 6, y, h,
                     (w, hh) => _block(context, st, hh)));
               }
+            }
+            // "Comes after" lines between blocks.
+            if (l.links.isNotEmpty) {
+              children.add(Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _LinkPainter(
+                      [
+                        for (final k in l.links)
+                          if (_rects[k.from] case final a?)
+                            if (_rects[k.to] case final b?) (a, b, k.tooEarly),
+                      ],
+                      theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                ),
+              ));
             }
             if (DateUtils.isSameDay(now, _day)) {
               final ny = y(now);
@@ -409,7 +604,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
-            if (l.blocks.isEmpty) {
+            if (l.blocks.isEmpty && l.events.isEmpty) {
               children.add(Positioned(
                 left: x0,
                 right: 10,
@@ -437,6 +632,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
     if (moving) top += _dy;
     if (identical(_resizing, b)) hh = max(h(s.snap), hh + _dy);
     final w = max(right - left, 20.0);
+    _rects[b] = Rect.fromLTWH(left, top + 1, w, max(hh - 2, 14));
     final widget = SizedBox(width: w, height: max(hh - 2, 14), child: child(w, max(hh - 2, 14)));
     return Positioned(
       left: left,
@@ -561,7 +757,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                       style: const TextStyle(color: ink, decoration: TextDecoration.none),
                     ),
                   ),
-                  if (b.clash) const _Tag('Clash'),
+                  if (b.tooEarly) const _Tag('Too early', bad: true) else if (b.clash) const _Tag('Clash'),
                   _tick(b),
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -573,8 +769,20 @@ class _DayPlanPageState extends State<DayPlanPage> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: ink)),
-                      Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
-                      if (b.clash && hh >= 80) const Padding(padding: EdgeInsets.only(top: 3), child: _Tag('Clash')),
+                      Text.rich(
+                        TextSpan(children: [
+                          if (b.tooEarly && hh < 64)
+                            const TextSpan(text: 'Too early · ', style: TextStyle(color: Color(0xFFB71C1C), fontWeight: FontWeight.w700)),
+                          TextSpan(text: meta),
+                        ]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Color(0xAA000000)),
+                      ),
+                      if (b.tooEarly && hh >= 64)
+                        const Padding(padding: EdgeInsets.only(top: 3), child: _Tag('Too early', bad: true))
+                      else if (b.clash && hh >= 80)
+                        const Padding(padding: EdgeInsets.only(top: 3), child: _Tag('Clash')),
                       if (listRoom > 0 && unplanned.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Container(
@@ -879,21 +1087,91 @@ class _DayPlanPageState extends State<DayPlanPage> {
       ));
   }
 
-  void _shift(PlanBlock b, int minutes) {
-    final d = Duration(minutes: minutes);
-    store.updateSlot(b.task, b.slot, start: b.start.add(d));
-    // A task's steps planned inside it move with it.
-    for (final st in b.inside) {
-      store.updateSlot(st.task, st.slot, start: st.start.add(d));
-    }
+  /// What comes after [b], moved later if [b] now runs into it, as Settings' "When a bar
+  /// moves" says (ask, always or never). Empty when nothing is to move.
+  Future<List<PlanMove>?> _pushFor(PlanBlock b, DateTime start, int minutes) async {
+    if (b.shared || !start.add(Duration(minutes: minutes)).isAfter(b.end)) return const [];
+    final moves = pushAfter(data, b, start, minutes);
+    if (moves.isEmpty || data.ganttPush == GanttPush.never) return const [];
+    if (data.ganttPush == GanttPush.always) return moves;
+    final n = moves.map((m) => m.slot).toSet().length;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Move what comes after?'),
+        content: Text('"${b.title}" now runs into $n planned time${n == 1 ? '' : 's'} after it. '
+            'Move ${n == 1 ? 'it' : 'them'} later, keeping the gaps?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Leave them')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Move them')),
+        ],
+      ),
+    );
+    if (yes == null) return null;
+    return yes ? moves : const [];
   }
 
-  void _stretch(PlanBlock b, int minutes) {
+  Future<void> _shift(PlanBlock b, int minutes) async {
+    final d = Duration(minutes: minutes);
+    final push = await _pushFor(b, b.start.add(d), b.slot.minutes);
+    if (push == null || !mounted) return;
+    final before = b.start;
+    final inside = [for (final st in b.inside) (st, st.start)];
+    store.updateSlot(b.task, b.slot, start: b.start.add(d));
+    // A task's steps planned inside it move with it.
+    for (final (st, at) in inside) {
+      store.updateSlot(st.task, st.slot, start: at.add(d));
+    }
+    store.applyPlanMoves(push);
+    _changedSnack(
+      '"${b.title}" now starts ${DateFormat('HH:mm').format(before.add(d))}'
+      '${push.isEmpty ? '' : ', and ${_moved(push)} moved later'}',
+      () {
+        store.applyPlanMoves(push, back: true);
+        for (final (st, at) in inside) {
+          store.updateSlot(st.task, st.slot, start: at);
+        }
+        store.updateSlot(b.task, b.slot, start: before);
+      },
+    );
+  }
+
+  Future<void> _stretch(PlanBlock b, int minutes) async {
     final to = max(s.snap, b.slot.minutes + minutes);
+    final push = await _pushFor(b, b.start, to);
+    if (push == null || !mounted) return;
+    final was = b.slot.minutes;
     store.updateSlot(b.task, b.slot, minutes: to);
+    store.applyPlanMoves(push);
+    _changedSnack(
+      '"${b.title}" now ends ${DateFormat('HH:mm').format(b.start.add(Duration(minutes: to)))}'
+      '${push.isEmpty ? '' : ', and ${_moved(push)} moved later'}',
+      () {
+        store.applyPlanMoves(push, back: true);
+        store.updateSlot(b.task, b.slot, minutes: was);
+      },
+    );
+  }
+
+  String _moved(List<PlanMove> moves) {
+    final n = moves.map((m) => m.slot).toSet().length;
+    return '$n other${n == 1 ? '' : 's'}';
+  }
+
+  void _changedSnack(String text, VoidCallback undo) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text('"${b.title}" now ends ${DateFormat('HH:mm').format(b.start.add(Duration(minutes: to)))}')));
+      ..showSnackBar(SnackBar(content: Text(text), action: SnackBarAction(label: 'Undo', onPressed: undo)));
+  }
+
+  /// Plans [b]'s task's steps that have no time inside [b]'s own time, back to back.
+  void _stepsInside(PlanBlock b) {
+    final added = store.planStepsInOrder(b.task, b.start, within: b.slot.minutes);
+    if (added.isEmpty) return;
+    _changedSnack(
+      'Planned ${added.length} step${added.length == 1 ? '' : 's'} inside "${b.title}"',
+      () => store.removeSlots(b.task, added),
+    );
   }
 
   Future<void> _toggle(PlanBlock b) async {
@@ -963,10 +1241,21 @@ class _DayPlanPageState extends State<DayPlanPage> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             title: Text(b.title, style: theme.textTheme.titleMedium),
-            subtitle: Text([if (b.step != null) 'Step of ${b.task.title}', _times(b)].join(' · ')),
+            subtitle: Text([
+              if (b.step != null) 'Step of ${b.task.title}',
+              _times(b),
+              if (b.tooEarly) 'Starts before what it comes after is done',
+            ].join(' · ')),
           ),
           ListTile(leading: const Icon(Icons.open_in_new), title: const Text('Open the task'), onTap: () => Navigator.pop(c, 'open')),
           ListTile(leading: const Icon(Icons.schedule), title: const Text('Change the time…'), onTap: () => Navigator.pop(c, 'time')),
+          if (b.step == null && !b.done && b.task.steps.any((x) => !x.done && b.task.slotsOf(x).every((sl) => sl.doneAt != null)))
+            ListTile(
+              leading: const Icon(Icons.low_priority),
+              title: const Text('Plan its steps inside this time'),
+              subtitle: const Text('Steps without a time, in order, back to back'),
+              onTap: () => Navigator.pop(c, 'steps'),
+            ),
           ListTile(
             leading: Icon(b.shared ? Icons.check_box : Icons.check_box_outline_blank),
             title: const Text('Leave room for other tasks'),
@@ -996,6 +1285,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
         store.updateSlot(b.task, b.slot, shared: !b.shared);
       case 'tick':
         await _toggle(b);
+      case 'steps':
+        _stepsInside(b);
       case 'remove':
         store.removeSlot(b.task, b.slot);
         ScaffoldMessenger.of(context)
@@ -1009,14 +1300,15 @@ class _DayPlanPageState extends State<DayPlanPage> {
 }
 
 class _Tag extends StatelessWidget {
-  const _Tag(this.text);
+  const _Tag(this.text, {this.bad = false});
   final String text;
+  final bool bad;
 
   @override
   Widget build(BuildContext context) => Container(
         margin: const EdgeInsets.only(right: 4),
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-        decoration: BoxDecoration(color: const Color(0xD01A1C1C), borderRadius: BorderRadius.circular(6)),
+        decoration: BoxDecoration(color: bad ? const Color(0xFFC62828) : const Color(0xD01A1C1C), borderRadius: BorderRadius.circular(6)),
         child: Text(text, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500)),
       );
 }
@@ -1064,4 +1356,64 @@ class _DashedBox extends CustomPainter {
 
   @override
   bool shouldRepaint(_DashedBox old) => old.colour != colour;
+}
+
+/// The "comes after" lines: from the bottom of each block to the top of the one that waits for
+/// it, red when it starts too early.
+class _LinkPainter extends CustomPainter {
+  _LinkPainter(this.links, this.colour);
+  final List<(Rect, Rect, bool)> links;
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final (a, b, early) in links) {
+      final colour = early ? const Color(0xFFD32F2F) : this.colour;
+      final p = Paint()
+        ..color = colour
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      final Offset from, to, c1, c2;
+      if (b.top - a.bottom > 12) {
+        // Below it: straight down from its bottom edge to the top of the next.
+        from = Offset(a.right - 22, a.bottom - 3);
+        to = Offset(b.right - 22, b.top + 3);
+        final mid = (from.dy + to.dy) / 2;
+        c1 = Offset(from.dx, mid);
+        c2 = Offset(to.dx, mid);
+      } else if (b.left >= a.right - 1 || a.left >= b.right - 1) {
+        // Side by side (they overlap in time): across the small space between them.
+        // From its bottom edge round into the side of the one that waits.
+        final right = b.left >= a.right - 1;
+        from = Offset(right ? a.right - 34 : a.left + 34, a.bottom - 3);
+        to = Offset(right ? b.left + 2 : b.right - 2, min(b.bottom - 8, b.top + 16));
+        c1 = Offset(from.dx, max(from.dy, to.dy) + 22);
+        c2 = Offset(to.dx + (right ? -26 : 26), to.dy);
+      } else {
+        // Waits for something that ends later in the same column: round the right-hand side.
+        from = Offset(a.right - 4, a.bottom - 10);
+        to = Offset(b.right - 4, b.top + 10);
+        final x = min(max(a.right, b.right) + 9, size.width - 1);
+        c1 = Offset(x, from.dy);
+        c2 = Offset(x, to.dy);
+      }
+      canvas.drawPath(Path()..moveTo(from.dx, from.dy)..cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, to.dx, to.dy), p);
+      canvas.drawCircle(from, 3.5, Paint()..color = colour);
+      var dir = to - c2;
+      if (dir.distance < 0.01) dir = to - from;
+      final n = dir / dir.distance;
+      final side = Offset(-n.dy, n.dx);
+      canvas.drawPath(
+        Path()
+          ..moveTo(to.dx, to.dy)
+          ..lineTo(to.dx - n.dx * 9 + side.dx * 5, to.dy - n.dy * 9 + side.dy * 5)
+          ..lineTo(to.dx - n.dx * 9 - side.dx * 5, to.dy - n.dy * 9 - side.dy * 5)
+          ..close(),
+        Paint()..color = colour,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LinkPainter old) => true;
 }
