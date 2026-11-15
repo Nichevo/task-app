@@ -10,6 +10,7 @@ import 'focus_page.dart';
 import '../store.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_colors.dart';
+import '../widgets/task_where.dart' show editDrive;
 import 'starred_page.dart' show pickTask;
 import 'task_page.dart';
 
@@ -705,6 +706,17 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 child: CustomPaint(painter: _Hatch(theme.hintColor.withValues(alpha: 0.22))),
               ));
             }
+            // 1.12.5: driving there and back.
+            for (final d in l.drives) {
+              final hh = max(h(d.minutes) - 2, 14.0);
+              children.add(Positioned(
+                left: x0,
+                width: x1 - x0,
+                top: y(d.start) + 1,
+                height: hh,
+                child: _driveBlock(context, d, hh),
+              ));
+            }
             // Bands first, so what sits on them is drawn on top.
             for (final b in l.blocks.where((b) => b.shared && !b.hidden)) {
               children.add(_positioned(b, x0, x1, y, h, (w, hh) => _band(context, b, hh)));
@@ -1106,6 +1118,43 @@ class _DayPlanPageState extends State<DayPlanPage> {
             ? null
             : Text('Hidden · ${describeLength(b.slot.minutes)}',
                 style: TextStyle(fontSize: 12, color: theme.hintColor), maxLines: 1),
+      ),
+    );
+  }
+
+  /// 1.12.5: a stretch of driving before or after a block.
+  Widget _driveBlock(BuildContext context, DriveSpan d, double hh) {
+    final theme = Theme.of(context);
+    final w = d.block.task.where;
+    final label = [
+      '${d.estimate ? '≈' : ''}${describeLength(d.minutes)}',
+      if (d.before) 'to ${w?.name ?? d.block.title}' else if (d.from != null) 'to ${d.from}' else 'driving',
+    ].join(' ');
+    return Semantics(
+      label: 'Driving $label',
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => editDrive(context, store, d.block.task),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.hintColor.withValues(alpha: 0.35)),
+          ),
+          alignment: Alignment.centerLeft,
+          child: hh < 14
+              ? null
+              : Row(children: [
+                  Icon(Icons.directions_car_outlined, size: min(16, hh - 2), color: theme.hintColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(label,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: theme.hintColor)),
+                  ),
+                ]),
+        ),
       ),
     );
   }

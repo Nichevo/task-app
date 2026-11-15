@@ -15,6 +15,8 @@ const releases = [
     'The week arrows above the Day plan now open the next or previous week on its Monday (or on today, when today is in that week), rather than the same weekday a week on.',
     'iPad and Fold: drag the line between the list and the side panel all the way to the right to hide the panel. A handle stays on the right edge: tap it or drag it back to bring the panel back.',
     'Edit all steps on an iPad held upright now shows the steps as cards, so their names can be read; the table needs a wider screen.',
+    'Tasks can have a location: on the task page, tap Location and search for an address, pick a saved place or use where you are now. It is separate from place reminders. The map button opens it in Maps.',
+    'Driving time: a task with a location gets driving blocks on the Day plan before and after its planned time, counted as busy. With a saved place called Home, the app suggests them from the distance (from Home, or from your previous stop that day, and home after the last one). They are rough town-driving estimates, marked ≈. Set your own on the task page under Driving time, or tap a driving block.',
   ]),
   Release('1.12.3', 'November 2026', [
     'New: a focus timer. Pick a task (or one of its steps) and work in rounds: 25 minutes of focus, a 5 minute break, and a 15 minute break after every fourth round. Start it from the timer button on a task, "Start focus" on a Day plan block, the ⋮ menu, or the Start focus button on a reminder.',

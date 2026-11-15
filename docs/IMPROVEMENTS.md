@@ -1397,7 +1397,7 @@ modes in the statistics; the top bar has no room for more icons.
 - Not built: Day plan "actuals" drawn from focus minutes.
 - Tests: test/focus_timer_test.dart.
 
-## 103. Day plan tray, week arrows, hiding the side panel, Edit all steps upright ☑ (version 1.12.4)
+## 103. Day plan tray, week arrows, hiding the side panel, Edit all steps upright, task locations and driving ☑ (version 1.12.4)
 
 - Tray: `DayPlanSettings.trayAll` (default on; Settings "Tray: all other open tasks" and a button
   on the opened tray) adds every other open task with no time to come and not waiting on
@@ -1411,5 +1411,16 @@ modes in the statistics; the top bar has no room for more icons.
   open task still shows beside the list.
 - Edit all steps: the table shows only when the width fits its columns plus 240 px for names
   (`_tableWidth`); otherwise cards.
-- Tests: test/day_plan_tray_test.dart, panel_test, steps_edit_test.
+- Task location (`Task.where`, `TaskWhere` name + optional pin, synced; copied when a step
+  becomes a task): task page "Location" (lib/widgets/task_where.dart: address search via
+  OpenStreetMap Nominatim in lib/geocode.dart, saved places, where I am now, name only; Open in
+  Maps). Separate from the place reminder.
+- Driving: `Task.driveBefore`/`driveAfter` (null = suggested, 0 = none). `driveFor` in
+  day_plan.dart: the set value, else for a pinned task the distance from the previous pinned
+  block that day or from Home (`homePlace`, a saved place called Home; `savedPlaces` global set by
+  AppStore), and after the last pinned block the drive home; `estimateDriveMinutes` (x1.3 road,
+  40 km/h, 5-minute steps, under 300 m none). `DayLayout.drives` (`DriveSpan`) drawn before and
+  after blocks, busy for free time, counted in `dayLoad`. Task page "Driving time" and tapping a
+  driving block open `editDrive`.
+- Tests: test/day_plan_tray_test.dart, task_where_test.dart, panel_test, steps_edit_test.
 

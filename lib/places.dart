@@ -42,6 +42,23 @@ class Place {
   }
 }
 
+/// This device's saved places (set by [AppStore]), for the Day plan's driving estimates.
+List<Place> savedPlaces = const [];
+
+/// The saved place called Home (or House), if any.
+Place? homePlace([List<Place>? places]) {
+  final all = places ?? savedPlaces;
+  return all.where((p) => p.name.trim().toLowerCase() == 'home').firstOrNull ??
+      all.where((p) => RegExp(r'\b(home|house)\b', caseSensitive: false).hasMatch(p.name)).firstOrNull;
+}
+
+/// 1.12.5: a rough driving time for [metres] as the crow flies: roads about 1.3 times longer,
+/// 40 km/h on average (town driving), rounded up to 5 minutes, at least 5.
+int estimateDriveMinutes(double metres) {
+  final minutes = metres * 1.3 / 1000 / 40 * 60;
+  return max(5, (minutes / 5).ceil() * 5);
+}
+
 /// Item 102: the nearest saved place that ([lat], [lng]) is inside, if any.
 Place? placeAt(List<Place> places, double lat, double lng) {
   Place? best;

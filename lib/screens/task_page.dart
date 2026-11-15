@@ -15,6 +15,7 @@ import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/step_links.dart';
 import '../widgets/task_burn_down.dart';
+import '../widgets/task_where.dart';
 import '../widgets/worked_week.dart';
 import 'calendar_page.dart';
 import 'gantt_page.dart' show GanttPage, editStepPlan;
@@ -858,6 +859,29 @@ class _TaskPageState extends State<TaskPage> {
             title: const Text('Skip this time'),
             subtitle: const Text('Move it to the next date without ticking it off'),
             onTap: _skip,
+          ),
+        // 1.12.5: where it happens, and the driving either side.
+        ListTile(
+          leading: const Icon(Icons.location_on_outlined),
+          title: const Text('Location'),
+          subtitle: Text(task.where == null
+              ? 'Where it happens (an address, or where you are)'
+              : '${task.where!.name}${task.where!.pinned ? '' : ' (no pin)'}'),
+          onTap: archived ? null : () => pickTaskWhere(context, widget.store, task),
+          trailing: task.where == null
+              ? null
+              : IconButton(
+                  tooltip: 'Open in Maps',
+                  icon: const Icon(Icons.map_outlined),
+                  onPressed: () => openInMaps(task.where!),
+                ),
+        ),
+        if (task.where != null || task.driveBefore != null || task.driveAfter != null)
+          ListTile(
+            leading: const Icon(Icons.directions_car_outlined),
+            title: const Text('Driving time'),
+            subtitle: Text(driveSummary(widget.store.data, task)),
+            onTap: archived ? null : () => editDrive(context, widget.store, task),
           ),
         if (!archived && (PlaceReminders.supported || task.place != null))
           ListTile(
