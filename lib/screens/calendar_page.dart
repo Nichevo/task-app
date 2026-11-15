@@ -274,6 +274,7 @@ class _CalendarPageState extends State<CalendarPage> {
                         task: d.task,
                         color: ageColor(d.task, data.hoursToRed, byDue: data.colourByDue, now: now),
                         categoryName: data.category(d.task.categoryId)?.name,
+                        data: data,
                         expanded: _expanded.contains(d.task.id),
                         onTap: () => setState(() =>
                             _expanded.contains(d.task.id) ? _expanded.remove(d.task.id) : _expanded.add(d.task.id)),

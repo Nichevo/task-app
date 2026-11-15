@@ -82,7 +82,7 @@ void main() {
 
     await tester.tap(find.text('Fix gate latch'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit / set due date'));
+    await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
     expect(find.text('Tasks'), findsOneWidget); // list still visible
     expect(find.widgetWithText(TextField, 'Fix gate latch'), findsOneWidget);
@@ -102,7 +102,7 @@ void main() {
 
     await tester.tap(find.text('Fix gate latch'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit / set due date'));
+    await tester.tap(find.text('Edit'));
     await tester.pumpAndSettle();
     expect(find.text('Tasks'), findsNothing);
     expect(find.widgetWithText(TextField, 'Fix gate latch'), findsOneWidget);

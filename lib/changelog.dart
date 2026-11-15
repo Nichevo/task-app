@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.5', 'November 2026', [
+    'A tidier opened task: a time bar runs from when it was added to its due date, with a mark for today and a dot for each step with a date (filled once ticked, red when late). Under it: "14 days ago" and "in 7 days".',
+    'Chips show only what the task has: the next step (red when overdue), where it happens with the driving time, how long it takes and how long you have worked on it, how it repeats and the next date, its next Day plan time, the reminder, the days worked this week and "Behind" when less is done than the time gone. More than six fold into "+2 more".',
+    'Ticked steps fold into one line, the first three open steps show with their dates and the rest open from "6 more steps". The category only shows when the list isn\'t already grouped by it.',
+    'One row of buttons along the bottom: Worked today, Board (only for tasks on the board; it opens the board), Plan time (Day plan) and Edit.',
+  ]),
   Release('1.12.4', 'November 2026', [
     'Day plan: the "To plan" tray now also lists your other open tasks, due later or with no date, under "Also open", soonest due first, so you can plan work before it is due. The button at the top of the opened tray (or Settings, Day plan) switches this off again.',
     'Tasks in the tray open to their steps: tap the number on a task (or "2 steps" on the iPad and Fold) and drag a step onto a time on its own.',

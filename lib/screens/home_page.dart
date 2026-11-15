@@ -19,6 +19,7 @@ import '../native.dart';
 import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
+import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
 import '../widgets/mode_chip.dart';
 import '../widgets/task_block.dart';
@@ -1004,7 +1005,10 @@ class HomePageState extends State<HomePage> {
           onWorked: () => store.toggleWorked(t),
           stageName: t.kanban ? (data.stage(t.stageId) ?? data.stages.firstOrNull)?.name : null,
           boxName: MatrixBox.byId(t.matrixBox) == null ? null : data.boxName(MatrixBox.byId(t.matrixBox)!),
-          onBoard: t.kanban || data.stages.isEmpty ? null : () => _addToBoard(t),
+          onBoard: t.kanban ? () => openBoard(stageId: t.stageId) : null,
+          onPlan: () => showPlanTimeSheet(context, store, t),
+          data: data,
+          showCategory: !data.groupByCategory,
           trailing: drag
               ? ReorderableDragStartListener(
                   index: i,
@@ -1016,16 +1020,6 @@ class HomePageState extends State<HomePage> {
               : null,
         ),
     );
-  }
-
-  void _addToBoard(Task t) {
-    store.setOnBoard(t, true);
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        content: Text('Put "${t.title}" on the board in ${data.stage(t.stageId)?.name}'),
-        action: SnackBarAction(label: 'Open board', onPressed: openBoard),
-      ));
   }
 
   void _toggleStep(Task t, TaskStep s) {
@@ -1081,6 +1075,8 @@ class HomePageState extends State<HomePage> {
                 onStep: (s) => _toggleStep(t, s),
                 onSkip: () => _skip(t),
                 onWorked: () => store.toggleWorked(t),
+                onPlan: () => showPlanTimeSheet(context, store, t),
+                data: data,
               ),
             ),
           if (breaking.length > 5)
