@@ -173,6 +173,7 @@ class AppStore extends ChangeNotifier {
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
       calendarMode = s['calendarMode'] as String? ?? 'month';
+      dayPlanTwoDays = s['dayPlanTwoDays'] as bool? ?? false;
       hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
@@ -362,6 +363,7 @@ class AppStore extends ChangeNotifier {
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
       if (calendarMode != 'month') 'calendarMode': calendarMode,
+      if (dayPlanTwoDays) 'dayPlanTwoDays': true,
       if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
@@ -1676,6 +1678,15 @@ class AppStore extends ChangeNotifier {
     saveDeviceSettings();
   }
 
+  /// Item 101 (1.11.2): the Day plan shows two days side by side on a wide screen (this device).
+  bool dayPlanTwoDays = false;
+
+  void setDayPlanTwoDays(bool on) {
+    dayPlanTwoDays = on;
+    notifyListeners();
+    saveDeviceSettings();
+  }
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -2470,8 +2481,9 @@ enum PanelView {
   agenda('Agenda'),
   matrix('Matrix'),
   board('Board'),
-  timeline('Timeline'),
+  timeline('Gantt'), // Named "Timeline" before 1.11.2; the stored name stays.
   calendar('Calendar'),
+  dayPlan('Day plan'), // Item 101 (1.11.2).
   events('Events'),
   stats('Statistics'),
   achievements('Achievements'),

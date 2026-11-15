@@ -9,6 +9,17 @@ class Release {
 }
 
 const releases = [
+  Release('1.11.2', 'November 2026', [
+    'Fold and tablets: the side panel has a new "Day plan" view, today\'s timeline in a slim column beside your list, with its own "To plan" tray. Switch days with the week strip, and the full-size button opens the whole Day plan. The panel\'s "Timeline" view is now called "Gantt", which is what it shows.',
+    'Day plan on a wide screen: the new columns button shows two days side by side (the day you pick and the next), lined up hour by hour. Drag from the tray onto either day. This device remembers the choice.',
+    'New widget, Today\'s plan (Android and iPad): today\'s planned times in order with their start and end, mixed in with your calendar events, in each task\'s colour. The box ticks a step or the task; when more time is planned for the task later, it counts as worked on today instead, as on the Day plan. Tap the title to open the Day plan. Free stretches in your working hours show between them as "Free 45 min".',
+    'With the Day plan in the side panel, press and hold a task in your list and drag it onto a time to plan it there.',
+    'Plan a time warns "Too early" while you choose, when the time starts before something it comes after is finished.',
+    'Moving a block that leaves room for other tasks asks whether to move what is planned inside it too (it follows the Gantt setting "When a bar moves"). Undo puts it all back.',
+    'Day plan filter: "Show ticked" hides or shows blocks you have ticked off.',
+    'The To plan tray has category chips, so you can pick from one category at a time.',
+    'A missed time in the tray now offers "Move to today" and "Next free gap" as well as choosing a time, and dragging it moves the missed time instead of adding another.',
+  ]),
   Release('1.11.1', 'November 2026', [
     'Day plan: your phone\'s calendar events show on the timeline in grey, read-only, and count as busy time, so free time and how full a day is include them. All-day events show as chips above the timeline. Tap one to see it, or to hide events; turn them on or off from the filter button or Settings, Day plan. If the app can\'t read your calendar yet, an "Allow calendar" button asks.',
     'An event that overlaps a planned block is a clash, side by side with a red outline, and the gap after a block stops where an event starts.',

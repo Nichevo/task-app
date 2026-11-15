@@ -93,6 +93,12 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_today" />
         </receiver>
+        <receiver android:name=".DayPlanWidget" android:exported="true" android:label="Today's plan">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_day_plan" />
+        </receiver>
         <receiver android:name=".FocusWidget" android:exported="true" android:label="Focus task">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

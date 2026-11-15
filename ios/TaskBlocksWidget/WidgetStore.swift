@@ -41,6 +41,18 @@ struct WTask {
   var streakUnit = "day"
 }
 
+/** Item 101: a planned time from the Day plan, for the Today's plan widget. */
+struct WPlan {
+  let id: String
+  let step: String?
+  let title: String
+  let task: String?
+  let at: Date
+  let end: Date
+  /** More of the task's own time is planned later: ticking marks it worked on today. */
+  let later: Bool
+}
+
 struct AddedDone {
   var added: [Int] = []
   var done: [Int] = []
@@ -71,6 +83,9 @@ struct Snapshot {
   var streak = 0
   var addedDone: [String: AddedDone] = [:]
   var burn: [String: Burn] = [:]
+  var plan: [WPlan] = []
+  /** Item 101: free time in working hours (the app's view, before calendar events). */
+  var planFree: [(start: Date, end: Date)] = []
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
@@ -206,6 +221,16 @@ struct Snapshot {
     s.streak = (stats["streak"] as? NSNumber)?.intValue ?? 0
     for (k, v) in (root["addedDone"] as? [String: [String: Any]]) ?? [:] {
       s.addedDone[k] = AddedDone(added: ints(v["added"]), done: ints(v["done"]), open: ints(v["open"]))
+    }
+    s.plan = ((root["plan"] as? [[String: Any]]) ?? []).compactMap { o in
+      guard let at = date(o["at"]) else { return nil }
+      return WPlan(
+        id: str(o["id"]), step: o["step"] as? String, title: str(o["title"]), task: o["task"] as? String, at: at,
+        end: date(o["end"]) ?? at, later: (o["later"] as? Bool) ?? false)
+    }
+    s.planFree = ((root["planFree"] as? [[NSNumber]]) ?? []).compactMap { a in
+      guard a.count == 2 else { return nil }
+      return (Date(timeIntervalSince1970: a[0].doubleValue / 1000), Date(timeIntervalSince1970: a[1].doubleValue / 1000))
     }
     for (k, v) in (root["burn"] as? [String: [String: Any]]) ?? [:] {
       s.burn[k] = Burn(
@@ -349,13 +374,13 @@ enum W {
 
 /** Today's events from the iPad's calendars, once the app has been allowed to read them. */
 enum Events {
-  static func today(_ now: Date) -> [(id: String, title: String, start: Date, allDay: Bool)] {
+  static func today(_ now: Date) -> [(id: String, title: String, start: Date, end: Date, allDay: Bool)] {
     guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
     let store = EKEventStore()
     let start = Calendar.current.startOfDay(for: now)
     let pred = store.predicateForEvents(withStart: start, end: start.addingTimeInterval(W.day), calendars: nil)
     return store.events(matching: pred).map {
-      ($0.eventIdentifier ?? UUID().uuidString, $0.title ?? "(No title)", $0.startDate, $0.isAllDay)
+      ($0.eventIdentifier ?? UUID().uuidString, $0.title ?? "(No title)", $0.startDate, $0.endDate, $0.isAllDay)
     }
   }
 }

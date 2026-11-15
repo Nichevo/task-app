@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../csv_export.dart';
 import '../csv_import.dart';
-import '../day_plan.dart' show describeLength;
+import '../day_plan.dart' show TrayItem, describeLength;
 import '../input_parse.dart';
 import '../models.dart';
 import '../changelog.dart';
@@ -421,6 +421,11 @@ class HomePageState extends State<HomePage> {
         return LayoutBuilder(builder: (context, box) {
           final wide = box.maxWidth >= _twoPaneWidth;
           _unfolded(wide);
+          // Item 101 (1.11.2): with the Day plan in the side panel, tasks drag onto it.
+          _planDrag = wide &&
+              open == null &&
+              store.panelView == PanelView.dayPlan &&
+              store.shownPanelViews.contains(PanelView.dayPlan);
           final list = _listScaffold(context, wide);
           if (!wide) {
             return PopScope(
@@ -457,6 +462,10 @@ class HomePageState extends State<HomePage> {
   }
 
   bool? _wasWide;
+
+  /// The side panel shows the Day plan: pressing and holding a task drags it onto a time there
+  /// (the handle on the right still reorders the list).
+  bool _planDrag = false;
 
   /// Item 59: on going from narrow to wide (unfolding the Fold), open what Settings asks for.
   void _unfolded(bool wide) {
@@ -765,9 +774,35 @@ class HomePageState extends State<HomePage> {
     final waitingFor = data.isLocked(t) ? data.task(t.afterTaskId)?.title : null;
     final drag = _canDrag;
     final block = _block(t, i, now, waitingFor, drag);
+    if (_planDrag) return KeyedSubtree(key: ValueKey(t.id), child: _toPlan(t, block, now));
     return drag
         ? ReorderableDelayedDragStartListener(key: ValueKey(t.id), index: i, child: block)
         : KeyedSubtree(key: ValueKey(t.id), child: block);
+  }
+
+  /// Item 101 (1.11.2): a task that can be dragged onto the Day plan in the side panel.
+  Widget _toPlan(Task t, Widget block, DateTime now) {
+    final item = TrayItem(t, 'From the list');
+    final minutes = item.minutes(data);
+    return LongPressDraggable<TrayItem>(
+      data: item,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: 240,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          decoration: BoxDecoration(
+            color: ageColor(t, data.hoursToRed, byDue: data.colourByDue, now: now).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(blurRadius: 8, color: Color(0x44000000))],
+          ),
+          child: Text('${t.title} · ${describeLength(minutes)}',
+              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.4, child: block),
+      child: block,
+    );
   }
 
   Widget _block(Task t, int i, DateTime now, String? waitingFor, bool drag) {

@@ -57,6 +57,7 @@ class WidgetActionActivity : Activity() {
       "open" -> if (id != null) launch("taskblocks://open?id=" + Uri.encode(id))
       "day" -> launch("taskblocks://day?d=" + Uri.encode(intent.getStringExtra("d") ?: ""))
       "home" -> launch("taskblocks://home")
+      "dayplan" -> launch("taskblocks://dayplan")
     }
     finish()
   }

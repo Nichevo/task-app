@@ -66,7 +66,8 @@ open class TaskListWidget : AppWidgetProvider() {
       )
       views.setOnClickPendingIntent(
           R.id.widget_title,
-          HomeWidgetLaunchIntent.getActivity(c, MainActivity::class.java, Uri.parse("taskblocks://home")),
+          HomeWidgetLaunchIntent.getActivity(
+              c, MainActivity::class.java, Uri.parse(if (filter == "plan") "taskblocks://dayplan" else "taskblocks://home")),
       )
       m.updateAppWidget(id, views)
     }
@@ -87,4 +88,9 @@ class TodayWidget : TaskListWidget() {
       m.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
     }
   }
+}
+
+/** Item 101: today's planned times from the Day plan, with today's calendar events. */
+class DayPlanWidget : TaskListWidget() {
+  override fun filterFor(c: Context, id: Int): String = "plan"
 }

@@ -118,6 +118,8 @@ class _TaskAppState extends State<TaskApp> {
           home.openAchievements();
         case 'habits':
           home.openHabits();
+        case 'dayplan':
+          home.openDayPlan();
       }
     });
   }

@@ -19,7 +19,7 @@ import 'task_page.dart';
 ///
 /// Also the Calendar page's Day mode: [onMode] then switches back to 'month' or 'week'.
 class DayPlanPage extends StatefulWidget {
-  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events});
+  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false});
 
   final AppStore store;
   final DateTime? initialDay;
@@ -28,6 +28,10 @@ class DayPlanPage extends StatefulWidget {
   /// Calendar events to show instead of reading the phone's (for tests and previews).
   final List<CalendarEvent>? events;
 
+  /// In the Fold's side panel (1.11.2): a slimmer bar, a button to open it full size, and the
+  /// tray along the bottom.
+  final bool embedded;
+
   @override
   State<DayPlanPage> createState() => _DayPlanPageState();
 }
@@ -35,8 +39,45 @@ class DayPlanPage extends StatefulWidget {
 class _DayPlanPageState extends State<DayPlanPage> {
   late DateTime _day = dayStart(widget.initialDay ?? DateTime.now());
   final _scroll = ScrollController();
-  final _timelineKey = GlobalKey();
+  final _timelineKeys = [GlobalKey(), GlobalKey()];
   bool _trayOpen = false;
+
+  /// The tray's category chip ('' = no category, null = all).
+  String? _trayCat;
+
+  /// The tray narrowed to [_trayCat], and chips for the categories it holds.
+  List<TrayItem> _trayShown(List<TrayItem> tray) =>
+      _trayCat == null ? tray : tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == _trayCat).toList();
+
+  Widget _trayCats(List<TrayItem> tray, {EdgeInsets padding = const EdgeInsets.fromLTRB(14, 0, 14, 6)}) {
+    final ids = <String>{for (final i in tray) data.category(i.task.categoryId)?.id ?? ''};
+    if (ids.length < 2) return const SizedBox();
+    String name(String id) => id.isEmpty ? 'No category' : data.category(id)!.name;
+    return SizedBox(
+      height: 38,
+      child: ListView(scrollDirection: Axis.horizontal, padding: padding, children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: ChoiceChip(
+            visualDensity: VisualDensity.compact,
+            label: const Text('All'),
+            selected: _trayCat == null,
+            onSelected: (_) => setState(() => _trayCat = null),
+          ),
+        ),
+        for (final id in [for (final c in data.categories) if (ids.contains(c.id)) c.id, if (ids.contains('')) ''])
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: ChoiceChip(
+              visualDensity: VisualDensity.compact,
+              label: Text('${name(id)} ${tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == id).length}'),
+              selected: _trayCat == id,
+              onSelected: (_) => setState(() => _trayCat = _trayCat == id ? null : id),
+            ),
+          ),
+      ]),
+    );
+  }
 
   // A block being moved (press and hold) or stretched (bottom edge), and by how far.
   PlanBlock? _moving;
@@ -79,7 +120,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
     if (!force && _eventsWeek == monday) return;
     _eventsWeek = monday;
     try {
-      final list = await Native.events(monday, monday.add(const Duration(days: 7)), data.eventCalendars);
+      // A day over, for the second of two days side by side on a Sunday.
+      final list = await Native.events(monday, monday.add(const Duration(days: 8)), data.eventCalendars);
       if (!mounted) return;
       setState(() {
         _events = list;
@@ -152,15 +194,41 @@ class _DayPlanPageState extends State<DayPlanPage> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) => LayoutBuilder(builder: (context, box) {
-        final wide = box.maxWidth >= 840;
+        final embedded = widget.embedded;
+        // Two days side by side need room for both and, beside them, the tray.
+        final canTwo = !embedded && box.maxWidth >= 900;
+        final two = canTwo && store.dayPlanTwoDays;
+        final wide = !embedded && box.maxWidth >= (two ? 1180 : 840);
         final layout = layoutDay(data, _day, events: _events);
+        final next = _day.add(const Duration(days: 1));
+        final layouts = [layout, if (two) layoutDay(data, next, events: _events)];
         final tray = trayFor(data, _day);
+        final fmt = DateFormat(embedded ? 'EEE d MMM' : (wide ? 'EEEE d MMMM' : 'EEE d MMM'));
         return Scaffold(
           appBar: AppBar(
-            title: Text('Day plan · ${DateFormat(wide ? 'EEEE d MMMM' : 'EEE d MMM').format(_day)}'),
+            primary: !embedded,
+            automaticallyImplyLeading: !embedded,
+            toolbarHeight: embedded ? 48 : null,
+            titleTextStyle: embedded ? Theme.of(context).textTheme.titleMedium : null,
+            title: Text(two
+                ? 'Day plan · ${fmt.format(_day)} and ${DateFormat('EEE d').format(next)}'
+                : embedded
+                    ? fmt.format(_day)
+                    : 'Day plan · ${fmt.format(_day)}'),
             actions: [
               IconButton(tooltip: 'Today', icon: const Icon(Icons.today), onPressed: () => _goTo(DateTime.now())),
               IconButton(tooltip: 'Plan a task', icon: const Icon(Icons.add), onPressed: _planAny),
+              if (canTwo)
+                IconButton(
+                  tooltip: two ? 'One day' : 'Two days side by side',
+                  isSelected: two,
+                  icon: const Icon(Icons.view_column_outlined),
+                  selectedIcon: const Icon(Icons.view_column),
+                  onPressed: () {
+                    store.setDayPlanTwoDays(!two);
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+                  },
+                ),
               if (widget.onMode != null) ...[
                 IconButton(
                   tooltip: 'Week view',
@@ -178,11 +246,16 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 icon: const Icon(Icons.filter_list),
                 onSelected: (v) {
                   if (v == 'events') return _toggleEvents();
+                  if (v == 'ticked') {
+                    s.showTicked = !s.showTicked;
+                    return store.dayPlanChanged();
+                  }
                   s.show = v as DayShow;
                   store.dayPlanChanged();
                 },
                 itemBuilder: (_) => [
                   CheckedPopupMenuItem(value: 'events', checked: s.showEvents, child: const Text('Calendar events')),
+                  CheckedPopupMenuItem(value: 'ticked', checked: s.showTicked, child: const Text('Show ticked')),
                   const PopupMenuDivider(),
                   for (final v in DayShow.values)
                     CheckedPopupMenuItem(
@@ -196,6 +269,13 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     ),
                 ],
               ),
+              if (embedded)
+                IconButton(
+                  tooltip: 'Open the Day plan',
+                  icon: const Icon(Icons.open_in_full),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => DayPlanPage(store: store, initialDay: _day, events: widget.events))),
+                ),
             ],
           ),
           body: Column(children: [
@@ -208,9 +288,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       SizedBox(width: 300, child: _trayPanel(context, tray)),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _timeline(context, layout)),
+                      Expanded(child: _timeline(context, layouts)),
                     ])
-                  : _timeline(context, layout),
+                  : _timeline(context, layouts),
             ),
             if (!wide) _trayBar(context, tray),
           ]),
@@ -460,31 +540,72 @@ class _DayPlanPageState extends State<DayPlanPage> {
 
   // --- The timeline ---
 
-  Widget _timeline(BuildContext context, DayLayout l) {
+  /// The day's timeline, or (two days side by side) both days' in one scrolling view, with
+  /// the same hours drawn so they line up.
+  Widget _timeline(BuildContext context, List<DayLayout> ls) {
     final theme = Theme.of(context);
     final ppm = _ppm(context);
-    final (from, to) = _range(l);
+    var (from, to) = _range(ls.first);
+    for (final l in ls.skip(1)) {
+      final (a, b) = _range(l);
+      from = min(from, a);
+      to = max(to, b);
+    }
     final height = (to - from) * ppm + _top * 2;
-    double y(DateTime t) => (t.hour * 60 + t.minute - from + (DateUtils.isSameDay(t, _day) ? 0 : 24 * 60)) * ppm + _top;
+    _rects.clear();
+    final today = dayStart(DateTime.now());
+    final scroll = SingleChildScrollView(
+      controller: _scroll,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (var i = 0; i < ls.length; i++) ...[
+          if (i > 0) Container(width: 1, height: height, color: theme.dividerColor),
+          Expanded(child: _dayColumn(context, ls[i], from, to, height, _timelineKeys[i])),
+        ],
+      ]),
+    );
+    if (ls.length == 1) return scroll;
+    return Column(children: [
+      Row(children: [
+        for (final l in ls)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(_gutter, 2, 10, 4),
+              child: Text(
+                '${DateFormat('EEEE d MMM').format(l.day)}${l.day == today ? ' · Today' : ''}'
+                ' · ${describeLength(l.plannedMinutes)} planned',
+                style: theme.textTheme.titleSmall?.copyWith(color: l.day == today ? theme.colorScheme.primary : null),
+              ),
+            ),
+          ),
+      ]),
+      const Divider(height: 1),
+      Expanded(child: scroll),
+    ]);
+  }
+
+  /// One day's column: hour lines, free time, gaps, events, blocks, links and the now line.
+  /// Drops from the tray land on this column's day.
+  Widget _dayColumn(BuildContext context, DayLayout l, int from, int to, double height, GlobalKey key) {
+    final theme = Theme.of(context);
+    final ppm = _ppm(context);
+    final day = l.day;
+    double y(DateTime t) => (t.hour * 60 + t.minute - from + (DateUtils.isSameDay(t, day) ? 0 : 24 * 60)) * ppm + _top;
     double h(int minutes) => minutes * ppm;
     final now = DateTime.now();
     return DragTarget<TrayItem>(
       onAcceptWithDetails: (d) {
-        final box = _timelineKey.currentContext?.findRenderObject() as RenderBox?;
+        final box = key.currentContext?.findRenderObject() as RenderBox?;
         if (box == null) return;
         final local = box.globalToLocal(d.offset);
         final minutes = (local.dy - _top) / ppm + from;
-        final start = snapTime(_day.add(Duration(minutes: minutes.round().clamp(0, 24 * 60 - s.snap))), s.snap);
+        final start = snapTime(day.add(Duration(minutes: minutes.round().clamp(0, 24 * 60 - s.snap))), s.snap);
         _planDropped(d.data, start);
       },
       builder: (context, candidates, _) => Container(
         color: candidates.isNotEmpty ? theme.colorScheme.primaryContainer.withValues(alpha: 0.25) : null,
-        child: SingleChildScrollView(
-          controller: _scroll,
-          child: LayoutBuilder(builder: (context, box) {
+        child: LayoutBuilder(builder: (context, box) {
             final x0 = _gutter, x1 = box.maxWidth - 10;
             final children = <Widget>[];
-            _rects.clear();
             // Hour lines.
             for (var m = (from + 59) ~/ 60 * 60; m <= to; m += 60) {
               final top = (m - from) * ppm + _top;
@@ -589,7 +710,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
-            if (DateUtils.isSameDay(now, _day)) {
+            if (DateUtils.isSameDay(now, day)) {
               final ny = y(now);
               children.add(Positioned(
                 left: x0 - 6,
@@ -608,7 +729,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               children.add(Positioned(
                 left: x0,
                 right: 10,
-                top: y(DateTime(_day.year, _day.month, _day.day).add(Duration(minutes: s.workStart))) + 40,
+                top: y(day.add(Duration(minutes: s.workStart))) + 40,
                 child: Text(
                   'Nothing planned. Drag a task from the "To plan" tray onto a time, or use + to plan one.',
                   textAlign: TextAlign.center,
@@ -616,9 +737,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
-            return SizedBox(key: _timelineKey, height: height, child: Stack(clipBehavior: Clip.none, children: children));
+            return SizedBox(key: key, height: height, child: Stack(clipBehavior: Clip.none, children: children));
           }),
-        ),
       ),
     );
   }
@@ -1002,8 +1122,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
-  Widget _trayBar(BuildContext context, List<TrayItem> tray) {
+  Widget _trayBar(BuildContext context, List<TrayItem> all) {
     final theme = Theme.of(context);
+    final tray = _trayShown(all);
     return Material(
       color: theme.colorScheme.surfaceContainer,
       elevation: 3,
@@ -1017,7 +1138,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               child: Row(children: [
                 Expanded(
                   child: Text(
-                    tray.isEmpty ? 'Nothing waiting to be planned' : 'To plan for ${DateFormat('EEE d').format(_day)} (${tray.length})',
+                    all.isEmpty ? 'Nothing waiting to be planned' : 'To plan for ${DateFormat('EEE d').format(_day)} (${all.length})',
                     style: theme.textTheme.titleSmall,
                   ),
                 ),
@@ -1025,6 +1146,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               ]),
             ),
           ),
+          if (_trayOpen) _trayCats(all),
           if (tray.isNotEmpty)
             _trayOpen
                 ? ConstrainedBox(
@@ -1047,8 +1169,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
-  Widget _trayPanel(BuildContext context, List<TrayItem> tray) {
+  Widget _trayPanel(BuildContext context, List<TrayItem> all) {
     final theme = Theme.of(context);
+    final tray = _trayShown(all);
     return ColoredBox(
       color: theme.colorScheme.surfaceContainer,
       child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 16), children: [
@@ -1056,7 +1179,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
           child: Text('To plan · drag onto a time', style: theme.textTheme.titleSmall),
         ),
-        if (tray.isEmpty)
+        _trayCats(all, padding: const EdgeInsets.fromLTRB(10, 0, 10, 8)),
+        if (all.isEmpty)
           Padding(
             padding: const EdgeInsets.all(14),
             child: Text('Nothing waiting. Switch "On the Day plan" on a task, or plan one with +.',
@@ -1075,9 +1199,64 @@ class _DayPlanPageState extends State<DayPlanPage> {
     await showPlanTimeSheet(context, store, t, day: _day);
   }
 
-  Future<void> _planTray(TrayItem i) => showPlanTimeSheet(context, store, i.task, step: i.step, day: _day);
+  Future<void> _planTray(TrayItem i) async {
+    final missed = i.missed;
+    if (missed == null) {
+      await showPlanTimeSheet(context, store, i.task, step: i.step, day: _day);
+      return;
+    }
+    // A missed time: move it rather than plan another.
+    final now = DateTime.now();
+    final from = snapUp(now, s.snap);
+    final today = DateTime(now.year, now.month, now.day);
+    final sameTime = today.add(Duration(minutes: missed.start.hour * 60 + missed.start.minute));
+    final todayAt = sameTime.isBefore(from) ? from : sameTime;
+    final free = layoutDay(data, today, events: _events).firstFree(missed.minutes, from: from);
+    final hm = DateFormat('HH:mm');
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(title: Text(i.title), subtitle: Text('${i.why} · ${describeLength(missed.minutes)}')),
+          ListTile(
+            leading: const Icon(Icons.today),
+            title: Text('Move to today, ${hm.format(todayAt)}'),
+            onTap: () => Navigator.pop(c, 'today'),
+          ),
+          if (free != null)
+            ListTile(
+              leading: const Icon(Icons.schedule),
+              title: Text('Next free gap, ${hm.format(free)}'),
+              onTap: () => Navigator.pop(c, 'free'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.edit_calendar),
+            title: const Text('Choose a time…'),
+            onTap: () => Navigator.pop(c, 'choose'),
+          ),
+        ]),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'choose') {
+      await showPlanTimeSheet(context, store, i.task, slot: missed);
+      return;
+    }
+    _moveMissed(i, choice == 'free' ? free! : todayAt);
+  }
+
+  /// Moves a missed time to [start], with Undo.
+  void _moveMissed(TrayItem i, DateTime start) {
+    final missed = i.missed!;
+    final was = missed.start;
+    store.updateSlot(i.task, missed, start: start);
+    _changedSnack('Moved "${i.title}" to ${DateFormat('EEE HH:mm').format(start)}',
+        () => store.updateSlot(i.task, missed, start: was));
+  }
 
   void _planDropped(TrayItem i, DateTime start) {
+    if (i.missed != null) return _moveMissed(i, start);
     final slot = store.planTime(i.task, start, i.minutes(data), step: i.step);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -1111,9 +1290,32 @@ class _DayPlanPageState extends State<DayPlanPage> {
     return yes ? moves : const [];
   }
 
+  /// A band that leaves room is moving: what's planned inside it, to move with it as Settings'
+  /// "When a bar moves" says (ask, always or never).
+  Future<List<PlanMove>?> _bandFor(PlanBlock b, Duration d) async {
+    final moves = insideBand(data, b, d);
+    if (moves.isEmpty || data.ganttPush == GanttPush.never) return const [];
+    if (data.ganttPush == GanttPush.always) return moves;
+    final n = moves.length;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Move what\'s inside it too?'),
+        content: Text('$n planned time${n == 1 ? ' is' : 's are'} inside "${b.title}". Move '
+            '${n == 1 ? 'it' : 'them'} with it?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Leave them')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Move them')),
+        ],
+      ),
+    );
+    if (yes == null) return null;
+    return yes ? moves : const [];
+  }
+
   Future<void> _shift(PlanBlock b, int minutes) async {
     final d = Duration(minutes: minutes);
-    final push = await _pushFor(b, b.start.add(d), b.slot.minutes);
+    final push = b.shared ? await _bandFor(b, d) : await _pushFor(b, b.start.add(d), b.slot.minutes);
     if (push == null || !mounted) return;
     final before = b.start;
     final inside = [for (final st in b.inside) (st, st.start)];
@@ -1125,7 +1327,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
     store.applyPlanMoves(push);
     _changedSnack(
       '"${b.title}" now starts ${DateFormat('HH:mm').format(before.add(d))}'
-      '${push.isEmpty ? '' : ', and ${_moved(push)} moved later'}',
+      '${push.isEmpty ? '' : b.shared ? ', with ${_moved(push).replaceFirst(' other', ' thing')} inside it' : ', and ${_moved(push)} moved later'}',
       () {
         store.applyPlanMoves(push, back: true);
         for (final (st, at) in inside) {

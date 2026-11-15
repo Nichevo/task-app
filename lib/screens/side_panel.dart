@@ -10,6 +10,7 @@ import '../store.dart';
 import '../task_list.dart' show sortTasks;
 import 'archive_page.dart';
 import 'calendar_page.dart';
+import 'day_plan_page.dart';
 import 'events_page.dart';
 import 'kanban_page.dart' show KanbanPage, boardColumnOrder, describeSpell, moveWithRule;
 import 'matrix_page.dart';
@@ -60,6 +61,7 @@ class SidePanel extends StatelessWidget {
           PanelView.board => MiniBoard(store: store, onOpen: onOpen),
           PanelView.timeline => GanttTimeline(store: store, onOpen: onOpen),
           PanelView.calendar => CalendarPage(store: store, mode: 'month'),
+          PanelView.dayPlan => DayPlanPage(store: store, embedded: true),
           PanelView.events => EventsPage(store: store),
           PanelView.stats => PanelStats(store: store),
           PanelView.achievements => AchievementsView(store: store, onOpen: onOpen),

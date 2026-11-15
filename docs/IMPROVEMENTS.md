@@ -1253,3 +1253,23 @@ plan choice in the Fold side panel. Default gap after a block = the time step (o
 - Quick add: `takePlanTime` ("@14:00 45m", "@2pm 1.5h", "@9"), `ParsedInput.planAt`/`planMinutes`
   /`plan`, passed through `addTask(plan:)` and `_applyNew` (also the inbox, email and board +).
 - Tests: test/day_plan_2_test.dart.
+
+### 101, part 3: Fold side panel, two days, Today's plan widget ☑ (version 1.11.2)
+
+- `PanelView.dayPlan` ("Day plan") shows `DayPlanPage(embedded: true)`: no top inset, a 48 high
+  bar with the date, an "Open the Day plan" button, the tray along the bottom. `PanelView.timeline`
+  is labelled "Gantt" (stored name unchanged).
+- Two days side by side: `AppStore.dayPlanTwoDays` (device setting), offered at 900 wide and up;
+  the tray stays a side panel from 1180 wide. `_timeline` now lays out one `_dayColumn` per day in
+  one scroll view with the same hours; each column takes its own drops.
+- Widget: `HomeWidgets.dayPlanRows` sends the coming week's open planned times as `plan` (id,
+  slot, step, title, task, at, end, shared, later). Android `DayPlanWidget` (filter "plan",
+  `WidgetData.planRows`, `TaskListService.planRow`, picker preview `widget_preview_day_plan`); iPad
+  kind `DayPlan` (`planRows`, `DayPlanView`). Ticking: step, else worked today when `later`, else
+  the task. Today's events (now with end times) are mixed in. `taskblocks://dayplan` opens it.
+- Gaps from the plan doc, added in the same PR: list rows drag onto the panel's Day plan
+  (`HomePage._planDrag`, `LongPressDraggable<TrayItem>`); `tooEarlyFor` in the Plan a time sheet;
+  `insideBand` moves a "leave room" band's contents (asks per `ganttPush`); `DayPlanSettings.showTicked`
+  ("ticked", saved only when off); tray category chips; `TrayItem.missed` with Move to today / Next
+  free gap; widget free time `planFree` (Android `freeRows`, iPad free rows, trimmed by events).
+- Tests: test/day_plan_3_test.dart, test/day_plan_4_test.dart.

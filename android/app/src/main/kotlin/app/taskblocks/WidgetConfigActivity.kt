@@ -36,7 +36,8 @@ class WidgetConfigActivity : Activity() {
           provider.endsWith("MatrixWidget") ||
           provider.endsWith("AddedDoneWidget") -> pickCategoryFilter(snap)
       provider.endsWith("BurnDownWidget") -> pickBurn(snap)
-      provider.endsWith("TodayWidget") || provider.endsWith("StatsWidget") || provider.endsWith("MonthWidget") ||
+      provider.endsWith("TodayWidget") || provider.endsWith("DayPlanWidget") || provider.endsWith("StatsWidget") ||
+          provider.endsWith("MonthWidget") ||
           provider.endsWith("CalendarWidget") ->
           pickLook(showRows = false)
       else -> pickFilter(snap, showRows = !provider.endsWith("CompactWidget") && !provider.endsWith("FocusWidget"))

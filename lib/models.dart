@@ -591,6 +591,7 @@ class DayPlanSettings {
     this.show = DayShow.both,
     this.showEvents = true,
     this.remindStart = true,
+    this.showTicked = true,
     Set<String>? hiddenCategories,
     Map<String, dynamic>? extra,
   })  : hiddenCategories = hiddenCategories ?? {},
@@ -630,6 +631,9 @@ class DayPlanSettings {
   /// Item 101 (1.11.1): a reminder when a planned block is due to start.
   bool remindStart;
 
+  /// Item 101 (1.11.2): ticked blocks stay on the timeline (faded); off hides them.
+  bool showTicked;
+
   /// Categories hidden on the Day plan ('' = tasks with no category).
   final Set<String> hiddenCategories;
 
@@ -637,7 +641,7 @@ class DayPlanSettings {
 
   static const _known = {
     'dayStart', 'dayEnd', 'workStart', 'workEnd', 'snap', 'gap', 'length', 'trayDue', 'trayGantt',
-    'trayInProgress', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart',
+    'trayInProgress', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart', 'ticked',
   };
 
   Map<String, dynamic> toJson() => {
@@ -656,6 +660,7 @@ class DayPlanSettings {
         'show': show.name,
         'events': showEvents,
         'remindStart': remindStart,
+        if (!showTicked) 'ticked': false,
         if (hiddenCategories.isNotEmpty) 'hidden': hiddenCategories.toList()..sort(),
       };
 
@@ -678,6 +683,7 @@ class DayPlanSettings {
       show: DayShow.values.where((s) => s.name == v['show']).firstOrNull ?? DayShow.both,
       showEvents: b('events', true),
       remindStart: b('remindStart', true),
+      showTicked: b('ticked', true),
       hiddenCategories: {for (final c in v['hidden'] as List? ?? []) ?c as String?},
       extra: unknownFields(v, _known),
     );
