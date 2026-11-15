@@ -9,6 +9,17 @@ class Release {
 }
 
 const releases = [
+  Release('1.11.0', 'November 2026', [
+    'New: the Day plan. One day as a timeline from morning to evening, with each task or step that has a planned time drawn as a block as tall as the time it takes. Open it from the Calendar (the new Day button, which the Calendar icon then remembers), from the ⋮ menu, or switch on its own top bar icon in Settings.',
+    'Give a task a time from its page ("On the Day plan", then "Plan a time"), or a step from its menu: the day, the start, how long it takes in 15-minute steps (starting from the task\'s "Time needed"), the gap to leave after it, and whether it leaves room for other tasks. A task can be planned more than once, on one day or several.',
+    'The gap after each block matches the time step unless you change it, and the free time left in your working hours shows as dashed "Free" boxes. Blocks that overlap are put side by side with a red outline and counted as clashes.',
+    '"Leave room for other tasks" turns a long block (a backup running, paint drying) into a band down the left side. Smaller tasks planned inside it sit on top of it, aren\'t clashes, and its time still counts as free.',
+    'Steps show as well as tasks: inside their task\'s block when they are planned within its time, on their own with the task\'s name above them, or as a short checklist inside a planned task when they have no time. The filter button shows tasks and steps, tasks only, or steps only.',
+    'The week strip at the top shows how full each day is. Category chips pick which categories show; hidden ones leave a faint "Hidden" strip so free time isn\'t overstated (a setting). A category can also put all its tasks on the Day plan (Settings, Categories).',
+    'The "To plan" tray holds what hasn\'t got a time yet: tasks on the Day plan, tasks and steps due that day, Gantt work for that day, and planned times that were missed. Press and hold one and drop it on the timeline, or tap it to choose a time.',
+    'Press and hold a block to move it, drag its bottom edge to make it longer or shorter, tap it for more. Ticking a step\'s block ticks the step (and asks about the task when it was the last one). Ticking a task\'s block ticks the task off, unless more time is planned for it later, when it counts as worked on today.',
+    'Settings, Day plan: hours shown, working hours, time steps, the gap after each block, the length when none is set, and what goes in the tray. Planned times are also exported to a day_plan CSV file.',
+  ]),
   Release('1.10.17', 'November 2026', [
     'Kanban board: new "Ring" card shading. A small ring by the menu button shows time left round the outside (dashed once overdue) and work done filling the inside like a pie. Pick it from the board\'s shading button or Settings, Kanban board, for task cards, step cards or both.',
     'Fills up now fills step cards the same way as task cards: the done part of the step in its task\'s colour, the rest pale, with the time strip along the bottom edge. A ticked step is full. A step fills from its own "how far along", so a step with none set stays pale until it is ticked.',

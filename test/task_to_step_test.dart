@@ -178,7 +178,11 @@ void main() {
   group('top bar icons (74)', () {
     test('each icon can be switched off on this device and comes back from a backup', () async {
       final s = AppStore();
-      expect(TopIcon.all.every(s.topIconShown), isTrue);
+      expect(TopIcon.all.where((n) => !TopIcon.offByDefault.contains(n)).every(s.topIconShown), isTrue);
+      // Item 101: the Day plan icon starts off and can be switched on.
+      expect(s.topIconShown(TopIcon.dayPlan), isFalse);
+      s.setTopIcon(TopIcon.dayPlan, true);
+      expect(s.topIconShown(TopIcon.dayPlan), isTrue);
       s.setTopIcon(TopIcon.calendar, false);
       expect(s.topIconShown(TopIcon.calendar), isFalse);
       final backup = s.deviceSettingsBackup();
@@ -186,6 +190,7 @@ void main() {
       await other.restoreDeviceSettings(DeviceBackup('phone', DateTime.now(), backup));
       expect(other.topIconShown(TopIcon.calendar), isFalse);
       expect(other.topIconShown(TopIcon.search), isTrue);
+      expect(other.topIconShown(TopIcon.dayPlan), isTrue);
     });
   });
 }

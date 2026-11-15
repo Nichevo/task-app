@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../day_plan.dart' show describeLength;
 import '../gantt.dart';
 import '../habits.dart';
 import '../models.dart';
@@ -9,11 +10,13 @@ import '../places.dart';
 import '../store.dart';
 import '../task_list.dart';
 import '../widgets/link_text.dart';
+import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/step_links.dart';
 import '../widgets/task_burn_down.dart';
 import '../widgets/worked_week.dart';
+import 'calendar_page.dart';
 import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
@@ -127,6 +130,10 @@ class _TaskPageState extends State<TaskPage> {
                   ? 'Start, days of work and progress'
                   : 'Change its start, days of work or progress'),
             ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'dayplan'),
+              child: Text(task.slotsOf(s).isEmpty ? 'Plan a time on the Day plan' : 'Plan another time on the Day plan'),
+            ),
             if (task.steps.length > 1)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'after'),
@@ -184,6 +191,8 @@ class _TaskPageState extends State<TaskPage> {
       case 'plan':
         await editStepPlan(context, widget.store, task, s);
         if (mounted) setState(() {});
+      case 'dayplan':
+        if (await showPlanTimeSheet(context, widget.store, task, step: s) && mounted) setState(() {});
       case 'note':
         final note = await askText(context, 'Note for "${s.title}"', initial: s.note);
         if (note != null) setState(() => widget.store.setStepNote(task, s, note));
@@ -862,6 +871,7 @@ class _TaskPageState extends State<TaskPage> {
         ..._board(context),
         ..._matrix(context),
         ..._gantt(context),
+        ..._dayPlan(context),
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
@@ -1059,6 +1069,92 @@ class _TaskPageState extends State<TaskPage> {
           ]),
         ),
       ),
+    ];
+  }
+
+  /// Item 101: On the Day plan, and its planned times (the task's and its steps').
+  List<Widget> _dayPlan(BuildContext context) {
+    if (task.habit || archived && task.slots.isEmpty) return [];
+    final store = widget.store;
+    final hm = DateFormat('HH:mm');
+    final byCategory = data.category(task.categoryId)?.dayPlan ?? false;
+    final slots = [...task.slots]..sort((a, b) => a.start.compareTo(b.start));
+    final on = data.onDayPlan(task);
+    return [
+      if (!archived)
+        SwitchListTile(
+          secondary: const Icon(Icons.view_day_outlined),
+          title: const Text('On the Day plan'),
+          subtitle: Text(!on
+              ? 'Off'
+              : slots.isEmpty
+                  ? byCategory && !task.dayPlan
+                      ? 'Through its category; waiting in the To plan tray'
+                      : 'Waiting in the To plan tray'
+                  : '${slots.length} planned time${slots.length == 1 ? '' : 's'}'),
+          value: on,
+          onChanged: byCategory && !task.dayPlan && task.slots.isEmpty
+              ? null
+              : (v) {
+                  if (!v && task.slots.any((x) => x.doneAt == null)) {
+                    showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Take it off the Day plan?'),
+                        content: const Text('Its planned times that aren\'t ticked are removed.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Take it off')),
+                        ],
+                      ),
+                    ).then((yes) {
+                      if (yes == true && mounted) setState(() => store.setOnDayPlan(task, false));
+                    });
+                    return;
+                  }
+                  setState(() => store.setOnDayPlan(task, v));
+                },
+        ),
+      if (on || slots.isNotEmpty) ...[
+        for (final sl in slots)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 8),
+            title: Text('${DateFormat('EEE d MMM').format(sl.start)}, ${hm.format(sl.start)} – ${hm.format(sl.end)}'),
+            subtitle: Text([
+              sl.stepId == null ? 'Whole task' : 'Step: ${task.steps.where((x) => x.id == sl.stepId).firstOrNull?.title ?? '?'}',
+              if (sl.shared) 'Leaves room',
+              if (sl.doneAt != null) 'Ticked',
+            ].join(' · ')),
+            trailing: Text(describeLength(sl.minutes)),
+            onTap: archived
+                ? null
+                : () async {
+                    if (await showPlanTimeSheet(context, store, task, slot: sl) && mounted) setState(() {});
+                  },
+          ),
+        if (!archived)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            leading: const Icon(Icons.add),
+            title: const Text('Plan a time'),
+            subtitle: task.steps.isEmpty ? null : const Text('For a step: its menu, "Plan a time on the Day plan"'),
+            onTap: () async {
+              if (await showPlanTimeSheet(context, store, task) && mounted) setState(() {});
+            },
+          ),
+        if (slots.isNotEmpty)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            title: const Text('Show on the Day plan'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              final now = DateTime.now();
+              final next = slots.where((x) => !x.end.isBefore(now)).firstOrNull ?? slots.last;
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CalendarPage(store: store, initialDay: next.start, mode: 'day')));
+            },
+          ),
+      ],
     ];
   }
 

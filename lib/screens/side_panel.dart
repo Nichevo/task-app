@@ -59,7 +59,7 @@ class SidePanel extends StatelessWidget {
           PanelView.matrix => MatrixPage(store: store),
           PanelView.board => MiniBoard(store: store, onOpen: onOpen),
           PanelView.timeline => GanttTimeline(store: store, onOpen: onOpen),
-          PanelView.calendar => CalendarPage(store: store),
+          PanelView.calendar => CalendarPage(store: store, mode: 'month'),
           PanelView.events => EventsPage(store: store),
           PanelView.stats => PanelStats(store: store),
           PanelView.achievements => AchievementsView(store: store, onOpen: onOpen),
