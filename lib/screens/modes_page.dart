@@ -65,6 +65,18 @@ class ModesPage extends StatelessWidget {
                   store.modeChanged();
                 },
               ),
+            if (data.modes.isNotEmpty)
+              SwitchListTile(
+                secondary: const Icon(Icons.widgets_outlined),
+                title: const Text('Widgets follow the mode'),
+                subtitle: const Text('Home screen widgets leave out what the mode hides (urgent tasks still show). '
+                    'Add the Focus mode widget, or the quick settings tile on Android, to see and change the mode.'),
+                value: data.modeWidgets,
+                onChanged: (v) {
+                  data.modeWidgets = v;
+                  store.modeChanged();
+                },
+              ),
             if (data.modes.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),

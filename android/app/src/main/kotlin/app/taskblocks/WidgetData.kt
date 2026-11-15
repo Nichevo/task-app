@@ -62,6 +62,74 @@ data class WidgetTask(
     val free: Boolean = false,
 )
 
+/**
+ * Item 102: a focus mode as the widgets see it: its name and colour, and what still breaks
+ * through (the app works out "planned today" and "gone red" when it shares the tasks).
+ */
+class WidgetMode(val id: String, val name: String, val colour: Int, val until: Long?, private val rule: JSONObject) {
+  /** Whether task [o] (as the app shared it) is hidden in this mode at [now]. */
+  fun hides(o: JSONObject, now: Long): Boolean {
+    val hide = o.optJSONArray("hide") ?: return false
+    if ((0 until hide.length()).none { hide.optString(it) == id }) return false
+    val due = if (!o.has("due") || o.isNull("due")) null else o.optLong("due")
+    if (rule.optBoolean("overdue", true) && due != null && due < now) return false
+    val limit = dueLimit(rule.optString("due", "today"), now)
+    if (limit != null && due != null && due < limit) return false
+    if (rule.optBoolean("starred", true) && o.optBoolean("star")) return false
+    return true
+  }
+
+  companion object {
+    /** The mode in force at [now] from the app's timeline; null for Everything or no modes. */
+    fun at(root: JSONObject, now: Long): WidgetMode? {
+      if (!root.optBoolean("modeWidgets", true)) return null
+      val line = root.optJSONArray("modeLine") ?: return null
+      val modes = root.optJSONArray("modes") ?: return null
+      for (i in 0 until line.length()) {
+        val s = line.optJSONArray(i) ?: continue
+        if (s.optLong(0) > now || now >= s.optLong(1)) continue
+        val id = s.optString(2)
+        for (j in 0 until modes.length()) {
+          val m = modes.getJSONObject(j)
+          if (m.optString("id") == id) {
+            // The stretch's end, joined with any following stretch in the same mode.
+            var end = s.optLong(1)
+            for (k in i + 1 until line.length()) {
+              val n = line.optJSONArray(k) ?: break
+              if (n.optString(2) != id) break
+              end = n.optLong(1)
+            }
+            val last = i == line.length() - 1 || end == line.optJSONArray(line.length() - 1)?.optLong(1)
+            return WidgetMode(id, m.optString("name"), m.optLong("colour", 0xFF3F6FB5).toInt(), if (last) null else end, m)
+          }
+        }
+        return null
+      }
+      return null
+    }
+
+    /** The latest due time that still breaks through (DueWithin in lib/modes.dart). */
+    fun dueLimit(name: String, now: Long): Long? {
+      val day = Calendar.getInstance().apply {
+        timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+      }
+      fun plusDays(n: Int): Long = (day.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, n) }.timeInMillis
+      return when (name) {
+        "off" -> null
+        "twoHours" -> now + 2 * 3_600_000L
+        "tomorrow" -> plusDays(2)
+        "threeDays" -> now + 3 * 86_400_000L
+        "week" -> now + 7 * 86_400_000L
+        else -> plusDays(1)
+      }
+    }
+  }
+}
+
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
 class Snapshot(
     val root: JSONObject,
@@ -92,6 +160,12 @@ class Snapshot(
   val doneThisWeek: Int
   val streak: Int
 
+  /** Item 102: the focus mode in force now, from the app's timeline (null = Everything). */
+  val mode: WidgetMode?
+
+  /** Item 102: open tasks the mode hides right now (they still break through when urgent). */
+  val hiddenByMode: Int
+
   init {
     val cats = root.optJSONArray("categories") ?: JSONArray()
     categories =
@@ -101,11 +175,17 @@ class Snapshot(
         }
     val arr = root.optJSONArray("tasks") ?: JSONArray()
     val nowMs = System.currentTimeMillis()
+    mode = WidgetMode.at(root, nowMs)
+    var hidden = 0
     val out = ArrayList<WidgetTask>()
     for (i in 0 until arr.length()) {
       val o = arr.getJSONObject(i)
       val id = o.optString("id")
       if (done.contains(id) || snoozed.contains(id)) continue
+      if (mode != null && mode.hides(o, nowMs)) {
+        hidden++
+        continue
+      }
       val stepArr = o.optJSONArray("steps") ?: JSONArray()
       val stepList =
           (0 until stepArr.length()).map {
@@ -147,6 +227,7 @@ class Snapshot(
           ))
     }
     all = out
+    hiddenByMode = hidden
     tasks = out.filter { !it.snoozed }
     val hArr = root.optJSONArray("habits") ?: JSONArray()
     habits =
@@ -585,6 +666,7 @@ object WidgetData {
           AddedDoneWidget::class.java,
           BurnDownWidget::class.java,
           DayPlanWidget::class.java,
+          ModeWidget::class.java, // Item 102.
       )
 
   fun refreshAll(c: Context) {

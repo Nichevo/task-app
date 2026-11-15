@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.2', 'November 2026', [
+    'Focus modes on the home screen: widgets now follow the mode you are in, so the task list, focus, board, matrix and Today\'s plan widgets leave out what the mode hides. Urgent tasks still show. They change by themselves when the schedule moves on, even with the app closed. Prefer the whole list on your widgets? Turn off "Widgets follow the mode" in Settings, Focus modes.',
+    'New widget, Focus mode (Android and iPad, and the iPad Lock Screen): the mode you are in, when it changes and how many tasks are resting. Tap it to pick another mode.',
+    'Android: a Focus mode tile for the quick settings panel (swipe down twice, then the pencil to add it). It shows the mode and lights up while one is on; tap it to change mode.',
+  ]),
   Release('1.12.1', 'November 2026', [
     'Focus modes: reminders for tasks a mode hides now wait. When the mode ends, one notification lists what was held ("Work is over: 3 reminders held"). Anything that breaks through (overdue, due today, starred, planned today) still reminds as usual.',
     'Habits in a hidden category pause while the mode hides them: no reminder, and those days don\'t break the streak. Each mode can turn this off.',

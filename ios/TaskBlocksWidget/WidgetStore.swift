@@ -39,6 +39,43 @@ struct WTask {
   var worked: Set<String> = []
   var streak = 0
   var streakUnit = "day"
+  /** Item 102: the focus modes this task is hidden in (unless it breaks through). */
+  var hide: [String] = []
+}
+
+/** Item 102: a focus mode as the widgets see it: its name, colour and what breaks through. */
+struct WMode {
+  let id: String
+  let name: String
+  let colour: Color
+  var overdue = true
+  var due = "today"
+  var starred = true
+
+  /** Whether [t] is hidden in this mode at [now] (the app works out the other reasons). */
+  func hides(_ t: WTask, now: Date) -> Bool {
+    guard t.hide.contains(id) else { return false }
+    if let d = t.due {
+      if overdue && d < now { return false }
+      if let limit = WMode.limit(due, now: now), d < limit { return false }
+    }
+    if starred && t.star { return false }
+    return true
+  }
+
+  /** The latest due time that still breaks through (DueWithin in lib/modes.dart). */
+  static func limit(_ name: String, now: Date) -> Date? {
+    let cal = Calendar.current
+    let day = cal.startOfDay(for: now)
+    switch name {
+    case "off": return nil
+    case "twoHours": return now.addingTimeInterval(2 * 3600)
+    case "tomorrow": return cal.date(byAdding: .day, value: 2, to: day)
+    case "threeDays": return now.addingTimeInterval(3 * 86400)
+    case "week": return now.addingTimeInterval(7 * 86400)
+    default: return cal.date(byAdding: .day, value: 1, to: day)
+    }
+  }
 }
 
 /** Item 101: a planned time from the Day plan, for the Today's plan widget. */
@@ -73,8 +110,13 @@ struct Snapshot {
   var hoursToRed = 72.0
   var byDue = true
   var categories: [(id: String, name: String)] = []
-  /** Every open task the app sent, snoozed board tasks too. */
+  /** Every open task the app sent, snoozed board tasks too, less what the focus mode hides. */
   var all: [WTask] = []
+  /** Item 102: every open task the app sent, whatever the mode. */
+  var everything: [WTask] = []
+  /** Item 102: the focus modes, and which is in force when (start, end, mode id). */
+  var modes: [WMode] = []
+  var modeLine: [(start: Date, end: Date, id: String)] = []
   var habits: [WTask] = []
   var stages: [WStage] = []
   var boxes: [String: String] = [:]
@@ -90,12 +132,38 @@ struct Snapshot {
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
     var s = self
-    s.all = all.map { t in
+    let m = mode(at: date)
+    s.all = everything.filter { m?.hides($0, now: date) != true }.map { t in
       var t = t
       if let until = t.snoozedUntil { t.snoozed = until > date }
       return t
     }
     return s
+  }
+
+  /** Item 102: the mode in force at [date] (Everything is a mode that hides nothing). */
+  func mode(at date: Date) -> WMode? {
+    guard let s = modeLine.first(where: { $0.start <= date && date < $0.end }) else { return nil }
+    return modes.first { $0.id == s.id }
+  }
+
+  /** Item 102: when the mode in force at [date] ends, if before the end of the timeline. */
+  func modeEnds(at date: Date) -> Date? {
+    guard let i = modeLine.firstIndex(where: { $0.start <= date && date < $0.end }) else { return nil }
+    var j = i
+    while j + 1 < modeLine.count && modeLine[j + 1].id == modeLine[i].id { j += 1 }
+    return j + 1 < modeLine.count ? modeLine[j].end : nil
+  }
+
+  /** Item 102: tasks the mode in force at [date] hides. */
+  func hiddenCount(at date: Date) -> Int {
+    guard let m = mode(at: date) else { return 0 }
+    return everything.filter { m.hides($0, now: date) }.count
+  }
+
+  /** Item 102: when the mode changes between [from] and [to], so the widgets redraw then. */
+  func modeChanges(from: Date, to: Date) -> [Date] {
+    modeLine.map { $0.start }.filter { $0 > from && $0 < to }
   }
 
   /** When snoozes end between [from] and [to], so the widgets can redraw then. */
@@ -193,8 +261,24 @@ struct Snapshot {
         t.snoozed = true
       }
       t.worked = worked(id, o)
-      s.all.append(t)
+      t.hide = (o["hide"] as? [String]) ?? []
+      s.everything.append(t)
     }
+    if (root["modeWidgets"] as? Bool) ?? false {
+      s.modes = ((root["modes"] as? [[String: Any]]) ?? []).map { (o: [String: Any]) -> WMode in
+        WMode(
+          id: str(o["id"]), name: str(o["name"]),
+          colour: argb((o["colour"] as? NSNumber)?.int64Value ?? 0xFF3F6FB5),
+          overdue: (o["overdue"] as? Bool) ?? true, due: (o["due"] as? String) ?? "today",
+          starred: (o["starred"] as? Bool) ?? true)
+      }
+      s.modeLine = ((root["modeLine"] as? [[Any]]) ?? []).compactMap { a -> (start: Date, end: Date, id: String)? in
+        guard a.count == 3, let f = date(a[0]), let e = date(a[1]), let id = a[2] as? String else { return nil }
+        return (start: f, end: e, id: id)
+      }
+    }
+    let nowMode = s.mode(at: Date())
+    s.all = s.everything.filter { nowMode?.hides($0, now: Date()) != true }
     for o in (root["habits"] as? [[String: Any]]) ?? [] {
       let id = str(o["id"])
       // `locked` here means "not due today" (enough this week already), as on Android.
@@ -352,7 +436,7 @@ enum W {
   static func redrawTimes(_ snap: Snapshot, now: Date, hours: Int) -> [Date] {
     let hourly = (0..<hours).map { now.addingTimeInterval(Double($0) * 3600) }
     let end = now.addingTimeInterval(Double(hours) * 3600)
-    return (hourly + snap.snoozeEnds(from: now, to: end)).sorted()
+    return (hourly + snap.snoozeEnds(from: now, to: end) + snap.modeChanges(from: now, to: end)).sorted()
   }
 
   /** A light tile colour for a stage: its own colour washed out, else one from a set. */

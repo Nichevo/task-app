@@ -7,6 +7,7 @@ import 'package:task_blocks/models.dart';
 import 'package:task_blocks/modes.dart';
 import 'package:task_blocks/screens/modes_page.dart';
 import 'package:task_blocks/habits.dart';
+import 'package:task_blocks/home_widgets.dart';
 import 'package:task_blocks/places.dart';
 import 'package:task_blocks/reminders.dart';
 import 'package:task_blocks/store.dart';
@@ -401,6 +402,54 @@ void main() {
       expect(placeAt([home, shop], 51.5009, -0.12)?.name, 'Shop');
       expect(placeAt([home, shop], 51.52, -0.12), isNull);
       expect(metresBetween(51.5, -0.12, 51.501, -0.12), closeTo(111, 2));
+    });
+  });
+
+  group('part 3: widgets', () {
+    test('the widgets get the modes, a timeline and which modes hide each task', () {
+      final (s, m, work, home, _) = setUpWork();
+      s.setModeSchedule([for (var d = 1; d <= 5; d++) ModeSlot(day: d, start: 8 * 60, end: 17 * 60, mode: m.id)]);
+      final gutters = s.addTask('Clear the gutters', categoryId: home.id);
+      final passport = s.addTask('Passport', categoryId: home.id)..alwaysShow = true;
+      final quote = s.addTask('Quote', categoryId: work.id);
+      final planned = s.addTask('Plumber', categoryId: home.id);
+      final now = DateTime.now();
+      planned.slots.add(TimeSlot.create(DateTime(now.year, now.month, now.day, 23, 30), 15));
+      s.refreshMode(now: now);
+      final j = jsonDecode(HomeWidgets.widgetJson(s.data, now)) as Map<String, dynamic>;
+      expect(j['modeWidgets'], isTrue);
+      expect([for (final x in j['modes'] as List) x['name']], ['Everything', 'Work']);
+      final line = j['modeLine'] as List;
+      expect(line, isNotEmpty);
+      expect((line.first as List)[0], DateTime(now.year, now.month, now.day).millisecondsSinceEpoch);
+      // Stretches follow on from each other.
+      for (var i = 1; i < line.length; i++) {
+        expect((line[i] as List)[0], (line[i - 1] as List)[1]);
+      }
+      Map<String, dynamic> task(Task t) => (j['tasks'] as List).firstWhere((x) => x['id'] == t.id) as Map<String, dynamic>;
+      expect(task(gutters)['hide'], [m.id]);
+      expect(task(passport).containsKey('hide'), isFalse);
+      expect(task(quote).containsKey('hide'), isFalse);
+      // Planned today breaks through, which the widgets can't work out themselves.
+      expect(task(planned).containsKey('hide'), isFalse);
+      // The same data twice in a day: the widgets aren't redrawn for nothing.
+      expect(HomeWidgets.widgetJson(s.data, now), HomeWidgets.widgetJson(s.data, now.add(const Duration(seconds: 5))));
+      // Switched off, or no modes: nothing about modes.
+      s.data.modeWidgets = false;
+      final off = jsonDecode(HomeWidgets.widgetJson(s.data, now)) as Map<String, dynamic>;
+      expect(off.containsKey('modeLine'), isFalse);
+      expect((off['tasks'] as List).any((x) => (x as Map).containsKey('hide')), isFalse);
+      expect(AppData.fromJson(jsonDecode(jsonEncode(s.data.toJson()))).modeWidgets, isFalse);
+    });
+
+    test('a hand choice shows on the timeline until it ends, then the schedule', () {
+      final (s, m, _, _, _) = setUpWork();
+      final now = DateTime.now();
+      final until = now.add(const Duration(hours: 2));
+      s.chooseMode(m.id, until: until);
+      final line = (jsonDecode(HomeWidgets.widgetJson(s.data, now)) as Map)['modeLine'] as List;
+      expect(line.first, [DateTime(now.year, now.month, now.day).millisecondsSinceEpoch, until.millisecondsSinceEpoch, m.id]);
+      expect((line[1] as List)[2], everythingId);
     });
   });
 }

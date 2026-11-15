@@ -120,6 +120,8 @@ class _TaskAppState extends State<TaskApp> {
           home.openHabits();
         case 'dayplan':
           home.openDayPlan();
+        case 'mode':
+          home.openModeSheet(); // Item 102: the Focus mode widget and quick settings tile.
       }
     });
   }
