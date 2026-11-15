@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'habits.dart';
 import 'models.dart';
+import 'modes.dart';
 import 'stats.dart';
 
 /// A Done or Snooze press on a notification, waiting for the app to apply it.
@@ -221,6 +222,9 @@ class Reminders {
     return jsonEncode([
       '${now.year}-${now.month}-${now.day}',
       j,
+      // Item 102: reminders a mode holds back depend on the mode in force and how long it lasts.
+      modeNow.mode?.id,
+      modeNow.reach?.toIso8601String(),
       data.done.length,
       data.archived.length,
       for (final t in data.active)
@@ -248,8 +252,17 @@ class Reminders {
     final out = <PlannedReminder>[];
     // Android allows ~500 alarms per app; stay well inside it. iOS keeps the soonest 64.
     var budget = 200;
-    bool add(int id, DateTime when, String title, String body, Task t, ReminderKind kind) {
+    // Item 102: reminders a focus mode holds back, by the mode and when it ends.
+    final held = <(String, DateTime), List<String>>{};
+    bool add(int id, DateTime when, String title, String body, Task t, ReminderKind kind, {bool habit = false}) {
       if (!when.isAfter(now)) return false;
+      final by = heldBy(data, t, when, now);
+      if (by != null) {
+        // Habits just pause; the rest are listed when the mode ends.
+        final end = forecastEnd(data, when, now);
+        if (!habit && end != null) (held[(by.name, end)] ??= []).add(t.title);
+        return false;
+      }
       out.add(PlannedReminder(id, when, title, body, t, kind));
       budget--;
       return true;
@@ -297,7 +310,7 @@ class Reminders {
     for (final t in data.habits) {
       final at = nextHabitReminder(t, now);
       if (at == null || budget <= 0) continue;
-      add(taskBase(t.id) + 7, at, 'Habit', t.title, t, ReminderKind.step);
+      add(taskBase(t.id) + 7, at, 'Habit', t.title, t, ReminderKind.step, habit: true);
     }
     // Item 101: a reminder as each planned block on the Day plan starts (the coming week).
     if (data.dayPlan.remindStart) {
@@ -316,8 +329,30 @@ class Reminders {
       }
     }
     if (data.overdueMode == OverdueMode.daily) out.addAll(dailySummaries(data, now));
+    out.addAll(heldSummaries(held));
     return out;
   }
+
+  /// Item 102: one notification as each focus mode ends, listing the reminders it held back.
+  static List<PlannedReminder> heldSummaries(Map<(String, DateTime), List<String>> held) {
+    final keys = held.keys.toList()..sort((a, b) => a.$2.compareTo(b.$2));
+    final out = <PlannedReminder>[];
+    for (final (i, k) in keys.take(20).indexed) {
+      final names = {...held[k]!}.toList();
+      out.add(PlannedReminder(
+        heldSummaryId(i),
+        k.$2,
+        '${k.$1} is over: ${names.length} reminder${names.length == 1 ? '' : 's'} held',
+        names.length > 4 ? '${names.take(4).join(', ')}…' : names.join(', '),
+        null,
+        ReminderKind.summary,
+      ));
+    }
+    return out;
+  }
+
+  /// Item 102: the ids of the "mode is over" summaries, below the Day plan's.
+  static int heldSummaryId(int i) => -900000000 - i;
 
   /// Item 101: a planned time's reminder id, below every step's (which go down to about
   /// -537 million), so they never meet.

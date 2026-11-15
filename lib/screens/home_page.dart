@@ -108,17 +108,22 @@ class HomePageState extends State<HomePage> {
       if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) {
         // Item 102: the schedule may have moved on to another mode.
         if (!store.refreshMode()) setState(() {});
+        // Item 102: places and calendar events that switch modes (it waits 5 minutes between looks).
+        store.checkAutoModes();
       }
     });
     _lifecycle = AppLifecycleListener(onResume: () {
       store.refreshMode();
+      store.checkAutoModes(force: true);
       setState(() {}); // Colours and snoozes may have moved on while it was hidden.
       store.syncIfStale();
       _checkStarred();
       if (store.dropbox == null) store.checkEmailTasks();
     });
     store.addListener(_checkEvents);
+    store.addListener(_showAutoNote);
     _checkEvents();
+    store.checkAutoModes();
     _checkStarred();
     // With Dropbox, each sync checks Gmail too (item 54).
     if (store.dropbox == null) store.checkEmailTasks();
@@ -131,7 +136,27 @@ class HomePageState extends State<HomePage> {
     _search.dispose();
     _searchFocus.dispose();
     store.removeListener(_checkEvents);
+    store.removeListener(_showAutoNote);
     super.dispose();
+  }
+
+  /// Item 102: "Switched to Travel: Flight to Rome", with Undo, after a place or event did it.
+  void _showAutoNote() {
+    final note = store.autoNote;
+    if (note == null || !mounted) return;
+    store.takeAutoNote();
+    final was = modeNow.mode?.id;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(note),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (modeNow.mode?.id == was) store.answerAutoUndo();
+          },
+        ),
+      ));
   }
 
   bool _checkingEvents = false;
@@ -720,6 +745,16 @@ class HomePageState extends State<HomePage> {
                 },
                 child: const Text('Have a look'),
               ),
+            ],
+          ),
+        if (store.pendingAuto case final a? when data.mode(a.mode) != null)
+          MaterialBanner(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            leading: Icon(modeIcon(data.mode(a.mode)!.icon), color: Color(data.mode(a.mode)!.colour)),
+            content: Text('${a.reason}. Switch to ${data.mode(a.mode)!.name}?'),
+            actions: [
+              TextButton(onPressed: () => store.answerAutoMode(false), child: const Text('Not now')),
+              TextButton(onPressed: () => store.answerAutoMode(true), child: const Text('Switch')),
             ],
           ),
         if (_eventCount > 0)

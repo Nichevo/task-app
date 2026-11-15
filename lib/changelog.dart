@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.1', 'November 2026', [
+    'Focus modes: reminders for tasks a mode hides now wait. When the mode ends, one notification lists what was held ("Work is over: 3 reminders held"). Anything that breaks through (overdue, due today, starred, planned today) still reminds as usual.',
+    'Habits in a hidden category pause while the mode hides them: no reminder, and those days don\'t break the streak. Each mode can turn this off.',
+    'Modes can switch on by themselves: at a saved place (Work at the Office; Home office at Home on days the schedule says Work) or during a calendar event with certain words in its title (Travel for "Flight" or "Trip", Home office for "WFH"). Set it on each mode\'s page under "Switch on by itself". A mode you pick by hand still wins.',
+    'When a place or event switches the mode, a note says why, with Undo. Prefer to be asked first? Turn on "Ask before switching by place or calendar" in Settings, Focus modes.',
+    'A task can be set to always show in every mode, from the ⋮ menu on its page (handy for a passport or a bill that belongs to Home but matters at work too).',
+  ]),
   Release('1.12.0', 'November 2026', [
     'New: focus modes. A mode shows only what matters right now: Work, Home office, Weekend, Travel, or any you make. Tap the title of the list (it now reads "Tasks ▾") to pick one; the title becomes the mode\'s coloured chip, with when it changes next. Press and hold the chip to go back to Everything, which is the whole app as it always was.',
     'Set up the four starter modes in one tap (the app guesses from your category names which are work, home and travel), then change them in Settings, Focus modes. Each category is Show, Quiet (folded under one heading at the bottom of the list) or Hide in each mode.',

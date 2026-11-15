@@ -82,9 +82,15 @@ class FocusMode {
     this.starred = true,
     this.red = false,
     this.planned = true,
+    this.pauseHabits = true,
+    List<String>? places,
+    this.placeWhen,
+    List<String>? events,
     Map<String, dynamic>? extra,
   })  : cats = cats ?? {},
         toolsOff = toolsOff ?? {},
+        places = places ?? [],
+        events = events ?? [],
         extra = extra ?? {};
 
   final String id;
@@ -120,11 +126,24 @@ class FocusMode {
   /// Has a planned time on the Day plan today.
   bool planned;
 
+  /// Habits in hidden categories pause: no reminders, and the days don't break their streaks.
+  bool pauseHabits;
+
+  /// Saved place names (Settings, Places) where this mode comes on by itself.
+  final List<String> places;
+
+  /// A place only switches to this mode while the weekly schedule says this mode id (Home office:
+  /// at Home while the schedule says Work); null = any time.
+  String? placeWhen;
+
+  /// Words in a calendar event's title that switch to this mode while it lasts ("Flight", "WFH").
+  final List<String> events;
+
   final Map<String, dynamic> extra;
 
   static const _known = {
     'id', 'name', 'colour', 'icon', 'cats', 'other', 'off', 'panel', 'filter', 'newCat', 'overdue', 'due',
-    'starred', 'red', 'planned',
+    'starred', 'red', 'planned', 'habits', 'places', 'placeWhen', 'events',
   };
 
   bool toolOn(ModeTool t) => !toolsOff.contains(t.name);
@@ -159,6 +178,10 @@ class FocusMode {
         if (!starred) 'starred': false,
         if (red) 'red': true,
         if (!planned) 'planned': false,
+        if (!pauseHabits) 'habits': false,
+        if (places.isNotEmpty) 'places': places,
+        if (placeWhen != null) 'placeWhen': placeWhen,
+        if (events.isNotEmpty) 'events': events,
       };
 
   static T _enum<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -183,6 +206,10 @@ class FocusMode {
         starred: j['starred'] as bool? ?? true,
         red: j['red'] as bool? ?? false,
         planned: j['planned'] as bool? ?? true,
+        pauseHabits: j['habits'] as bool? ?? true,
+        places: [for (final p in j['places'] as List? ?? []) if (p is String) p],
+        placeWhen: j['placeWhen'] as String?,
+        events: [for (final e in j['events'] as List? ?? []) if (e is String) e],
         extra: unknownFields(j, _known),
       );
 }
@@ -380,10 +407,26 @@ class ModeNow {
   /// Whether the mode was chosen by hand.
   bool byHand = false;
 
+  /// Why it came on by itself, when a place or calendar event did it ("At Office", "Flight to
+  /// Rome"); null otherwise.
+  String? reason;
+
+  /// Until when the mode in force can be counted on for reminders set ahead: [until], or for a
+  /// place, the next change on the schedule. Null = for as long as can be told.
+  DateTime? reach;
+
+  /// The mode in force at noon on each past day (by [dayKey]), from the mode log, for pausing
+  /// habits on days their category was hidden.
+  Map<String, FocusMode> noonModes = {};
+
+  /// The app's data, for the habit pause check (which only gets a task).
+  AppData? data;
+
   bool get filtering => mode != null && !peek;
 
-  /// How [t]'s category shows now.
-  CatShow showOf(AppData data, Task t) => filtering ? mode!.showFor(data, t.categoryId) : CatShow.show;
+  /// How [t]'s category shows now (always shown for a task set to Always show).
+  CatShow showOf(AppData data, Task t) =>
+      filtering && !t.alwaysShow ? mode!.showFor(data, t.categoryId) : CatShow.show;
 
   /// Whether category [id] is hidden in the mode (not Quiet).
   bool hidesCategory(AppData data, String? id) => filtering && mode!.showFor(data, id) == CatShow.hide;
@@ -395,6 +438,7 @@ class ModeNow {
   String? breakThrough(AppData data, Task t, DateTime now) {
     final m = mode;
     if (m == null) return null;
+    if (t.alwaysShow) return 'Always shows';
     final due = t.dueAt;
     if (m.overdue && due != null && due.isBefore(now)) return 'Overdue';
     final limit = m.due.limit(now);
@@ -424,9 +468,108 @@ class ModeNow {
 /// The app's one [ModeNow].
 final modeNow = ModeNow();
 
+/// The mode at noon on each day the [logs] cover (the last device's log wins where they overlap).
+Map<String, FocusMode> noonModesFrom(AppData data, DateTime now) {
+  final out = <String, FocusMode>{};
+  final logs = [...data.modeLog]..sort((a, b) => a.start.compareTo(b.start));
+  for (final l in logs) {
+    final end = l.end ?? now;
+    final m = data.mode(l.mode);
+    var day = DateTime(l.start.year, l.start.month, l.start.day);
+    for (var i = 0; i < 400 && day.isBefore(end); i++) {
+      final noon = DateTime(day.year, day.month, day.day, 12);
+      if (!noon.isBefore(l.start) && noon.isBefore(end)) {
+        final k = dayKey(day);
+        if (m == null) {
+          out.remove(k);
+        } else {
+          out[k] = m;
+        }
+      }
+      day = DateTime(day.year, day.month, day.day + 1);
+    }
+  }
+  return out;
+}
+
+/// Whether habit [t] is paused on [day] (key yyyy-mm-dd) because the mode then hid its category:
+/// today by the mode in force, earlier days by the mode at noon.
+bool habitModePaused(Task t, String day, String today) {
+  if (t.alwaysShow) return false;
+  final data = modeNow.data;
+  if (data == null) return false;
+  final m = day == today ? modeNow.mode : modeNow.noonModes[day];
+  return m != null && m.pauseHabits && m.showFor(data, t.categoryId) == CatShow.hide;
+}
+
+/// The mode that will be in force at [t], as far as can be told at [now]: the current one until
+/// [ModeNow.reach], then the weekly schedule.
+FocusMode? forecastMode(AppData data, DateTime t, DateTime now) {
+  final reach = modeNow.reach;
+  if (!t.isAfter(now) || reach == null || t.isBefore(reach)) return modeNow.mode;
+  return data.mode(scheduledAt(data.modeSchedule, t));
+}
+
+/// When the forecast mode at [t] ends: [ModeNow.reach] for the current one, else the next change
+/// on the schedule. Null when it can't be told.
+DateTime? forecastEnd(AppData data, DateTime t, DateTime now) {
+  final reach = modeNow.reach;
+  if (!t.isAfter(now) || reach == null || t.isBefore(reach)) return reach;
+  return nextScheduleChange(data.modeSchedule, t);
+}
+
+/// Whether a reminder for [t] at [when] is held back: the mode then hides its category and it
+/// doesn't break through. Returns that mode, or null when the reminder goes off as usual.
+FocusMode? heldBy(AppData data, Task t, DateTime when, DateTime now) {
+  final m = forecastMode(data, when, now);
+  if (m == null || m.showFor(data, t.categoryId) != CatShow.hide) return null;
+  final probe = ModeNow()..mode = m;
+  return probe.breakThrough(data, t, when) == null ? m : null;
+}
+
+/// A mode that comes on by itself: which, why ("At Office"), until when (null = until it no
+/// longer applies) and a key that tells one occasion from another (for "Ask before switching").
+typedef AutoMode = ({String mode, String reason, DateTime? until, String key});
+
+/// Whether an event title has one of [words] in it, as a whole word ("WFH", "work from home").
+bool eventMatches(String title, List<String> words) {
+  for (final w in words) {
+    final t = w.trim();
+    if (t.isEmpty) continue;
+    if (RegExp('(^|[^a-z0-9])${RegExp.escape(t.toLowerCase())}(\$|[^a-z0-9])').hasMatch(title.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/// The mode a calendar event or place calls for at [now]; events come before places, and modes
+/// higher in the list first. [events] are (id, title, start, end) of events happening now.
+AutoMode? autoModeAt(AppData data, DateTime now,
+    {String? place, List<(String, String, DateTime, DateTime)> events = const []}) {
+  for (final m in data.modes) {
+    if (m.events.isEmpty) continue;
+    for (final (id, title, start, end) in events) {
+      if (start.isAfter(now) || !end.isAfter(now) || !eventMatches(title, m.events)) continue;
+      return (mode: m.id, reason: title, until: end, key: 'event:$id:${m.id}');
+    }
+  }
+  if (place == null) return null;
+  final scheduled = scheduledAt(data.modeSchedule, now);
+  for (final m in data.modes) {
+    if (!m.places.any((p) => p.toLowerCase() == place.toLowerCase())) continue;
+    if (m.placeWhen != null && m.placeWhen != scheduled) continue;
+    // A place that only counts while the schedule says some mode lasts until the schedule moves on.
+    final until = m.placeWhen == null ? null : nextScheduleChange(data.modeSchedule, now);
+    return (mode: m.id, reason: 'At $place', until: until, key: 'place:$place:${m.id}:$scheduled');
+  }
+  return null;
+}
+
 /// Starter modes made from the categories' names: Work, Home office, Weekend, Travel. Every
 /// category is guessed as work, home or travel by its name; the rest show quietly.
-List<FocusMode> starterModes(AppData data) {
+List<FocusMode> starterModes(AppData data, {List<String> places = const []}) {
+  String? place(RegExp r) => places.where(r.hasMatch).firstOrNull;
+  final office = place(RegExp(r'office|work', caseSensitive: false));
+  final homePlace = place(RegExp(r'home|house', caseSensitive: false));
   final work = RegExp(r'work|job|office|admin|client|business|project|meeting', caseSensitive: false);
   final travel = RegExp(r'travel|trip|holiday|flight|vacation|pack', caseSensitive: false);
   final home = RegExp(r'home|house|chore|garden|car|family|kids|shop|clean|diy|personal|health', caseSensitive: false);
@@ -449,6 +592,7 @@ List<FocusMode> starterModes(AppData data) {
       cats: cats({'work': CatShow.show, 'home': CatShow.hide, 'travel': CatShow.hide, 'other': CatShow.quiet}),
       toolsOff: {ModeTool.habits.name, ModeTool.achievements.name, ModeTool.stats.name},
       newCategory: data.categories.where((c) => kind(c) == 'work').firstOrNull?.id,
+      places: [?office],
     ),
     FocusMode(
       id: 'm$stamp-homeoffice',
@@ -458,6 +602,9 @@ List<FocusMode> starterModes(AppData data) {
       cats: cats({'work': CatShow.show, 'home': CatShow.quiet, 'travel': CatShow.hide, 'other': CatShow.quiet}),
       toolsOff: {ModeTool.achievements.name, ModeTool.stats.name},
       newCategory: data.categories.where((c) => kind(c) == 'work').firstOrNull?.id,
+      places: [?homePlace],
+      placeWhen: homePlace == null ? null : 'm$stamp-work',
+      events: ['WFH', 'work from home', 'working from home'],
     ),
     FocusMode(
       id: 'm$stamp-weekend',
@@ -477,6 +624,7 @@ List<FocusMode> starterModes(AppData data) {
       cats: cats({'work': CatShow.hide, 'home': CatShow.hide, 'travel': CatShow.show, 'other': CatShow.quiet}),
       toolsOff: {ModeTool.gantt.name, ModeTool.board.name, ModeTool.matrix.name, ModeTool.stats.name, ModeTool.achievements.name},
       newCategory: data.categories.where((c) => kind(c) == 'travel').firstOrNull?.id,
+      events: ['flight', 'trip', 'holiday', 'vacation', 'travel'],
     ),
   ];
 }

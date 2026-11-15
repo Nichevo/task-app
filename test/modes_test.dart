@@ -6,6 +6,9 @@ import 'package:task_blocks/main.dart';
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/modes.dart';
 import 'package:task_blocks/screens/modes_page.dart';
+import 'package:task_blocks/habits.dart';
+import 'package:task_blocks/places.dart';
+import 'package:task_blocks/reminders.dart';
 import 'package:task_blocks/store.dart';
 import 'package:task_blocks/task_list.dart';
 import 'package:task_blocks/widgets/mode_chip.dart';
@@ -30,7 +33,11 @@ void main() {
   setUp(() {
     modeNow
       ..mode = null
-      ..peek = false;
+      ..peek = false
+      ..reach = null
+      ..reason = null
+      ..data = null
+      ..noonModes = {};
   });
 
   group('schedule', () {
@@ -266,5 +273,134 @@ void main() {
     await tester.dragFrom(start, const Offset(0, 3 * 20.0));
     await tester.pumpAndSettle();
     expect(s.data.modeSchedule.where((x) => x.day == DateTime.tuesday), isNotEmpty);
+  });
+
+  group('part 2: reminders, habits, places, events', () {
+    test('a hidden task\'s reminder waits and is listed when the mode ends; urgent ones still come', () {
+      final (s, m, _, home, _) = setUpWork();
+      s.setModeSchedule([for (var d = 1; d <= 5; d++) ModeSlot(day: d, start: 8 * 60, end: 17 * 60, mode: m.id)]);
+      final gutters = s.addTask('Clear the gutters', categoryId: home.id);
+      gutters.steps.add(TaskStep.create('Ladder')..dueAt = at(16, 10));
+      s.addTask('Ring the plumber', categoryId: home.id, due: at(16, 11));
+      s.refreshMode(now: at(16, 8));
+      expect(modeNow.reach, at(16, 17));
+      final plan = Reminders.plan(s.data, at(16, 8));
+      // The step (no urgency) waits; the task due today breaks through.
+      expect(plan.where((r) => r.title == 'Step due'), isEmpty);
+      expect(plan.where((r) => r.title == 'Task due' && r.body == 'Ring the plumber'), hasLength(1));
+      final summary = plan.where((r) => r.id == Reminders.heldSummaryId(0)).single;
+      expect(summary.when, at(16, 17));
+      expect(summary.title, 'Work is over: 1 reminder held');
+      expect(summary.body, 'Clear the gutters');
+      // Set to always show, it reminds as usual.
+      gutters.alwaysShow = true;
+      expect(Reminders.plan(s.data, at(16, 8)).where((r) => r.title == 'Step due'), hasLength(1));
+      // In Everything nothing is held.
+      s.refreshMode(now: at(16, 18));
+      gutters.alwaysShow = false;
+      gutters.steps.first.dueAt = at(16, 19);
+      expect(Reminders.plan(s.data, at(16, 18)).where((r) => r.title == 'Step due'), hasLength(1));
+    });
+
+    test('habits in hidden categories pause, today and on past days the mode hid them', () {
+      final (s, m, _, home, _) = setUpWork();
+      final walk = s.addTask('Walk', categoryId: home.id);
+      s.setHabit(walk, true);
+      walk.habitRemind = 9 * 60;
+      s.chooseMode(m.id);
+      final today = DateTime.now();
+      expect(pausedOn(walk, today), isTrue);
+      expect(Reminders.plan(s.data, today).where((r) => r.title == 'Habit'), isEmpty);
+      // A past day spent in Work at noon.
+      final day = DateTime(2026, 11, 13);
+      s.data.modeLog.add(ModeLog.open(m.id, DateTime(2026, 11, 13, 8), 'schedule')..end = DateTime(2026, 11, 13, 17));
+      modeNow.noonModes = noonModesFrom(s.data, today);
+      expect(pausedOn(walk, day), isTrue);
+      expect(pausedOn(walk, DateTime(2026, 11, 12)), isFalse);
+      // Switched off for the mode, or Everything today: not paused.
+      m.pauseHabits = false;
+      expect(pausedOn(walk, day), isFalse);
+      m.pauseHabits = true;
+      s.chooseMode(everythingId);
+      expect(pausedOn(walk, today), isFalse);
+    });
+
+    test('event words match whole words; events come before places', () {
+      expect(eventMatches('WFH day', ['wfh']), isTrue);
+      expect(eventMatches('Flight to Rome', ['Trip', 'flight']), isTrue);
+      expect(eventMatches('Inflight magazine', ['flight']), isFalse);
+      expect(eventMatches('Work from home', ['work from home']), isTrue);
+      final (s, m, _, _, _) = setUpWork();
+      final travel = FocusMode.create('Travel')..events.add('flight');
+      final office = FocusMode.create('Home office')
+        ..places.add('Home')
+        ..placeWhen = m.id;
+      m.places.add('Office');
+      s.addMode(travel);
+      s.addMode(office);
+      s.setModeSchedule([ModeSlot(day: 1, start: 8 * 60, end: 17 * 60, mode: m.id)]);
+      final flight = [('e1', 'Flight to Rome', at(16, 7), at(16, 12))];
+      expect(autoModeAt(s.data, at(16, 9), place: 'Office', events: flight)?.mode, travel.id);
+      expect(autoModeAt(s.data, at(16, 9), place: 'Office', events: flight)?.until, at(16, 12));
+      expect(autoModeAt(s.data, at(16, 13), place: 'Office', events: flight)?.mode, m.id);
+      expect(autoModeAt(s.data, at(16, 13), place: 'office')?.reason, 'At office');
+      // Home only means Home office while the schedule says Work.
+      expect(autoModeAt(s.data, at(16, 13), place: 'Home')?.mode, office.id);
+      expect(autoModeAt(s.data, at(16, 13), place: 'Home')?.until, at(16, 17));
+      expect(autoModeAt(s.data, at(16, 18), place: 'Home'), isNull);
+    });
+
+    test('a place switches the mode, a hand choice beats it, and Ask waits for a yes', () {
+      final (s, m, _, _, _) = setUpWork();
+      final office = FocusMode.create('Home office')..places.add('Home');
+      s.addMode(office);
+      s.placeNow = 'Home';
+      s.refreshMode(now: at(16, 9));
+      expect(modeNow.mode?.id, office.id);
+      expect(modeNow.reason, 'At Home');
+      expect(s.takeAutoNote(), 'Switched to Home office: At Home');
+      s.chooseMode(m.id);
+      expect(modeNow.mode?.id, m.id);
+      s.chooseMode(null);
+      expect(modeNow.mode?.id, office.id);
+      // Undo: that place no longer switches.
+      s.answerAutoUndo();
+      expect(modeNow.mode, isNull);
+      // With Ask, a new place waits for a yes.
+      s.data.modeAsk = true;
+      m.places.add('Office');
+      s.placeNow = 'Office';
+      s.refreshMode();
+      expect(modeNow.mode, isNull);
+      expect(s.pendingAuto?.mode, m.id);
+      s.answerAutoMode(true);
+      expect(modeNow.mode?.id, m.id);
+      expect(s.pendingAuto, isNull);
+    });
+
+    test('Always show keeps a task in view and survives saving', () {
+      final (s, m, _, home, _) = setUpWork();
+      final t = s.addTask('Passport', categoryId: home.id)..alwaysShow = true;
+      s.chooseMode(m.id);
+      expect(modeNow.showOf(s.data, t), CatShow.show);
+      expect(s.data.inMode(t), isTrue);
+      expect(Task.fromJson(jsonDecode(jsonEncode(t.toJson()))).alwaysShow, isTrue);
+      final copy = FocusMode.fromJson(jsonDecode(jsonEncode((m
+                ..places.add('Office')
+                ..placeWhen = 'x'
+                ..events.add('WFH')
+                ..pauseHabits = false)
+              .toJson())));
+      expect([copy.places, copy.placeWhen, copy.events, copy.pauseHabits], [['Office'], 'x', ['WFH'], false]);
+    });
+
+    test('the nearest saved place the phone is inside', () {
+      final home = Place.create('Home', 51.5, -0.12, radius: 150);
+      final shop = Place.create('Shop', 51.501, -0.12, radius: 150);
+      expect(placeAt([home, shop], 51.5003, -0.12)?.name, 'Home');
+      expect(placeAt([home, shop], 51.5009, -0.12)?.name, 'Shop');
+      expect(placeAt([home, shop], 51.52, -0.12), isNull);
+      expect(metresBetween(51.5, -0.12, 51.501, -0.12), closeTo(111, 2));
+    });
   });
 }
