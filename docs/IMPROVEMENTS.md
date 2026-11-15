@@ -1197,3 +1197,35 @@ and the ring (pie) style from the mock-up wasn't one of the choices.
   Outer ring = time left, dashed when overdue; inner pie = work done. The verdict chip shows as
   in Fills up. Offered in the board's shading menu and both Settings dropdowns.
 
+
+
+## 101. Day plan: a day as a timeline (part 1 of 3) ☑ (version 1.11.0)
+
+Feedback: a detailed day view where tasks and steps show how much time they take, with the
+tasks before and after them and any buffers; choose which tasks show; switch days; lengths in
+minutes and hours, not days. Later: two tasks may share time on purpose (a long one with smaller
+ones done while waiting), steps show as well as tasks, calendar events show and can be turned
+off, categories filter both what goes on and what shows, no new top-bar icon by default, a Day
+plan choice in the Fold side panel. Default gap after a block = the time step (owner's choice).
+
+- `TimeSlot` (start, minutes, `stepId`, `gapAfter`, `shared`, `doneAt`) in `Task.slots`, synced
+  with the task; `Task.dayPlan`; `TaskCategory.dayPlan`; `AppData.dayPlan` (`DayPlanSettings`:
+  hours shown, working hours, time step 15, gap null = time step, default length, tray switches,
+  hidden categories + strip, tasks/steps filter). Repeats copy their times moved like the due date.
+- lib/day_plan.dart: `layoutDay` (steps inside their task's block, "leave room" bands, clashes in
+  columns, gaps cut short by the next block, free time in working hours, totals), `dayLoad`,
+  `trayFor`, `snapTime`. Tests in test/day_plan_test.dart.
+- lib/screens/day_plan_page.dart: week strip with day load, summary chips, category chips,
+  timeline (hour lines, free boxes, hatched gaps, blocks, frames, bands, hidden strips, now
+  line), tray (bar on the phone, panel on wide screens), drop from the tray, press-and-hold
+  move, bottom-edge stretch, block menu, ticking (`AppStore.tickSlot`: step, last step asks,
+  later times = worked today, else ticked off with Undo).
+- Calendar page Day mode (remembered per device, `AppStore.calendarMode`); ⋮ menu "Day plan";
+  `TopIcon.dayPlan` off by default (`TopIcon.offByDefault`, stored as "on:dayPlan").
+- Task page "On the Day plan" section and step menu "Plan a time on the Day plan"
+  (lib/widgets/plan_time_sheet.dart); Settings, Day plan; category "Its tasks go on the Day
+  plan"; day_plan CSV export.
+- Next (1.11.1): phone calendar events in the timeline (needs event end times from the native
+  code), before/after link lines, "Too early", pushing what comes after, plan steps back to back,
+  start reminders, quick add. Then (1.11.2): Fold side panel Day plan, two days side by side on
+  wide screens, Today's plan widget.

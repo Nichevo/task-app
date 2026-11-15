@@ -75,9 +75,12 @@ class Task {
     this.habitFreeMiss = true,
     this.habitRemind,
     List<String>? habitPauses,
+    this.dayPlan = false,
+    List<TimeSlot>? slots,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
+        slots = slots ?? [],
         alsoAfter = alsoAfter ?? [],
         worked = worked ?? {},
         habitDays = habitDays ?? {1, 2, 3, 4, 5},
@@ -97,7 +100,7 @@ class Task {
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
-    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses',
+    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots',
   };
 
   final String id;
@@ -245,6 +248,19 @@ class Task {
 
   bool get habitPaused => habitPauses.isNotEmpty && habitPauses.last.endsWith('/');
 
+  /// Item 101: on the Day plan, waiting in its "To plan" tray until it has a time.
+  bool dayPlan;
+
+  /// Item 101: its planned times on the Day plan, for the whole task or one of its steps
+  /// ([TimeSlot.stepId]). A task can have several, on one day or more.
+  final List<TimeSlot> slots;
+
+  /// Item 101: the planned times of the whole task (not of a step).
+  Iterable<TimeSlot> get ownSlots => slots.where((s) => s.stepId == null);
+
+  /// Item 101: the planned times of step [s].
+  Iterable<TimeSlot> slotsOf(TaskStep s) => slots.where((x) => x.stepId == s.id);
+
   /// Item 75: whether [day] is ticked as worked.
   bool workedOn(DateTime day) => worked.contains(dayKey(day));
 
@@ -337,6 +353,18 @@ class Task {
           ..remindBefore = st.remindBefore
           ..dueAt = st.dueAt == null || shift == null ? null : st.dueAt!.add(shift),
     ]);
+    // Item 101: the next copy stays on the Day plan, its times moved by as much as its due date
+    // (a weekly review at 15:15 stays at 15:15 a week later). Without a due date to measure from
+    // they are left off.
+    next.dayPlan = dayPlan;
+    if (shift != null) {
+      final newStep = {for (var i = 0; i < steps.length; i++) steps[i].id: next.steps[i].id};
+      for (final sl in slots) {
+        if (sl.stepId != null && !newStep.containsKey(sl.stepId)) continue;
+        next.slots.add(TimeSlot.create(sl.start.add(shift), sl.minutes,
+            stepId: sl.stepId == null ? null : newStep[sl.stepId], gapAfter: sl.gapAfter, shared: sl.shared));
+      }
+    }
     return next;
   }
 
@@ -400,6 +428,8 @@ class Task {
         if (habit && !habitFreeMiss) 'hFree': false,
         if (habitRemind != null) 'hRemind': habitRemind,
         if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
+        if (dayPlan) 'dayPlan': true,
+        if (slots.isNotEmpty) 'slots': [for (final s in slots) s.toJson()],
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -455,10 +485,190 @@ class Task {
         habitFreeMiss: j['hFree'] as bool? ?? true,
         habitRemind: (j['hRemind'] as num?)?.toInt(),
         habitPauses: [for (final p in j['hPauses'] as List? ?? []) ?p as String?],
+        dayPlan: j['dayPlan'] as bool? ?? false,
+        slots: [
+          for (final s in j['slots'] as List? ?? [])
+            if (s is Map<String, dynamic>) ?TimeSlot.tryParse(s),
+        ],
         extra: unknownFields(j, _known),
       );
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+}
+
+/// Item 101: a planned time on the Day plan: a start, a length in minutes and the gap to leave
+/// after it. Kept on its task (so it syncs with it); [stepId] set when it is for one of the steps.
+class TimeSlot {
+  TimeSlot({
+    required this.id,
+    required this.start,
+    required this.minutes,
+    this.stepId,
+    this.gapAfter,
+    this.shared = false,
+    this.doneAt,
+    Map<String, dynamic>? extra,
+  }) : extra = extra ?? {};
+
+  factory TimeSlot.create(DateTime start, int minutes, {String? stepId, int? gapAfter, bool shared = false}) => TimeSlot(
+        id: 's${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 30)}',
+        start: start,
+        minutes: minutes,
+        stepId: stepId,
+        gapAfter: gapAfter,
+        shared: shared,
+      );
+
+  final String id;
+  DateTime start;
+  int minutes;
+
+  /// The step it is for; null for the whole task.
+  String? stepId;
+
+  /// Minutes to keep free after it; null = the default in Settings.
+  int? gapAfter;
+
+  /// "Leave room for other tasks": waiting time (a download, paint drying). Things planned
+  /// inside it aren't clashes and its time still counts as free.
+  bool shared;
+
+  /// When it was ticked on the Day plan.
+  DateTime? doneAt;
+
+  /// Fields from a newer app version, kept as they are (item 62).
+  final Map<String, dynamic> extra;
+
+  static const _known = {'id', 'start', 'min', 'step', 'gap', 'shared', 'done'};
+
+  DateTime get end => start.add(Duration(minutes: minutes));
+
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'id': id,
+        'start': start.toIso8601String(),
+        'min': minutes,
+        if (stepId != null) 'step': stepId,
+        if (gapAfter != null) 'gap': gapAfter,
+        if (shared) 'shared': true,
+        if (doneAt != null) 'done': doneAt!.toIso8601String(),
+      };
+
+  static TimeSlot? tryParse(Map<String, dynamic> j) {
+    final start = j['start'] is String ? DateTime.tryParse(j['start'] as String) : null;
+    final minutes = (j['min'] as num?)?.toInt();
+    if (j['id'] is! String || start == null || minutes == null || minutes <= 0) return null;
+    return TimeSlot(
+      id: j['id'] as String,
+      start: start,
+      minutes: minutes,
+      stepId: j['step'] as String?,
+      gapAfter: (j['gap'] as num?)?.toInt(),
+      shared: j['shared'] as bool? ?? false,
+      doneAt: j['done'] is String ? DateTime.tryParse(j['done'] as String) : null,
+      extra: unknownFields(j, _known),
+    );
+  }
+}
+
+/// Item 101: what the Day plan shows: tasks and steps, tasks only, or steps only.
+enum DayShow { both, tasks, steps }
+
+/// Item 101: the Day plan's settings, synced with the rest. Times are minutes after midnight.
+class DayPlanSettings {
+  DayPlanSettings({
+    this.dayStart = 7 * 60,
+    this.dayEnd = 22 * 60,
+    this.workStart = 8 * 60,
+    this.workEnd = 17 * 60,
+    this.snap = 15,
+    this.gap,
+    this.length = 30,
+    this.trayDue = true,
+    this.trayGantt = true,
+    this.trayInProgress = false,
+    this.hiddenStrip = true,
+    this.show = DayShow.both,
+    Set<String>? hiddenCategories,
+    Map<String, dynamic>? extra,
+  })  : hiddenCategories = hiddenCategories ?? {},
+        extra = extra ?? {};
+
+  /// The hours drawn; things outside them still show at the top or bottom edge.
+  int dayStart, dayEnd;
+
+  /// Working hours: free time and how full a day is are worked out inside these.
+  int workStart, workEnd;
+
+  /// Moving and stretching snap to this many minutes.
+  int snap;
+
+  /// The gap after each block; null = the same as [snap] (the owner's choice, so gaps and moves
+  /// line up).
+  int? gap;
+  int get gapMinutes => gap ?? snap;
+
+  /// Length of a new planned time for a task with no estimate.
+  int length;
+
+  /// What else goes in the "To plan" tray: tasks due that day, Gantt bars covering the day, and
+  /// cards in the board's In progress stage.
+  bool trayDue, trayGantt, trayInProgress;
+
+  /// Hidden categories' blocks shrink to a faint "Hidden" strip (so free time isn't overstated)
+  /// rather than disappearing.
+  bool hiddenStrip;
+
+  DayShow show;
+
+  /// Categories hidden on the Day plan ('' = tasks with no category).
+  final Set<String> hiddenCategories;
+
+  final Map<String, dynamic> extra;
+
+  static const _known = {
+    'dayStart', 'dayEnd', 'workStart', 'workEnd', 'snap', 'gap', 'length', 'trayDue', 'trayGantt',
+    'trayInProgress', 'hiddenStrip', 'show', 'hidden',
+  };
+
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'dayStart': dayStart,
+        'dayEnd': dayEnd,
+        'workStart': workStart,
+        'workEnd': workEnd,
+        'snap': snap,
+        if (gap != null) 'gap': gap,
+        'length': length,
+        'trayDue': trayDue,
+        'trayGantt': trayGantt,
+        'trayInProgress': trayInProgress,
+        'hiddenStrip': hiddenStrip,
+        'show': show.name,
+        if (hiddenCategories.isNotEmpty) 'hidden': hiddenCategories.toList()..sort(),
+      };
+
+  factory DayPlanSettings.fromJson(Object? v) {
+    if (v is! Map<String, dynamic>) return DayPlanSettings();
+    int n(String k, int d) => (v[k] as num?)?.toInt() ?? d;
+    bool b(String k, bool d) => v[k] as bool? ?? d;
+    return DayPlanSettings(
+      dayStart: n('dayStart', 7 * 60),
+      dayEnd: n('dayEnd', 22 * 60),
+      workStart: n('workStart', 8 * 60),
+      workEnd: n('workEnd', 17 * 60),
+      snap: n('snap', 15).clamp(5, 60),
+      gap: (v['gap'] as num?)?.toInt(),
+      length: n('length', 30),
+      trayDue: b('trayDue', true),
+      trayGantt: b('trayGantt', true),
+      trayInProgress: b('trayInProgress', false),
+      hiddenStrip: b('hiddenStrip', true),
+      show: DayShow.values.where((s) => s.name == v['show']).firstOrNull ?? DayShow.both,
+      hiddenCategories: {for (final c in v['hidden'] as List? ?? []) ?c as String?},
+      extra: unknownFields(v, _known),
+    );
+  }
 }
 
 /// The ways a task can get into the app. Stored as plain names so new ones (another app pushing
@@ -1272,6 +1482,7 @@ class TaskCategory {
       this.boardByDefault = false,
       this.boardStage,
       this.stepsOnBoard = false,
+      this.dayPlan = false,
       Map<String, dynamic>? extra})
       : keywords = keywords ?? [],
         extra = extra ?? {};
@@ -1282,11 +1493,14 @@ class TaskCategory {
   String? boardStage;
   bool stepsOnBoard;
 
+  /// Item 101: every open task in this category is on the Day plan (in its tray until planned).
+  bool dayPlan;
+
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'name', 'keywords', 'board', 'boardStage', 'boardSteps'};
+  static const _known = {'id', 'name', 'keywords', 'board', 'boardStage', 'boardSteps', 'dayPlan'};
 
   final String id;
   String name;
@@ -1305,6 +1519,7 @@ class TaskCategory {
         if (boardByDefault) 'board': true,
         if (boardStage != null) 'boardStage': boardStage,
         if (stepsOnBoard) 'boardSteps': true,
+        if (dayPlan) 'dayPlan': true,
       };
 
   factory TaskCategory.fromJson(Map<String, dynamic> j) => TaskCategory(
@@ -1314,6 +1529,7 @@ class TaskCategory {
         boardByDefault: j['board'] as bool? ?? false,
         boardStage: j['boardStage'] as String?,
         stepsOnBoard: j['boardSteps'] as bool? ?? false,
+        dayPlan: j['dayPlan'] as bool? ?? false,
         extra: unknownFields(j, _known),
       );
 }
@@ -1359,6 +1575,7 @@ class AppData {
     this.ganttWeekends = false,
     this.ganttPush = GanttPush.ask,
     this.ganttStartOnProgress = true,
+    DayPlanSettings? dayPlan,
     Map<String, SkipRecord>? skips,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
@@ -1377,6 +1594,7 @@ class AppData {
     Map<String, String>? quickWords,
     List<dynamic>? unreadable,
   })  : active = active ?? [],
+        dayPlan = dayPlan ?? DayPlanSettings(),
         unreadable = unreadable ?? [],
         hiddenEmails = hiddenEmails ?? {},
         allowedSenders = allowedSenders ?? [],
@@ -1480,6 +1698,14 @@ class AppData {
 
   /// Item 72: tasks on the Gantt chart.
   Iterable<Task> get ganttTasks => active.where((t) => t.gantt);
+
+  /// Item 101: the Day plan's settings.
+  DayPlanSettings dayPlan;
+
+  /// Item 101: on the Day plan: switched on, in a category that puts its tasks there, or with a
+  /// planned time.
+  bool onDayPlan(Task t) =>
+      !t.habit && (t.dayPlan || t.slots.isNotEmpty || (category(t.categoryId)?.dayPlan ?? false));
 
   /// Item 78: habits, which live with the open tasks but stay out of the list.
   Iterable<Task> get habits => active.where((t) => t.habit);
@@ -1610,7 +1836,7 @@ class AppData {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
     'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips',
-    'ganttWeekends', 'ganttPush', 'ganttStartOnProgress',
+    'ganttWeekends', 'ganttPush', 'ganttStartOnProgress', 'dayPlan',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
@@ -1646,6 +1872,7 @@ class AppData {
         if (ganttWeekends) 'ganttWeekends': true,
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
+        'dayPlan': dayPlan.toJson(),
         if (lists && skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -1745,6 +1972,7 @@ class AppData {
         ganttWeekends: j['ganttWeekends'] as bool? ?? false,
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
+        dayPlan: DayPlanSettings.fromJson(j['dayPlan']),
         skips: {
           for (final e in (j['skips'] as Map? ?? {}).entries)
             e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
@@ -1942,6 +2170,7 @@ AppData mergeData(AppData a, AppData b) {
     ganttWeekends: settingsFrom.ganttWeekends,
     ganttPush: settingsFrom.ganttPush,
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
+    dayPlan: settingsFrom.dayPlan,
     skips: skips,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: _mergeById(settingsFrom.templates, olderSettings.templates, (c) => c.id, deleted),

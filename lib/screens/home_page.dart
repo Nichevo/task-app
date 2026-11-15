@@ -201,6 +201,9 @@ class HomePageState extends State<HomePage> {
 
   void openCalendar(DateTime? day) => _open(context, CalendarPage(store: store, initialDay: day));
 
+  /// Item 101: the Day plan (the Calendar's Day mode).
+  void openDayPlan() => _open(context, CalendarPage(store: store, mode: 'day'));
+
   void openStats() => _open(context, StatsPage(store: store));
 
   void openBoard({String? stageId}) => _open(context, KanbanPage(store: store, initialStage: stageId));
@@ -527,11 +530,14 @@ class HomePageState extends State<HomePage> {
               icon: const Icon(Icons.calendar_month_outlined),
               onPressed: () => openCalendar(null),
             ),
+          if (store.topIconShown(TopIcon.dayPlan))
+            IconButton(tooltip: 'Day plan', icon: const Icon(Icons.view_day_outlined), onPressed: openDayPlan),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
               'group' => store.toggleGroupByCategory(),
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
+              'dayplan' => openDayPlan(),
               'stats' => openStats(),
               'achievements' => openAchievements(),
               'habits' => openHabits(),
@@ -564,6 +570,7 @@ class HomePageState extends State<HomePage> {
               if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
               if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
               if (!store.topIconShown(TopIcon.calendar)) const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
+              if (!store.topIconShown(TopIcon.dayPlan)) const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
@@ -1092,8 +1099,9 @@ Future<void> exportCsv(BuildContext context, AppStore store) async {
   await _exportEmails(store, messenger);
 }
 
-/// Emails kept on tasks go in a file of their own (item 63).
+/// Emails kept on tasks go in a file of their own (item 63), and so do Day plan times (item 101).
 Future<void> _exportEmails(AppStore store, ScaffoldMessengerState messenger) async {
+  await _exportDayPlan(store, messenger);
   final emails = buildEmailsCsv(store.data);
   if (emails == null) return;
   final emailsName = 'task_emails_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
@@ -1105,6 +1113,23 @@ Future<void> _exportEmails(AppStore store, ScaffoldMessengerState messenger) asy
       mimeType: 'text/csv',
     );
     if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Exported $emailsName')));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+  }
+}
+
+Future<void> _exportDayPlan(AppStore store, ScaffoldMessengerState messenger) async {
+  final plan = buildDayPlanCsv(store.data);
+  if (plan == null) return;
+  final name = 'day_plan_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv';
+  try {
+    final saved = await FilePicker.saveFile(
+      dialogTitle: 'Export Day plan times',
+      fileName: name,
+      bytes: Uint8List.fromList(utf8.encode('\uFEFF$plan')),
+      mimeType: 'text/csv',
+    );
+    if (saved != null) messenger.showSnackBar(SnackBar(content: Text('Exported $name')));
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
   }

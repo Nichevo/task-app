@@ -10,6 +10,7 @@ import '../google.dart';
 import '../inbox_files.dart';
 import '../input_parse.dart';
 import '../location.dart';
+import '../day_plan.dart' show describeLength;
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -385,6 +386,7 @@ class _SettingsPageState extends State<SettingsPage> {
     var board = c.boardByDefault;
     var stageId = data.stage(c.boardStage)?.id ?? stages.firstOrNull?.id;
     var steps = c.stepsOnBoard;
+    var dayPlan = c.dayPlan;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -434,6 +436,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ],
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Its tasks go on the Day plan'),
+                subtitle: const Text('They wait in the "To plan" tray until you give them a time'),
+                value: dayPlan,
+                onChanged: (v) => setInner(() => dayPlan = v),
+              ),
             ]),
           ),
           actions: [
@@ -448,6 +457,7 @@ class _SettingsPageState extends State<SettingsPage> {
     store.setKeywords(c, keywords.text.split(','));
     final turnedOn = board && !c.boardByDefault;
     store.setCategoryBoard(c, on: board, stageId: stageId, steps: steps);
+    if (dayPlan != c.dayPlan) store.setCategoryDayPlan(c, dayPlan);
     final off = store.offBoardIn(c);
     if (!turnedOn || off.isEmpty || !mounted) return;
     final all = await showDialog<bool>(
@@ -550,6 +560,98 @@ class _SettingsPageState extends State<SettingsPage> {
 
   static String _time(int minutes) =>
       '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+
+  /// Item 101: the Day plan.
+  List<Widget> _dayPlanSettings() {
+    final d = data.dayPlan;
+    String hm(int m) => '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+    Future<int?> pick(int m) async {
+      final t = await showTimePicker(context: context, initialTime: TimeOfDay(hour: m ~/ 60, minute: m % 60));
+      return t == null ? null : t.hour * 60 + t.minute;
+    }
+
+    Widget range(String title, String sub, int a, int b, void Function(int, int) set) => ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(title),
+          subtitle: Text(sub),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            TextButton(
+              onPressed: () async {
+                final v = await pick(a);
+                if (v != null && v < b) _set(() => set(v, b));
+              },
+              child: Text(hm(a)),
+            ),
+            const Text('–'),
+            TextButton(
+              onPressed: () async {
+                final v = await pick(b);
+                if (v != null && v > a) _set(() => set(a, v));
+              },
+              child: Text(hm(b)),
+            ),
+          ]),
+        );
+
+    Widget minutes(String title, String sub, int? value, List<int?> options, String Function(int?) label, void Function(int?) set) =>
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(title),
+          subtitle: Text(sub),
+          trailing: DropdownButton<int?>(
+            value: options.contains(value) ? value : options.first,
+            items: [for (final o in options) DropdownMenuItem(value: o, child: Text(label(o)))],
+            onChanged: (v) => _set(() => set(v)),
+          ),
+        );
+
+    return [
+      _heading('Day plan'),
+      const Text('The Calendar\'s Day mode: tasks and steps with a planned time, as blocks as long as they take.'),
+      range('Hours shown', 'Things planned outside them still show', d.dayStart, d.dayEnd, (a, b) {
+        d.dayStart = a;
+        d.dayEnd = b;
+      }),
+      range('Working hours', 'Free time and how full a day is', d.workStart, d.workEnd, (a, b) {
+        d.workStart = a;
+        d.workEnd = b;
+      }),
+      minutes('Time steps', 'Moving and stretching snap to this', d.snap, const [5, 10, 15, 30], (m) => '$m min',
+          (v) => d.snap = v ?? 15),
+      minutes('Gap after each block', 'A planned time can set its own', d.gap, const [null, 0, 5, 10, 15, 30],
+          (m) => m == null ? 'Same as time steps' : m == 0 ? 'None' : '$m min', (v) => d.gap = v),
+      minutes('Length when none is set', 'A task\'s "Time needed" comes first', d.length, const [15, 30, 45, 60, 90, 120],
+          (m) => describeLength(m!), (v) => d.length = v ?? 30),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Tray: tasks due that day'),
+        subtitle: const Text('In the "To plan" tray until given a time'),
+        value: d.trayDue,
+        onChanged: (v) => _set(() => d.trayDue = v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Tray: Gantt work for that day'),
+        subtitle: const Text('Tasks whose Gantt bar covers the day'),
+        value: d.trayGantt,
+        onChanged: (v) => _set(() => d.trayGantt = v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Tray: In progress cards'),
+        subtitle: const Text('From the Kanban board'),
+        value: d.trayInProgress,
+        onChanged: (v) => _set(() => d.trayInProgress = v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Hidden categories leave a strip'),
+        subtitle: const Text('A faint "Hidden" strip keeps their time, so free time isn\'t overstated'),
+        value: d.hiddenStrip,
+        onChanged: (v) => _set(() => d.hiddenStrip = v),
+      ),
+    ];
+  }
 
   Widget _heading(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
@@ -707,6 +809,8 @@ class _SettingsPageState extends State<SettingsPage> {
               value: data.ganttStartOnProgress,
               onChanged: (v) => _set(() => data.ganttStartOnProgress = v),
             ),
+            const Divider(height: 40),
+            ..._dayPlanSettings(),
             const Divider(height: 40),
             _heading('Top bar icons'),
             const Text('Icons at the top of the task list on this device. Anything switched off is still in the ⋮ menu.'),

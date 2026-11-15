@@ -6,15 +6,20 @@ import '../stats.dart';
 import '../store.dart';
 import '../widgets/task_block.dart';
 import '../widgets/task_colors.dart';
+import 'day_plan_page.dart';
 import 'task_page.dart';
 
 /// Tasks by due date: a month grid (or a week strip) with coloured dots, and the chosen
 /// day's tasks below it, or beside it on a wide screen. Drag a task onto a day to move it.
+///
+/// Item 101: a third mode, Day, is the Day plan. The page opens in the mode last used on this
+/// device ([AppStore.calendarMode]) unless [mode] says.
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key, required this.store, this.initialDay});
+  const CalendarPage({super.key, required this.store, this.initialDay, this.mode});
 
   final AppStore store;
   final DateTime? initialDay;
+  final String? mode;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -23,7 +28,13 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   late DateTime _day = Stats.dayOf(widget.initialDay ?? DateTime.now());
   late DateTime _month = DateTime(_day.year, _day.month);
-  bool _week = false;
+  late String _mode = widget.mode ?? widget.store.calendarMode;
+  bool get _week => _mode == 'week';
+
+  void _setMode(String m) {
+    setState(() => _mode = m);
+    store.setCalendarMode(m);
+  }
   final _expanded = <String>{};
 
   AppStore get store => widget.store;
@@ -70,6 +81,14 @@ class _CalendarPageState extends State<CalendarPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_mode == 'day') {
+      return DayPlanPage(
+        key: ValueKey(_day),
+        store: store,
+        initialDay: _day,
+        onMode: _setMode,
+      );
+    }
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) => LayoutBuilder(builder: (context, box) {
@@ -93,7 +112,12 @@ class _CalendarPageState extends State<CalendarPage> {
               IconButton(
                 tooltip: _week ? 'Month view' : 'Week view',
                 icon: Icon(_week ? Icons.calendar_view_month : Icons.calendar_view_week),
-                onPressed: () => setState(() => _week = !_week),
+                onPressed: () => _setMode(_week ? 'month' : 'week'),
+              ),
+              IconButton(
+                tooltip: 'Day plan',
+                icon: const Icon(Icons.view_day_outlined),
+                onPressed: () => _setMode('day'),
               ),
             ],
           ),
@@ -212,8 +236,15 @@ class _CalendarPageState extends State<CalendarPage> {
     final items = _dueByDay(_day, _day.add(const Duration(days: 1)))[_day] ?? const [];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-        child: Text(DateFormat('EEEE d MMMM').format(_day), style: Theme.of(context).textTheme.titleMedium),
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+        child: Row(children: [
+          Expanded(child: Text(DateFormat('EEEE d MMMM').format(_day), style: Theme.of(context).textTheme.titleMedium)),
+          TextButton.icon(
+            icon: const Icon(Icons.view_day_outlined, size: 18),
+            label: const Text('Day plan'),
+            onPressed: () => _setMode('day'),
+          ),
+        ]),
       ),
       Expanded(
         child: items.isEmpty

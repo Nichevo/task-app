@@ -106,3 +106,33 @@ String? buildMovesCsv(AppData data) {
   final lines = [movesHeader, for (final r in rows) r.$2];
   return '${lines.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
 }
+
+const dayPlanHeader = ['Task', 'Step', 'Category', 'Start', 'Minutes', 'Gap after (min)', 'Leaves room', 'Ticked'];
+
+/// Item 101: day_plan.csv: every planned time on the Day plan, oldest first. Null when nothing
+/// has been planned.
+String? buildDayPlanCsv(AppData data) {
+  final rows = <(DateTime, List<String>)>[];
+  for (final t in data.allTasks) {
+    for (final sl in t.slots) {
+      final step = sl.stepId == null ? null : t.steps.where((x) => x.id == sl.stepId).firstOrNull;
+      rows.add((
+        sl.start,
+        [
+          t.title,
+          step?.title ?? '',
+          data.category(t.categoryId)?.name ?? '',
+          _date(sl.start),
+          '${sl.minutes}',
+          '${sl.gapAfter ?? data.dayPlan.gapMinutes}',
+          sl.shared ? 'yes' : '',
+          _date(sl.doneAt),
+        ]
+      ));
+    }
+  }
+  if (rows.isEmpty) return null;
+  rows.sort((a, b) => a.$1.compareTo(b.$1));
+  final lines = [dayPlanHeader, for (final r in rows) r.$2];
+  return '${lines.map((r) => r.map(_cell).join(',')).join('\r\n')}\r\n';
+}

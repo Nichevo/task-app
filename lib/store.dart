@@ -24,13 +24,18 @@ import 'task_list.dart';
 /// Item 74: the icons the top bar can show, in order. Each can be switched off in Settings.
 abstract final class TopIcon {
   static const search = 'search', board = 'board', matrix = 'matrix', gantt = 'gantt', calendar = 'calendar';
-  static const all = [search, board, matrix, gantt, calendar];
+  static const dayPlan = 'dayPlan';
+  static const all = [search, board, matrix, gantt, calendar, dayPlan];
+
+  /// Item 101: icons that start switched off (the Day plan is also the Calendar's Day mode).
+  static const offByDefault = {dayPlan};
   static const labels = {
     search: 'Search',
     board: 'Kanban board (when tasks are on it)',
     matrix: 'Matrix (when tasks are on it)',
     gantt: 'Gantt chart (when tasks are on it)',
     calendar: 'Calendar',
+    dayPlan: 'Day plan (also in the Calendar)',
   };
 }
 
@@ -165,6 +170,7 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      calendarMode = s['calendarMode'] as String? ?? 'month';
       hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
@@ -353,6 +359,7 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (calendarMode != 'month') 'calendarMode': calendarMode,
       if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
@@ -1269,6 +1276,95 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  // --- Day plan (item 101) ---
+
+  /// Puts [t] on the Day plan (into its tray) or takes it off. Taking it off removes its planned
+  /// times that aren't ticked yet.
+  void setOnDayPlan(Task t, bool on) {
+    t.dayPlan = on;
+    if (!on) t.slots.removeWhere((s) => s.doneAt == null);
+    changed(task: t);
+  }
+
+  /// Gives [t] (or its [step]) a planned time.
+  TimeSlot planTime(Task t, DateTime start, int minutes, {TaskStep? step, int? gap, bool shared = false}) {
+    final s = TimeSlot.create(start, minutes, stepId: step?.id, gapAfter: gap, shared: shared);
+    t.slots.add(s);
+    t.dayPlan = true;
+    changed(task: t);
+    return s;
+  }
+
+  /// Changes a planned time; [gap] -1 means the default.
+  void updateSlot(Task t, TimeSlot s, {DateTime? start, int? minutes, int? gap, bool? shared}) {
+    if (start != null) s.start = start;
+    if (minutes != null && minutes > 0) s.minutes = minutes;
+    if (gap != null) s.gapAfter = gap < 0 ? null : gap;
+    if (shared != null) s.shared = shared;
+    changed(task: t);
+  }
+
+  void removeSlot(Task t, TimeSlot s) {
+    t.slots.remove(s);
+    changed(task: t);
+  }
+
+  /// Puts back a planned time removed by [removeSlot] (undo).
+  void restoreSlot(Task t, TimeSlot s) {
+    if (!t.slots.contains(s)) t.slots.add(s);
+    changed(task: t);
+  }
+
+  /// Ticks a block on the Day plan. A step's block ticks the step; a task's block ticks the task
+  /// off, unless more of its time is planned later, when it only counts as worked today. Returns
+  /// what happened, so the screen can offer to tick the task or undo.
+  SlotTick tickSlot(Task t, TimeSlot s, {DateTime? now, void Function(int index, Task? next)? onComplete}) {
+    now ??= DateTime.now();
+    s.doneAt = now;
+    final step = s.stepId == null ? null : t.steps.where((x) => x.id == s.stepId).firstOrNull;
+    if (step != null) {
+      if (!step.done) {
+        step.done = true;
+        _stepTicked(t, step);
+      }
+      if (!t.worked.contains(dayKey(now))) setWorked(t, now, true);
+      changed(task: t);
+      return t.steps.every((x) => x.done) ? SlotTick.lastStep : SlotTick.step;
+    }
+    final later = t.ownSlots.any((x) => !identical(x, s) && x.doneAt == null && x.start.isAfter(s.start));
+    if (later) {
+      setWorked(t, now, true);
+      changed(task: t);
+      return SlotTick.worked;
+    }
+    if (t.closedAt == null) {
+      final index = data.active.indexOf(t);
+      final next = complete(t);
+      onComplete?.call(index, next);
+    }
+    return SlotTick.done;
+  }
+
+  /// Unticks a block (and its step). A task ticked off from its block is put back separately.
+  void untickSlot(Task t, TimeSlot s) {
+    s.doneAt = null;
+    final step = s.stepId == null ? null : t.steps.where((x) => x.id == s.stepId).firstOrNull;
+    if (step != null && step.done) {
+      step.done = false;
+      _stepTicked(t, step);
+    }
+    changed(task: t);
+  }
+
+  /// Item 101: a category whose tasks all go on the Day plan.
+  void setCategoryDayPlan(TaskCategory c, bool on) {
+    c.dayPlan = on;
+    changed(settings: true);
+  }
+
+  /// Item 101: the Day plan's settings changed.
+  void dayPlanChanged() => changed(settings: true);
+
   // --- Gantt chart (item 72) ---
 
   /// Puts [t] on the Gantt chart (or takes it off). [start] sets its start day.
@@ -1492,12 +1588,27 @@ class AppStore extends ChangeNotifier {
 
   /// Item 74: shows or hides one top bar icon on this device.
   void setTopIcon(String name, bool shown) {
-    shown ? hiddenTopIcons.remove(name) : hiddenTopIcons.add(name);
+    if (TopIcon.offByDefault.contains(name)) {
+      // Kept in the same set as "on:<name>", so older versions just ignore it.
+      shown ? hiddenTopIcons.add('on:$name') : hiddenTopIcons.remove('on:$name');
+    } else {
+      shown ? hiddenTopIcons.remove(name) : hiddenTopIcons.add(name);
+    }
     notifyListeners();
     saveDeviceSettings();
   }
 
-  bool topIconShown(String name) => !hiddenTopIcons.contains(name);
+  bool topIconShown(String name) =>
+      TopIcon.offByDefault.contains(name) ? hiddenTopIcons.contains('on:$name') : !hiddenTopIcons.contains(name);
+
+  /// Item 101: the Calendar page's last view on this device: 'month', 'week' or 'day'.
+  String calendarMode = 'month';
+
+  void setCalendarMode(String mode) {
+    if (mode == calendarMode) return;
+    calendarMode = mode;
+    saveDeviceSettings();
+  }
 
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
@@ -1592,6 +1703,7 @@ class AppStore extends ChangeNotifier {
 
   void removeStep(Task t, TaskStep s) {
     t.steps.remove(s);
+    t.slots.removeWhere((x) => x.stepId == s.id);
     tidyStepLinks(t);
     changed(task: t);
   }
@@ -2285,6 +2397,9 @@ class DeviceBackup {
 }
 
 /// Item 59: what the right-hand panel on a wide screen shows when no task is open.
+/// Item 101: what ticking a block on the Day plan did.
+enum SlotTick { step, lastStep, worked, done }
+
 enum PanelView {
   agenda('Agenda'),
   matrix('Matrix'),
