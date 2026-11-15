@@ -9,6 +9,15 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.4', 'November 2026', [
+    'Day plan: the "To plan" tray now also lists your other open tasks, due later or with no date, under "Also open", soonest due first, so you can plan work before it is due. The button at the top of the opened tray (or Settings, Day plan) switches this off again.',
+    'Tasks in the tray open to their steps: tap the number on a task (or "2 steps" on the iPad and Fold) and drag a step onto a time on its own.',
+    'The week arrows above the Day plan now open the next or previous week on its Monday (or on today, when today is in that week), rather than the same weekday a week on.',
+    'iPad and Fold: drag the line between the list and the side panel all the way to the right to hide the panel. A handle stays on the right edge: tap it or drag it back to bring the panel back.',
+    'Edit all steps on an iPad held upright now shows the steps as cards, so their names can be read; the table needs a wider screen.',
+    'Tasks can have a location: on the task page, tap Location and search for an address, pick a saved place or use where you are now. It is separate from place reminders. The map button opens it in Maps.',
+    'Driving time: a task with a location gets driving blocks on the Day plan before and after its planned time, counted as busy. With a saved place called Home, the app suggests them from the distance (from Home, or from your previous stop that day, and home after the last one). They are rough town-driving estimates, marked ≈. Set your own on the task page under Driving time, or tap a driving block.',
+  ]),
   Release('1.12.3', 'November 2026', [
     'New: a focus timer. Pick a task (or one of its steps) and work in rounds: 25 minutes of focus, a 5 minute break, and a 15 minute break after every fourth round. Start it from the timer button on a task, "Start focus" on a Day plan block, the ⋮ menu, or the Start focus button on a reminder.',
     'While a round runs, the countdown sits beside the mode chip in the top bar and in a notification you can see from the lock screen. Other tasks\' reminders wait until your break, and the app tells you when it\'s time for a break and when the break is over. Pause, +5 minutes, skip the break or stop at any time.',

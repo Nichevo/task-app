@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'gantt.dart';
 import 'models.dart';
 import 'native.dart' show CalendarEvent;
+import 'places.dart';
 
 /// Item 101: the Day plan. Everything here is plain logic (what goes where on one day), so it can
 /// be tested without a screen; lib/screens/day_plan_page.dart draws it.
@@ -88,10 +89,68 @@ class Span {
   int get minutes => end.difference(start).inMinutes;
 }
 
+/// 1.12.5: driving before or after a planned block whose task has a location.
+class DriveSpan extends Span {
+  const DriveSpan(super.start, super.end, this.block, {required this.before, this.from, this.estimate = false});
+  final PlanBlock block;
+
+  /// Driving there (true) or on afterwards.
+  final bool before;
+
+  /// Where the estimate starts or ends ("Home", the previous task's place).
+  final String? from;
+
+  /// Worked out from the distance, rather than set on the task.
+  final bool estimate;
+}
+
+/// Minutes of driving before (or [after]) [b], with where from and whether it is an estimate:
+/// the task's own setting, else (when it has a pin) the distance from the previous pinned block
+/// that day, or from Home. After a block the estimate is only the drive home, after the last
+/// pinned block of the day; the next block's own "before" covers the trip between them.
+({int minutes, String? from, bool estimate})? driveFor(Task t, Placed b, List<PlanBlock> day,
+    {required bool after, List<Place>? places, bool suggest = false}) {
+  final set = suggest ? null : (after ? t.driveAfter : t.driveBefore);
+  if (set != null) return set > 0 ? (minutes: set, from: null, estimate: false) : null;
+  final w = t.where;
+  if (w == null || !w.pinned) return null;
+  final pinned = day.where((o) => !identical(o, b) && !o.shared && o.task.where?.pinned == true);
+  double? lat, lng;
+  String? name;
+  if (!after) {
+    final prev = pinned.where((o) => !o.end.isAfter(b.start)).fold<PlanBlock?>(null, (a, o) => a == null || o.end.isAfter(a.end) ? o : a);
+    if (prev != null) {
+      lat = prev.task.where!.lat;
+      lng = prev.task.where!.lng;
+      name = prev.task.where!.name;
+    }
+  } else if (pinned.any((o) => !o.start.isBefore(b.end))) {
+    return null;
+  }
+  if (lat == null) {
+    final home = homePlace(places);
+    if (home == null) return null;
+    lat = home.lat;
+    lng = home.lng;
+    name = home.name;
+  }
+  final m = metresBetween(lat, lng!, w.lat!, w.lng!);
+  if (m < 300) return null;
+  return (minutes: estimateDriveMinutes(m), from: name, estimate: true);
+}
+
 /// Everything on one day, laid out.
 class DayLayout {
   DayLayout(this.day, this.blocks, this.gaps, this.free,
-      {required this.workStart, required this.workEnd, this.events = const [], this.allDay = const [], this.links = const []});
+      {required this.workStart,
+      required this.workEnd,
+      this.events = const [],
+      this.allDay = const [],
+      this.links = const [],
+      this.drives = const []});
+
+  /// 1.12.5: driving before and after blocks whose task has a location.
+  final List<DriveSpan> drives;
 
   final DateTime day;
 
@@ -288,9 +347,25 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
   }
   close();
 
+  // 1.12.5: driving there and back, which takes time too.
+  final drives = <DriveSpan>[];
+  final road = shown.where((b) => !b.shared && !b.hidden && !b.done).toList();
+  for (final b in road) {
+    final t = b.task;
+    if (t.where == null && t.driveBefore == null && t.driveAfter == null) continue;
+    if (driveFor(t, b, road, after: false) case final d?) {
+      drives.add(DriveSpan(b.start.subtract(Duration(minutes: d.minutes)), b.start, b,
+          before: true, from: d.from, estimate: d.estimate));
+    }
+    if (driveFor(t, b, road, after: true) case final d?) {
+      drives.add(DriveSpan(b.end, b.end.add(Duration(minutes: d.minutes)), b,
+          before: false, from: d.from, estimate: d.estimate));
+    }
+  }
+
   // Gaps after each ordinary block, cut short by whatever comes next.
   final gaps = <Span>[];
-  final busy = <Span>[for (final e in timed) Span(e.start, e.end)];
+  final busy = <Span>[for (final e in timed) Span(e.start, e.end), ...drives];
   final solid = <Placed>[...shown.where((b) => !b.shared), ...timed];
   for (final b in shown.where((b) => !b.shared)) {
     busy.add(Span(b.start, b.end));
@@ -323,7 +398,7 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
   if (we.difference(cursor).inMinutes >= 5) free.add(Span(cursor, we));
 
   return DayLayout(day, shown, gaps, free,
-      workStart: ws, workEnd: we, events: timed, allDay: allDay, links: _links(data, shown));
+      workStart: ws, workEnd: we, events: timed, allDay: allDay, links: _links(data, shown), drives: drives);
 }
 
 /// [day]'s events from [events]: the timed ones as blocks, and the all-day ones. None when
@@ -496,13 +571,30 @@ double dayLoad(AppData data, DateTime day, {List<CalendarEvent> events = const [
     final st = e.start.isBefore(ws) ? ws : e.start, en = e.end.isAfter(we) ? we : e.end;
     if (en.isAfter(st)) spans.add(Span(st, en));
   }
+  // Driving counts too.
+  final road = blocksOn(data, day).where((b) => !b.shared && !b.done).toList();
+  for (final b in road) {
+    for (final after in [false, true]) {
+      final d = b.task.where == null && b.task.driveBefore == null && b.task.driveAfter == null
+          ? null
+          : driveFor(b.task, b, road, after: after);
+      if (d == null) continue;
+      final from = after ? b.end : b.start.subtract(Duration(minutes: d.minutes));
+      final to = from.add(Duration(minutes: d.minutes));
+      final st = from.isBefore(ws) ? ws : from, en = to.isAfter(we) ? we : to;
+      if (en.isAfter(st)) spans.add(Span(st, en));
+    }
+  }
   return (_union(spans) + outside) / work;
 }
 
 /// Something waiting in the "To plan" tray, with why it's there.
 class TrayItem {
-  const TrayItem(this.task, this.why, {this.step, this.missed});
+  const TrayItem(this.task, this.why, {this.step, this.missed, this.other = false});
   final Task task;
+
+  /// In "Other open tasks": not for this day, but open and not planned yet.
+  final bool other;
   final TaskStep? step;
   final String why;
 
@@ -524,6 +616,7 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
   final fmt = DateFormat('EEE d MMM');
   final out = <TrayItem>[];
   final dueFirst = <TrayItem>[];
+  final others = <TrayItem>[];
   for (final t in data.active) {
     if (t.habit || categoryHidden(data, t.categoryId) || !data.inMode(t)) continue;
     final own = t.ownSlots.toList();
@@ -555,7 +648,19 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
                 ? 'Overdue'
                 : 'Due ${fmt.format(due)}';
       }
-      if (why != null) (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why, missed: missedSlot));
+      if (why != null) {
+        (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why, missed: missedSlot));
+      } else if (s.trayAll && !upcoming && !data.isLocked(t)) {
+        others.add(TrayItem(
+          t,
+          due == null
+              ? 'No date'
+              : due.isBefore(now)
+                  ? 'Overdue'
+                  : 'Due ${fmt.format(due)}',
+          other: true,
+        ));
+      }
     }
     if (s.trayDue && s.show != DayShow.tasks) {
       for (final st in t.steps) {
@@ -565,7 +670,37 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
       }
     }
   }
-  return [...dueFirst, ...out];
+  // Soonest due first, then starred, then the rest by title.
+  final far = DateTime(9999);
+  others.sort((a, b) {
+    final c = (a.task.dueAt ?? far).compareTo(b.task.dueAt ?? far);
+    if (c != 0) return c;
+    if (a.task.starred != b.task.starred) return a.task.starred ? -1 : 1;
+    return a.task.title.toLowerCase().compareTo(b.task.title.toLowerCase());
+  });
+  return [...dueFirst, ...out, ...others];
+}
+
+/// The open steps of [i]'s task that have no time on [day], to drag onto the Day plan one by one
+/// (the tray's "steps" drill-down). Steps already in [shown] are left out.
+List<TrayItem> trayStepsOf(AppData data, TrayItem i, DateTime day, {Iterable<TrayItem> shown = const []}) {
+  final t = i.task;
+  final have = {for (final x in shown) if (x.task.id == t.id && x.step != null) x.step!.id};
+  final fmt = DateFormat('EEE d MMM');
+  return [
+    for (final st in t.steps)
+      if (!st.done && !have.contains(st.id) && !t.slotsOf(st).any((x) => _sameDay(x.start, day)))
+        TrayItem(t, st.dueAt == null ? 'Step' : 'Step due ${fmt.format(st.dueAt!)}', step: st, other: i.other),
+  ];
+}
+
+/// The day the Day plan's week arrows go to: the Monday [by] weeks from [day]'s week, or [today]
+/// when it falls in that week.
+DateTime weekStartFrom(DateTime day, int by, {required DateTime today}) {
+  final d = DateTime(day.year, day.month, day.day);
+  final monday = DateTime(d.year, d.month, d.day - (d.weekday - 1) + 7 * by);
+  final t = DateTime(today.year, today.month, today.day);
+  return !t.isBefore(monday) && t.isBefore(DateTime(monday.year, monday.month, monday.day + 7)) ? t : monday;
 }
 
 /// Rounds [t] to the nearest [snap] minutes.
@@ -587,4 +722,18 @@ String describeLength(int minutes) {
   if (minutes < 60) return '$minutes min';
   final h = minutes ~/ 60, m = minutes % 60;
   return m == 0 ? '$h h' : '$h h $m';
+}
+
+/// 1.12.5: the suggested driving before (or [after]) [t]'s next planned time, or, with none,
+/// from and back to Home. Null without a pin or a saved Home.
+({int minutes, String? from, bool estimate})? suggestDrive(AppData data, Task t, {required bool after, DateTime? at}) {
+  final now = at ?? DateTime.now();
+  final next = t.slots.where((x) => x.doneAt == null && x.end.isAfter(now)).fold<TimeSlot?>(
+      null, (a, x) => a == null || x.start.isBefore(a.start) ? x : a);
+  if (next != null) {
+    final day = blocksOn(data, next.start).where((b) => !b.shared && !b.done).toList();
+    final b = day.where((b) => identical(b.slot, next)).firstOrNull;
+    if (b != null) return driveFor(t, b, day, after: after, suggest: true);
+  }
+  return driveFor(t, PlanBlock(t, TimeSlot.create(now, 30)), const [], after: after, suggest: true);
 }

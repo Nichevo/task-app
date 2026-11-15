@@ -56,7 +56,10 @@ enum OwnSteps {
 }
 
 class AppStore extends ChangeNotifier {
-  AppStore({this.reminders, this.widgets, this.location});
+  AppStore({this.reminders, this.widgets, this.location}) {
+    // 1.12.5: the Day plan's driving estimates start from a saved place called Home.
+    savedPlaces = places;
+  }
 
   AppData data = AppData();
 
@@ -521,6 +524,17 @@ class AppStore extends ChangeNotifier {
   }
 
   static const panelMinFraction = 0.25;
+
+  /// 1.12.4: the right-hand pane dragged shut (iPad, Fold): the list takes the whole width and a
+  /// handle on the right edge brings the pane back. An open task still shows beside the list.
+  bool panelClosed = false;
+
+  void setPanelClosed(bool v) {
+    if (panelClosed == v) return;
+    panelClosed = v;
+    notifyListeners();
+    unawaited(saveDeviceSettings());
+  }
   static const panelMaxFraction = 0.7;
 
   Map<String, dynamic> _panelJson() => {
@@ -531,6 +545,7 @@ class AppStore extends ChangeNotifier {
         'panelStats': [for (final v in panelStats) v.name],
         if (unfoldOpens != UnfoldOpens.panel) 'unfoldOpens': unfoldOpens.name,
         if (panelFraction != null) 'panelFraction': panelFraction,
+        if (panelClosed) 'panelClosed': true,
       };
 
   void _readPanel(Map<String, dynamic> s) {
@@ -550,6 +565,7 @@ class AppStore extends ChangeNotifier {
     unfoldOpens = byName(UnfoldOpens.values, s['unfoldOpens']) ?? unfoldOpens;
     final f = s['panelFraction'];
     if (f is num) panelFraction = f.toDouble().clamp(panelMinFraction, panelMaxFraction);
+    panelClosed = s['panelClosed'] == true;
     panelView = (panelRemember ? byName(PanelView.values, s['panelLast']) : null) ?? panelStart;
     if (panelHidden.contains(panelView)) panelView = shownPanelViews.first;
   }
@@ -1069,6 +1085,26 @@ class AppStore extends ChangeNotifier {
   /// Hands the saved places to Android to watch. False when Android refused (no "all the time"
   /// location access yet).
   Future<bool> watchPlaces() => PlaceReminders.watch(places, arrivalSummary: arrivalSummary, dir: dirPath);
+
+  /// 1.12.5: where [t] happens (null removes it).
+  void setWhere(Task t, TaskWhere? w) {
+    t.where = w;
+    changed(task: t);
+  }
+
+  /// 1.12.5: minutes of driving before and after [t]'s planned times (null = suggest, 0 = none).
+  void setDrive(Task t, {required int? before, required int? after}) {
+    t.driveBefore = before;
+    t.driveAfter = after;
+    changed(task: t);
+  }
+
+  /// Where the phone is now, asking for location access if needed. Null when it can't be had.
+  Future<GeoPoint?> whereNow() async {
+    final loc = location;
+    if (loc == null || !await loc.requestAccess()) return null;
+    return loc.current();
+  }
 
   /// Saves the current location as a place. Null when the location can't be had.
   Future<Place?> addPlaceHere(String name, {int radius = 150}) async {
@@ -2545,6 +2581,7 @@ class AppStore extends ChangeNotifier {
       ..starred = t.starred
       ..place = t.place
       ..placeLeave = t.placeLeave
+      ..where = t.where
       ..estimate = t.estimate
       ..matrixBox = t.matrixBox
       ..waitingOn = t.waitingOn

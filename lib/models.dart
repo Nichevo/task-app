@@ -106,6 +106,7 @@ class Task {
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
+    'where', 'driveBefore', 'driveAfter',
   };
 
   final String id;
@@ -183,6 +184,14 @@ class Task {
 
   /// Remind when leaving [place] instead of arriving.
   bool placeLeave;
+
+  /// 1.12.5: where the task happens (an address, a saved place or a pin), apart from any place
+  /// reminder. Synced.
+  TaskWhere? where;
+
+  /// Minutes of driving before and after each planned time (Day plan). Null = suggested from the
+  /// distance when [where] has a pin; 0 = none.
+  int? driveBefore, driveAfter;
 
   /// On the Kanban board (item 52).
   bool kanban;
@@ -416,6 +425,9 @@ class Task {
         if (seriesId != null) 'series': seriesId,
         if (place != null) 'place': place,
         if (placeLeave) 'placeLeave': true,
+        if (where != null) 'where': where!.toJson(),
+        if (driveBefore != null) 'driveBefore': driveBefore,
+        if (driveAfter != null) 'driveAfter': driveAfter,
         if (kanban) 'kanban': true,
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
@@ -509,9 +521,38 @@ class Task {
             if (s is Map<String, dynamic>) ?TimeSlot.tryParse(s),
         ],
         extra: unknownFields(j, _known),
-      );
+      )
+        ..where = TaskWhere.tryParse(j['where'])
+        ..driveBefore = (j['driveBefore'] as num?)?.toInt()
+        ..driveAfter = (j['driveAfter'] as num?)?.toInt();
 
   static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
+}
+
+/// 1.12.5: where a task happens: a name or address, and a pin when known (from a saved place,
+/// where the phone was, or an address search).
+class TaskWhere {
+  const TaskWhere(this.name, {this.lat, this.lng});
+
+  final String name;
+  final double? lat, lng;
+
+  bool get pinned => lat != null && lng != null;
+
+  Map<String, dynamic> toJson() => {'name': name, if (pinned) 'lat': lat, if (pinned) 'lng': lng};
+
+  static TaskWhere? tryParse(Object? j) {
+    if (j is! Map || j['name'] is! String) return null;
+    final lat = j['lat'], lng = j['lng'];
+    return TaskWhere(j['name'] as String,
+        lat: lat is num && lng is num ? lat.toDouble() : null, lng: lat is num && lng is num ? lng.toDouble() : null);
+  }
+
+  @override
+  bool operator ==(Object other) => other is TaskWhere && other.name == name && other.lat == lat && other.lng == lng;
+
+  @override
+  int get hashCode => Object.hash(name, lat, lng);
 }
 
 /// Item 101: a planned time on the Day plan: a start, a length in minutes and the gap to leave
@@ -605,6 +646,7 @@ class DayPlanSettings {
     this.trayDue = true,
     this.trayGantt = true,
     this.trayInProgress = false,
+    this.trayAll = true,
     this.hiddenStrip = true,
     this.show = DayShow.both,
     this.showEvents = true,
@@ -636,6 +678,10 @@ class DayPlanSettings {
   /// cards in the board's In progress stage.
   bool trayDue, trayGantt, trayInProgress;
 
+  /// 1.12.4: the tray also lists every other open task with no time yet (due later or no date),
+  /// under "Other open tasks", so things can be planned before they're due.
+  bool trayAll;
+
   /// Hidden categories' blocks shrink to a faint "Hidden" strip (so free time isn't overstated)
   /// rather than disappearing.
   bool hiddenStrip;
@@ -659,7 +705,7 @@ class DayPlanSettings {
 
   static const _known = {
     'dayStart', 'dayEnd', 'workStart', 'workEnd', 'snap', 'gap', 'length', 'trayDue', 'trayGantt',
-    'trayInProgress', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart', 'ticked',
+    'trayInProgress', 'trayAll', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart', 'ticked',
   };
 
   Map<String, dynamic> toJson() => {
@@ -674,6 +720,7 @@ class DayPlanSettings {
         'trayDue': trayDue,
         'trayGantt': trayGantt,
         'trayInProgress': trayInProgress,
+        if (!trayAll) 'trayAll': false,
         'hiddenStrip': hiddenStrip,
         'show': show.name,
         'events': showEvents,
@@ -697,6 +744,7 @@ class DayPlanSettings {
       trayDue: b('trayDue', true),
       trayGantt: b('trayGantt', true),
       trayInProgress: b('trayInProgress', false),
+      trayAll: b('trayAll', true),
       hiddenStrip: b('hiddenStrip', true),
       show: DayShow.values.where((s) => s.name == v['show']).firstOrNull ?? DayShow.both,
       showEvents: b('events', true),

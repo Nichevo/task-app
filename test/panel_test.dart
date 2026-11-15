@@ -88,14 +88,31 @@ void main() {
     await tester.pumpWidget(TaskApp(store: s));
     await tester.pumpAndSettle();
     final before = tester.getRect(find.byType(SidePanel)).width;
-    final grip = tester.getCenter(find.bySemanticsLabel('Drag to resize the panes'));
+    final grip = tester.getCenter(find.bySemanticsLabel(RegExp('^Drag to resize')));
     await tester.dragFrom(grip, const Offset(-180, 0));
     await tester.pumpAndSettle();
     expect(tester.getRect(find.byType(SidePanel)).width, greaterThan(before + 150));
     expect(s.panelFraction, closeTo(0.6, 0.03));
-    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel('Drag to resize the panes')), const Offset(900, 0));
+    // Most of the way right, but not shut: the smallest size.
+    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel(RegExp('^Drag to resize'))), const Offset(380, 0));
     await tester.pumpAndSettle();
     expect(s.panelFraction, AppStore.panelMinFraction);
+    expect(s.panelClosed, isFalse);
+    // 1.12.4: all the way to the edge shuts it; the handle on the edge opens it again.
+    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel(RegExp('^Drag to resize'))), const Offset(900, 0));
+    await tester.pumpAndSettle();
+    expect(s.panelClosed, isTrue);
+    expect(find.byType(SidePanel), findsNothing);
+    await tester.tap(find.bySemanticsLabel('Open the side panel'));
+    await tester.pumpAndSettle();
+    expect(s.panelClosed, isFalse);
+    expect(find.byType(SidePanel), findsOneWidget);
+    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel(RegExp('^Drag to resize'))), const Offset(900, 0));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(tester.getCenter(find.bySemanticsLabel('Open the side panel')), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(s.panelClosed, isFalse);
+    expect(s.panelFraction, closeTo(0.55, 0.05));
     s.setPanelFraction(null);
     await tester.pumpAndSettle();
     expect(tester.getRect(find.byType(SidePanel)).width, closeTo(before, 1));

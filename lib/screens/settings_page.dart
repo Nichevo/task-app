@@ -646,6 +646,13 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
+        title: const Text('Tray: all other open tasks'),
+        subtitle: const Text('Due later or with no date, so you can plan them early'),
+        value: d.trayAll,
+        onChanged: (v) => _set(() => d.trayAll = v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
         title: const Text('Hidden categories leave a strip'),
         subtitle: const Text('A faint "Hidden" strip keeps their time, so free time isn\'t overstated'),
         value: d.hiddenStrip,

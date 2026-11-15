@@ -234,6 +234,8 @@ void main() {
       final t = s.addTask('Tidy garage');
       await tester.pumpWidget(MaterialApp(home: TaskPage(store: s, task: t)));
       await tester.scrollUntilVisible(find.text('On the Kanban board'), 200, scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(find.text('On the Kanban board'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('On the Kanban board'));
       await tester.pumpAndSettle();
       expect(t.kanban, isTrue);
