@@ -501,8 +501,11 @@ double dayLoad(AppData data, DateTime day, {List<CalendarEvent> events = const [
 
 /// Something waiting in the "To plan" tray, with why it's there.
 class TrayItem {
-  const TrayItem(this.task, this.why, {this.step, this.missed});
+  const TrayItem(this.task, this.why, {this.step, this.missed, this.other = false});
   final Task task;
+
+  /// In "Other open tasks": not for this day, but open and not planned yet.
+  final bool other;
   final TaskStep? step;
   final String why;
 
@@ -524,6 +527,7 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
   final fmt = DateFormat('EEE d MMM');
   final out = <TrayItem>[];
   final dueFirst = <TrayItem>[];
+  final others = <TrayItem>[];
   for (final t in data.active) {
     if (t.habit || categoryHidden(data, t.categoryId) || !data.inMode(t)) continue;
     final own = t.ownSlots.toList();
@@ -555,7 +559,19 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
                 ? 'Overdue'
                 : 'Due ${fmt.format(due)}';
       }
-      if (why != null) (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why, missed: missedSlot));
+      if (why != null) {
+        (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why, missed: missedSlot));
+      } else if (s.trayAll && !upcoming && !data.isLocked(t)) {
+        others.add(TrayItem(
+          t,
+          due == null
+              ? 'No date'
+              : due.isBefore(now)
+                  ? 'Overdue'
+                  : 'Due ${fmt.format(due)}',
+          other: true,
+        ));
+      }
     }
     if (s.trayDue && s.show != DayShow.tasks) {
       for (final st in t.steps) {
@@ -565,7 +581,37 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
       }
     }
   }
-  return [...dueFirst, ...out];
+  // Soonest due first, then starred, then the rest by title.
+  final far = DateTime(9999);
+  others.sort((a, b) {
+    final c = (a.task.dueAt ?? far).compareTo(b.task.dueAt ?? far);
+    if (c != 0) return c;
+    if (a.task.starred != b.task.starred) return a.task.starred ? -1 : 1;
+    return a.task.title.toLowerCase().compareTo(b.task.title.toLowerCase());
+  });
+  return [...dueFirst, ...out, ...others];
+}
+
+/// The open steps of [i]'s task that have no time on [day], to drag onto the Day plan one by one
+/// (the tray's "steps" drill-down). Steps already in [shown] are left out.
+List<TrayItem> trayStepsOf(AppData data, TrayItem i, DateTime day, {Iterable<TrayItem> shown = const []}) {
+  final t = i.task;
+  final have = {for (final x in shown) if (x.task.id == t.id && x.step != null) x.step!.id};
+  final fmt = DateFormat('EEE d MMM');
+  return [
+    for (final st in t.steps)
+      if (!st.done && !have.contains(st.id) && !t.slotsOf(st).any((x) => _sameDay(x.start, day)))
+        TrayItem(t, st.dueAt == null ? 'Step' : 'Step due ${fmt.format(st.dueAt!)}', step: st, other: i.other),
+  ];
+}
+
+/// The day the Day plan's week arrows go to: the Monday [by] weeks from [day]'s week, or [today]
+/// when it falls in that week.
+DateTime weekStartFrom(DateTime day, int by, {required DateTime today}) {
+  final d = DateTime(day.year, day.month, day.day);
+  final monday = DateTime(d.year, d.month, d.day - (d.weekday - 1) + 7 * by);
+  final t = DateTime(today.year, today.month, today.day);
+  return !t.isBefore(monday) && t.isBefore(DateTime(monday.year, monday.month, monday.day + 7)) ? t : monday;
 }
 
 /// Rounds [t] to the nearest [snap] minutes.

@@ -88,6 +88,19 @@ void main() {
       expect(t.steps.first.startAt, isNull);
     });
 
+    testWidgets('an iPad held upright gets cards, so step names can be read', (tester) async {
+      final store = AppStore();
+      final t = store.addTask('Kitchen');
+      store.addStep(t, 'Order the benchtop from the supplier');
+      tester.view.physicalSize = const Size(834, 1194);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: StepsEditPage(store: store, task: t)));
+      expect(find.text('STEP'), findsNothing, reason: 'no table header');
+      final name = find.text('Order the benchtop from the supplier').first;
+      expect(tester.getSize(name).width, greaterThan(250));
+    });
+
     testWidgets('folded: cards and a bottom bar', (tester) async {
       final store = AppStore();
       final t = store.addTask('Kitchen');

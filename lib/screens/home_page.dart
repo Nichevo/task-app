@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -529,9 +530,12 @@ class HomePageState extends State<HomePage> {
               store.panelView == PanelView.dayPlan &&
               store.shownPanelViews.contains(PanelView.dayPlan);
           final f0 = store.panelFraction ?? 0.4;
+          final closed = wide && open == null && store.panelClosed && _dragPanel == null;
           final paneWidth = !wide
               ? box.maxWidth
-              : box.maxWidth * (1 - (open == null && store.panelView == PanelView.matrix && f0 < 0.5 ? 0.5 : f0));
+              : closed
+                  ? box.maxWidth - _PaneDivider.width
+                  : box.maxWidth * (1 - (open == null && store.panelView == PanelView.matrix && f0 < 0.5 ? 0.5 : f0));
           final list = _listScaffold(context, wide, paneWidth);
           if (!wide) {
             return PopScope(
@@ -548,16 +552,34 @@ class HomePageState extends State<HomePage> {
           final half = open == null && store.panelView == PanelView.matrix;
           // Item 81: the divider can be dragged to make the right-hand pane wider or narrower.
           final f = store.panelFraction ?? 0.4;
-          final panel = half && f < 0.5 ? 0.5 : f;
+          final set = half && f < 0.5 ? 0.5 : f;
+          // 1.12.4: dragging the divider most of the way right shuts the pane; dragging the edge
+          // handle back (or tapping it) opens it again.
+          final panel = closed ? 0.0 : (_dragPanel ?? set).clamp(0.0, AppStore.panelMaxFraction);
           return Row(children: [
-            SizedBox(width: box.maxWidth * (1 - panel) - _PaneDivider.width / 2, child: list),
+            SizedBox(
+              width: closed ? box.maxWidth - _PaneDivider.width : box.maxWidth * (1 - panel) - _PaneDivider.width / 2,
+              child: list,
+            ),
             _PaneDivider(
-              onDrag: (dx) => store.setPanelFraction(panel - dx / box.maxWidth),
-              onEnd: () => store.setPanelFraction(store.panelFraction, save: true),
-              onReset: () => store.setPanelFraction(null, save: true),
+              closed: closed,
+              onDrag: (dx) => setState(() => _dragPanel = max(0.0, (_dragPanel ?? (closed ? 0.0 : set)) - dx / box.maxWidth)),
+              onEnd: () {
+                final raw = _dragPanel ?? set;
+                setState(() => _dragPanel = null);
+                if (open == null && raw < _closeBelow) {
+                  store.setPanelClosed(true);
+                } else {
+                  store.panelClosed = false;
+                  store.setPanelFraction(raw, save: true);
+                }
+              },
+              onReset: () => closed ? store.setPanelClosed(false) : store.setPanelFraction(null, save: true),
             ),
             Expanded(
-              child: open == null
+              child: closed
+                  ? const SizedBox.shrink()
+                  : open == null
                   ? SidePanel(store: store, onOpen: (t) => _select(t.id))
                   : TaskPage(key: ValueKey(open.id), store: store, task: open, onClose: () => _select(null)),
             ),
@@ -568,6 +590,13 @@ class HomePageState extends State<HomePage> {
   }
 
   bool? _wasWide;
+
+  /// The right-hand pane's share of the width while its divider is being dragged (it can go
+  /// below the smallest size, to shut it).
+  double? _dragPanel;
+
+  /// Let go with the pane narrower than this and it shuts.
+  static const _closeBelow = 0.15;
 
   /// The side panel shows the Day plan: pressing and holding a task drags it onto a time there
   /// (the handle on the right still reorders the list).
@@ -1409,7 +1438,10 @@ Future<void> _exportDayPlan(AppStore store, ScaffoldMessengerState messenger) as
 /// Item 81: the line between the two panes. Drag it sideways to resize them; double-tap to go
 /// back to the usual widths.
 class _PaneDivider extends StatelessWidget {
-  const _PaneDivider({required this.onDrag, required this.onEnd, required this.onReset});
+  const _PaneDivider({required this.onDrag, required this.onEnd, required this.onReset, this.closed = false});
+
+  /// The pane is shut: this is the handle on the right edge (tap or drag left to open it).
+  final bool closed;
 
   static const width = 16.0;
 
@@ -1423,12 +1455,14 @@ class _PaneDivider extends StatelessWidget {
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
       child: Semantics(
-        label: 'Drag to resize the panes',
+        label: closed ? 'Open the side panel' : 'Drag to resize the panes; drag to the right edge to hide the side panel',
+        button: closed,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
           onHorizontalDragEnd: (_) => onEnd(),
-          onDoubleTap: onReset,
+          onDoubleTap: closed ? null : onReset,
+          onTap: closed ? onReset : null,
           child: SizedBox(
             width: width,
             child: Stack(alignment: Alignment.center, children: [

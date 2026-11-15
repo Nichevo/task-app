@@ -1396,3 +1396,20 @@ modes in the statistics; the top bar has no room for more icons.
 - Statistics: Focus time (14 days, total, best day, top tasks).
 - Not built: Day plan "actuals" drawn from focus minutes.
 - Tests: test/focus_timer_test.dart.
+
+## 103. Day plan tray, week arrows, hiding the side panel, Edit all steps upright ☑ (version 1.12.4)
+
+- Tray: `DayPlanSettings.trayAll` (default on; Settings "Tray: all other open tasks" and a button
+  on the opened tray) adds every other open task with no time to come and not waiting on
+  another (`TrayItem.other`), soonest due first, then starred, then by title, after what's for
+  the day. Header: "To plan for Sun 15 (3) · 12 more open".
+- Steps in the tray: a task opens to its open steps with no time that day (`trayStepsOf`); each
+  is a tray item of its own and drags onto the timeline.
+- Week arrows and swipe: `weekStartFrom` (Monday of that week, or today if it falls in it).
+- Home, unfolded: dragging the pane divider below 15% of the width shuts the side panel
+  (`AppStore.panelClosed`, device setting); a handle on the right edge opens it (tap or drag). An
+  open task still shows beside the list.
+- Edit all steps: the table shows only when the width fits its columns plus 240 px for names
+  (`_tableWidth`); otherwise cards.
+- Tests: test/day_plan_tray_test.dart, panel_test, steps_edit_test.
+

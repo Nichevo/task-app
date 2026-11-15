@@ -46,6 +46,44 @@ class _DayPlanPageState extends State<DayPlanPage> {
   /// The tray's category chip ('' = no category, null = all).
   String? _trayCat;
 
+  /// Tasks in the tray opened to show their steps.
+  final Set<String> _traySteps = {};
+
+  /// The tray as shown: each opened task followed by its steps, and the "Other open tasks" heading
+  /// (null) before the first of those.
+  List<TrayItem?> _trayRows(List<TrayItem> tray) {
+    final out = <TrayItem?>[];
+    var other = false;
+    for (final i in tray) {
+      if (i.other && !other) {
+        other = true;
+        out.add(null);
+      }
+      out.add(i);
+      if (i.step == null && _traySteps.contains(i.task.id)) out.addAll(trayStepsOf(data, i, _day, shown: tray));
+    }
+    return out;
+  }
+
+  Widget _trayHeading(BuildContext context, {bool card = false}) {
+    final theme = Theme.of(context);
+    final text = Text(card ? 'Other open tasks' : 'Also open:', style: TextStyle(fontSize: 12, color: theme.hintColor, fontWeight: FontWeight.w600));
+    return card
+        ? Padding(padding: const EdgeInsets.fromLTRB(14, 8, 14, 6), child: text)
+        : Container(
+            margin: const EdgeInsets.only(right: 6, bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+            child: text,
+          );
+  }
+
+  List<Widget> _trayWidgets(BuildContext context, List<TrayItem> tray, {bool card = false}) => [
+        for (final i in _trayRows(tray)) i == null ? _trayHeading(context, card: card) : _trayChip(context, i, card: card),
+      ];
+
+  /// How many open steps [i] can open to (0 for a step, or a task planned in full).
+  int _stepCount(TrayItem i) => i.step != null ? 0 : trayStepsOf(data, i, _day).length;
+
   /// The tray narrowed to [_trayCat], and chips for the categories it holds.
   List<TrayItem> _trayShown(List<TrayItem> tray) =>
       _trayCat == null ? tray : tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == _trayCat).toList();
@@ -182,6 +220,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
     _scroll.jumpTo(((target - from) * _ppm(context)).clamp(0.0, _scroll.position.maxScrollExtent));
   }
 
+  /// The week [by] weeks from the one shown opens on its first day (Monday), or on today when
+  /// today falls in it.
+  DateTime _weekStart(int by) => weekStartFrom(_day, by, today: DateTime.now());
+
   void _goTo(DateTime d) {
     setState(() => _day = dayStart(d));
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
@@ -310,7 +352,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
     return GestureDetector(
       onHorizontalDragEnd: (d) {
         final v = d.primaryVelocity ?? 0;
-        if (v.abs() > 200) _goTo(_day.add(Duration(days: v < 0 ? 7 : -7)));
+        if (v.abs() > 200) _goTo(_weekStart(v < 0 ? 1 : -1));
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
@@ -319,7 +361,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             visualDensity: VisualDensity.compact,
             tooltip: 'Week before',
             icon: const Icon(Icons.chevron_left),
-            onPressed: () => _goTo(_day.subtract(const Duration(days: 7))),
+            onPressed: () => _goTo(_weekStart(-1)),
           ),
           for (var i = 0; i < 7; i++)
             Expanded(child: Builder(builder: (context) {
@@ -366,7 +408,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             visualDensity: VisualDensity.compact,
             tooltip: 'Week after',
             icon: const Icon(Icons.chevron_right),
-            onPressed: () => _goTo(_day.add(const Duration(days: 7))),
+            onPressed: () => _goTo(_weekStart(1)),
           ),
         ]),
       ),
@@ -1073,6 +1115,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
   Widget _trayChip(BuildContext context, TrayItem i, {bool card = false}) {
     final theme = Theme.of(context);
     final c = _colour(i.task);
+    final steps = _stepCount(i);
+    final open = _traySteps.contains(i.task.id);
+    void toggle() => setState(() => open ? _traySteps.remove(i.task.id) : _traySteps.add(i.task.id));
+    final isStep = i.step != null;
     final content = card
         ? Container(
             margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
@@ -1080,31 +1126,59 @@ class _DayPlanPageState extends State<DayPlanPage> {
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border(left: BorderSide(color: c, width: 6)),
+              border: Border(left: BorderSide(color: c, width: isStep && open ? 3 : 6)),
             ),
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(i.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                   Text(
-                    [if (i.step != null) 'Step of ${i.task.title}', i.why, describeLength(i.minutes(data))].join(' · '),
+                    [if (isStep) 'Step of ${i.task.title}', i.why, describeLength(i.minutes(data))].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 12, color: theme.hintColor),
                   ),
                 ]),
               ),
+              if (steps > 0)
+                TextButton.icon(
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6)),
+                  onPressed: toggle,
+                  icon: Icon(open ? Icons.expand_less : Icons.expand_more, size: 18),
+                  label: Text('$steps step${steps == 1 ? '' : 's'}'),
+                ),
               Icon(Icons.drag_indicator, color: theme.hintColor),
             ]),
           )
         : Container(
             margin: const EdgeInsets.only(right: 6, bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(10)),
-            child: Text.rich(TextSpan(children: [
-              TextSpan(text: i.title),
-              TextSpan(text: '  ${describeLength(i.minutes(data))}', style: const TextStyle(fontSize: 11, color: Color(0xAA000000))),
-            ]), style: const TextStyle(fontSize: 13, color: Color(0xDD000000))),
+            decoration: BoxDecoration(
+              color: isStep ? c.withValues(alpha: 0.55) : c,
+              borderRadius: BorderRadius.circular(10),
+              border: i.other && !isStep ? Border.all(color: const Color(0x33000000)) : null,
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (isStep) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.subdirectory_arrow_right, size: 14, color: Color(0xAA000000))),
+              Text.rich(TextSpan(children: [
+                TextSpan(text: i.title),
+                TextSpan(
+                    text: '  ${i.other && !isStep ? '${i.why} · ' : ''}${describeLength(i.minutes(data))}',
+                    style: const TextStyle(fontSize: 11, color: Color(0xAA000000))),
+              ]), style: const TextStyle(fontSize: 13, color: Color(0xDD000000))),
+              if (steps > 0)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: toggle,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text('$steps', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xAA000000))),
+                      Icon(open ? Icons.chevron_left : Icons.chevron_right, size: 16, color: const Color(0xAA000000)),
+                    ]),
+                  ),
+                ),
+            ]),
           );
     return LongPressDraggable<TrayItem>(
       data: i,
@@ -1139,10 +1213,16 @@ class _DayPlanPageState extends State<DayPlanPage> {
               child: Row(children: [
                 Expanded(
                   child: Text(
-                    all.isEmpty ? 'Nothing waiting to be planned' : 'To plan for ${DateFormat('EEE d').format(_day)} (${all.length})',
+                    all.isEmpty
+                        ? 'Nothing waiting to be planned'
+                        : [
+                            'To plan for ${DateFormat('EEE d').format(_day)} (${all.where((i) => !i.other).length})',
+                            if (all.any((i) => i.other)) '${all.where((i) => i.other).length} more open',
+                          ].join(' · '),
                     style: theme.textTheme.titleSmall,
                   ),
                 ),
+                if (_trayOpen) _trayAllButton(),
                 if (tray.isNotEmpty) Icon(_trayOpen ? Icons.expand_more : Icons.expand_less),
               ]),
             ),
@@ -1154,7 +1234,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.3),
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                      child: Wrap(children: [for (final i in tray) _trayChip(context, i)]),
+                      child: Wrap(children: _trayWidgets(context, tray)),
                     ),
                   )
                 : SizedBox(
@@ -1162,13 +1242,26 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-                      children: [for (final i in tray) _trayChip(context, i)],
+                      children: _trayWidgets(context, tray),
                     ),
                   ),
         ]),
       ),
     );
   }
+
+  /// Switches "Other open tasks" on and off (Settings, Day plan, has it too).
+  Widget _trayAllButton() => IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: s.trayAll ? 'Only what\'s for this day' : 'Show all open tasks',
+        isSelected: s.trayAll,
+        icon: const Icon(Icons.playlist_add_check),
+        selectedIcon: const Icon(Icons.playlist_add_check_circle),
+        onPressed: () {
+          s.trayAll = !s.trayAll;
+          store.dayPlanChanged();
+        },
+      );
 
   Widget _trayPanel(BuildContext context, List<TrayItem> all) {
     final theme = Theme.of(context);
@@ -1178,7 +1271,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
       child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 16), children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
-          child: Text('To plan · drag onto a time', style: theme.textTheme.titleSmall),
+          child: Row(children: [
+            Expanded(child: Text('To plan · drag onto a time', style: theme.textTheme.titleSmall)),
+            _trayAllButton(),
+          ]),
         ),
         _trayCats(all, padding: const EdgeInsets.fromLTRB(10, 0, 10, 8)),
         if (all.isEmpty)
@@ -1187,7 +1283,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             child: Text('Nothing waiting. Switch "On the Day plan" on a task, or plan one with +.',
                 style: TextStyle(color: theme.hintColor)),
           ),
-        for (final i in tray) _trayChip(context, i, card: true),
+        ..._trayWidgets(context, tray, card: true),
       ]),
     );
   }

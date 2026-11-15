@@ -563,7 +563,9 @@ class _StepsEditPageState extends State<StepsEditPage> {
     final steps = task.steps;
     final n = _sel.length;
     return LayoutBuilder(builder: (context, box) {
-      final wide = box.maxWidth >= 760;
+      // The table needs its fixed columns plus room to read the step names (about 240 px);
+      // narrower (an iPad held upright) gets the cards instead.
+      final wide = box.maxWidth >= _tableWidth + 240;
       return Scaffold(
         appBar: AppBar(
           title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -751,6 +753,11 @@ class _StepsEditPageState extends State<StepsEditPage> {
   }
 
   static const _wStart = 124.0, _wDays = 112.0, _wDue = 150.0, _wRemind = 128.0, _wStage = 124.0, _wProg = 92.0;
+
+  /// Everything in a table row but the step's name: tick box, handle, the columns and gaps, and
+  /// the list's side padding.
+  double get _tableWidth =>
+      40 + 28 + 8 + _wStart + _wDays + _wDue + _wRemind + _wProg + 4 * 8 + (_showStage ? _wStage + 8 : 0) + 32 + 16;
 
   List<Widget> _columns(List<Widget> plan, Widget due, Widget remind, Widget? stage) => [
         SizedBox(width: _wStart, child: plan[0]),

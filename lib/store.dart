@@ -521,6 +521,17 @@ class AppStore extends ChangeNotifier {
   }
 
   static const panelMinFraction = 0.25;
+
+  /// 1.12.4: the right-hand pane dragged shut (iPad, Fold): the list takes the whole width and a
+  /// handle on the right edge brings the pane back. An open task still shows beside the list.
+  bool panelClosed = false;
+
+  void setPanelClosed(bool v) {
+    if (panelClosed == v) return;
+    panelClosed = v;
+    notifyListeners();
+    unawaited(saveDeviceSettings());
+  }
   static const panelMaxFraction = 0.7;
 
   Map<String, dynamic> _panelJson() => {
@@ -531,6 +542,7 @@ class AppStore extends ChangeNotifier {
         'panelStats': [for (final v in panelStats) v.name],
         if (unfoldOpens != UnfoldOpens.panel) 'unfoldOpens': unfoldOpens.name,
         if (panelFraction != null) 'panelFraction': panelFraction,
+        if (panelClosed) 'panelClosed': true,
       };
 
   void _readPanel(Map<String, dynamic> s) {
@@ -550,6 +562,7 @@ class AppStore extends ChangeNotifier {
     unfoldOpens = byName(UnfoldOpens.values, s['unfoldOpens']) ?? unfoldOpens;
     final f = s['panelFraction'];
     if (f is num) panelFraction = f.toDouble().clamp(panelMinFraction, panelMaxFraction);
+    panelClosed = s['panelClosed'] == true;
     panelView = (panelRemember ? byName(PanelView.values, s['panelLast']) : null) ?? panelStart;
     if (panelHidden.contains(panelView)) panelView = shownPanelViews.first;
   }

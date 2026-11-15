@@ -605,6 +605,7 @@ class DayPlanSettings {
     this.trayDue = true,
     this.trayGantt = true,
     this.trayInProgress = false,
+    this.trayAll = true,
     this.hiddenStrip = true,
     this.show = DayShow.both,
     this.showEvents = true,
@@ -636,6 +637,10 @@ class DayPlanSettings {
   /// cards in the board's In progress stage.
   bool trayDue, trayGantt, trayInProgress;
 
+  /// 1.12.4: the tray also lists every other open task with no time yet (due later or no date),
+  /// under "Other open tasks", so things can be planned before they're due.
+  bool trayAll;
+
   /// Hidden categories' blocks shrink to a faint "Hidden" strip (so free time isn't overstated)
   /// rather than disappearing.
   bool hiddenStrip;
@@ -659,7 +664,7 @@ class DayPlanSettings {
 
   static const _known = {
     'dayStart', 'dayEnd', 'workStart', 'workEnd', 'snap', 'gap', 'length', 'trayDue', 'trayGantt',
-    'trayInProgress', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart', 'ticked',
+    'trayInProgress', 'trayAll', 'hiddenStrip', 'show', 'hidden', 'events', 'remindStart', 'ticked',
   };
 
   Map<String, dynamic> toJson() => {
@@ -674,6 +679,7 @@ class DayPlanSettings {
         'trayDue': trayDue,
         'trayGantt': trayGantt,
         'trayInProgress': trayInProgress,
+        if (!trayAll) 'trayAll': false,
         'hiddenStrip': hiddenStrip,
         'show': show.name,
         'events': showEvents,
@@ -697,6 +703,7 @@ class DayPlanSettings {
       trayDue: b('trayDue', true),
       trayGantt: b('trayGantt', true),
       trayInProgress: b('trayInProgress', false),
+      trayAll: b('trayAll', true),
       hiddenStrip: b('hiddenStrip', true),
       show: DayShow.values.where((s) => s.name == v['show']).firstOrNull ?? DayShow.both,
       showEvents: b('events', true),
