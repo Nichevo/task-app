@@ -21,6 +21,7 @@ import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
+import 'focus_page.dart';
 import 'starred_page.dart' show pickTask;
 import 'steps_edit_page.dart';
 
@@ -551,6 +552,12 @@ class _TaskPageState extends State<TaskPage> {
             : IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: _close),
         title: Text(archived ? 'Archived task' : 'Task'),
         actions: [
+          if (!archived && !task.habit)
+            IconButton(
+              tooltip: 'Focus on this (timer)',
+              icon: const Icon(Icons.timer_outlined),
+              onPressed: () => startFocusOn(context, widget.store, task),
+            ),
           IconButton(
             tooltip: task.starred ? 'Unstar' : 'Star (keep at the top)',
             icon: Icon(task.starred ? Icons.star : Icons.star_border,

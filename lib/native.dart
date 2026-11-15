@@ -51,6 +51,40 @@ class Native {
 
   static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
+  /// Item 102: whether the app may turn Do not disturb on and off (Android only).
+  static bool get dndSupported => !kIsWeb && Platform.isAndroid;
+
+  static Future<bool> dndAllowed() async {
+    if (!dndSupported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('dndAllowed') ?? false;
+    } catch (e) {
+      debugPrint('dndAllowed: $e');
+      return false;
+    }
+  }
+
+  /// Opens Android's page for allowing Do not disturb access.
+  static Future<void> askDnd() async {
+    if (!dndSupported) return;
+    try {
+      await _channel.invokeMethod('askDnd');
+    } catch (e) {
+      debugPrint('askDnd: $e');
+    }
+  }
+
+  /// Turns Do not disturb (priority only) on or off; false when not allowed.
+  static Future<bool> setDoNotDisturb(bool on) async {
+    if (!dndSupported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('setDnd', {'on': on}) ?? false;
+    } catch (e) {
+      debugPrint('setDnd: $e');
+      return false;
+    }
+  }
+
   /// Text shared to the app since it last asked, if any. On iPad it comes from the "Add to Task
   /// Blocks" action (Siri, Shortcuts or a Share sheet shortcut), see AppDelegate.swift.
   static Future<SharedText?> takeShared() async {

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../day_plan.dart';
 import '../models.dart';
 import '../native.dart';
+import 'focus_page.dart';
 import '../store.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_colors.dart';
@@ -1449,6 +1450,13 @@ class _DayPlanPageState extends State<DayPlanPage> {
               if (b.tooEarly) 'Starts before what it comes after is done',
             ].join(' · ')),
           ),
+          if (!b.done)
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Start focus'),
+              subtitle: const Text('The focus timer on this, full screen'),
+              onTap: () => Navigator.pop(c, 'focus'),
+            ),
           ListTile(leading: const Icon(Icons.open_in_new), title: const Text('Open the task'), onTap: () => Navigator.pop(c, 'open')),
           ListTile(leading: const Icon(Icons.schedule), title: const Text('Change the time…'), onTap: () => Navigator.pop(c, 'time')),
           if (b.step == null && !b.done && b.task.steps.any((x) => !x.done && b.task.slotsOf(x).every((sl) => sl.doneAt != null)))
@@ -1479,6 +1487,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
     if (!mounted || choice == null) return;
     switch (choice) {
+      case 'focus':
+        startFocusOn(context, store, b.task, stepId: b.step?.id);
       case 'open':
         await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: b.task)));
       case 'time':

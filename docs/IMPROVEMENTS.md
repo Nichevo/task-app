@@ -1370,3 +1370,29 @@ modes in the statistics; the top bar has no room for more icons.
   filters by the mode at that time and the timelines redraw when the mode changes. New kind
   "Mode" (small, and Lock Screen rectangular).
 - Tests: test/modes_test.dart (part 3 group).
+
+### 102, part 4 of 4 ☑ (version 1.12.3)
+
+- lib/focus_timer.dart: `FocusTimer` (task, step, phase, round, length, end or left, runFrom,
+  carry, waiting for Start) kept on this device (device settings 'focusTimer', global `focusNow`);
+  `FocusSettings` (focus 25, short 5, long 15, every 4, Do not disturb) synced as
+  `AppData.focusSettings`. Minutes land on `Task.focus` (day key to minutes, synced), split at
+  midnight with leftover seconds carried; a focused day also counts in `worked`.
+- AppStore: `startFocus`, `tickFocus` (round ends: break, long after every `every`th; break ends:
+  next round waits for Start), `pauseFocus`, `resumeFocus`, `addFocusTime` (+5), `skipBreak`,
+  `stopFocus`, `setFocusStep`. A timer whose task is ticked off or deleted stops.
+- lib/screens/focus_page.dart: Focus screen (ring, buttons, task card with steps, held reminders
+  and Do not disturb line), `pickFocusTask`, settings sheet; `FocusCountdown` chip beside the mode
+  chip. Ways in: task page timer button, Day plan block "Start focus", ⋮ menu "Focus timer",
+  reminder action "Start focus" (Day plan slots), taskblocks://focus?op=start|pause|resume|add|skip|stop|pick.
+- Reminders: during a focus round, other tasks' reminders move to just after the round
+  (`Reminders.heldForFocus`); an exact-alarm reminder when the round or break ends; Android
+  ongoing chronometer notification. Android: `ACCESS_NOTIFICATION_POLICY` and Do not disturb via
+  the native channel (`dndAllowed`, `askDnd`, `setDnd`), exact alarm permissions.
+- Widgets: `focusTimer` and `focusLengths` in the widget data, `focusToday` per task. Android
+  `FocusTimerWidget` (4x3 target, resizable; moves through phases itself, chronometer countdown,
+  buttons open the app through taskblocks://focus). iPad "Focus timer" kind (small, medium,
+  large) with `Text(timerInterval:)`.
+- Statistics: Focus time (14 days, total, best day, top tasks).
+- Not built: Day plan "actuals" drawn from focus minutes.
+- Tests: test/focus_timer_test.dart.

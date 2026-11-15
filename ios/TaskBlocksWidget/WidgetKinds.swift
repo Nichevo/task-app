@@ -1265,6 +1265,172 @@ struct ModeWidget: Widget {
   }
 }
 
+// MARK: - Focus timer (item 102, part 4)
+
+private let focusGreen = Color(red: 0.56, green: 0.88, blue: 0.35)
+private let focusBlue = Color(red: 0.49, green: 0.78, blue: 0.95)
+private let focusSoft = Color(red: 0.62, green: 0.83, blue: 0.80)
+private let focusBg = Color(red: 0.06, green: 0.18, blue: 0.18)
+
+func focusMinutes(_ m: Int) -> String {
+  m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(String(format: "%02d", m % 60))"
+}
+
+struct FocusTimerView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: PlainEntry
+
+  var body: some View {
+    let snap = entry.snap
+    let now = entry.date
+    let state = snap.focus(at: now)
+    let f = snap.focusTimer
+    let idle = topTask(snap.tasks)
+    let taskId = (f?["task"] as? String) ?? idle?.id
+    let title = (f?["title"] as? String) ?? idle?.title ?? "Nothing to focus on"
+    let today = (f?["today"] as? NSNumber)?.intValue ?? idle?.focusToday ?? 0
+    let colour = state?.onBreak == true ? focusBlue : focusGreen
+    let length = state?.length ?? Double(snap.focusLengths[0]) * 60
+    let left = state?.left ?? length
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(alignment: .top, spacing: 12) {
+        VStack(spacing: 2) {
+          ZStack {
+            Circle().stroke(Color(red: 0.13, green: 0.27, blue: 0.27), lineWidth: 9)
+            Circle().trim(from: 0, to: max(0, min(1, left / max(length, 1))))
+              .stroke(colour, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+              .rotationEffect(.degrees(-90))
+            if let end = state?.end {
+              Text(timerInterval: now...max(end, now), countsDown: true)
+                .font(.system(size: family == .systemSmall ? 20 : 24, weight: .light).monospacedDigit())
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .frame(maxWidth: 84)
+            } else {
+              Text(clock(left)).font(.system(size: family == .systemSmall ? 20 : 24, weight: .light).monospacedDigit())
+                .foregroundStyle(.white)
+            }
+          }
+          .frame(width: family == .systemSmall ? 92 : 104, height: family == .systemSmall ? 92 : 104)
+          Text(roundText(state, snap)).font(.caption2).foregroundStyle(focusSoft).lineLimit(1)
+        }
+        if family != .systemSmall {
+          VStack(alignment: .leading, spacing: 3) {
+            Link(destination: W.link("focus")) {
+              VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.headline).foregroundStyle(.white).lineLimit(2)
+                Text(today > 0 ? "focused \(focusMinutes(today)) today" : f == nil ? "Top task · ready when you are" : "focusing")
+                  .font(.caption).foregroundStyle(focusSoft)
+              }
+            }
+            if family != .systemMedium, let id = taskId {
+              ForEach(steps(f, idle).prefix(4)) { st in
+                Button(intent: TickStepAction(task: id, step: st.id)) {
+                  Text((st.done ? "☑ " : "☐ ") + st.title + (st.id == (f?["step"] as? String) ? "  ←" : ""))
+                    .font(.subheadline).foregroundStyle(st.done ? Color.white.opacity(0.5) : .white).lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .disabled(st.done)
+              }
+            }
+            Spacer(minLength: 0)
+          }
+        }
+      }
+      HStack(spacing: 6) {
+        ForEach(buttons(state, f == nil, idle)) { b in
+          Link(destination: W.link("focus", b.query)) {
+            Text(b.id).font(.caption.bold()).foregroundStyle(.white)
+              .padding(.horizontal, 10).padding(.vertical, 6)
+              .background(Color(red: 0.14, green: 0.31, blue: 0.31), in: Capsule())
+          }
+        }
+      }
+      if family == .systemLarge || family == .systemExtraLarge {
+        Text(footer(snap, taskId)).font(.caption2).foregroundStyle(focusSoft).lineLimit(1)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .containerBackground(focusBg, for: .widget)
+  }
+
+  func clock(_ t: TimeInterval) -> String {
+    let s = Int(t.rounded())
+    return String(format: "%02d:%02d", s / 60, s % 60)
+  }
+
+  func roundText(_ s: FocusState?, _ snap: Snapshot) -> String {
+    guard let s = s else { return "\(snap.focusLengths[0]) min round" }
+    if s.ready { return "Ready for round \(s.round)" }
+    if s.onBreak { return s.phase == "longBreak" ? "Long break" : "Short break" }
+    return s.running ? "Round \(s.round) of \(snap.focusLengths[3])" : "Round \(s.round) · paused"
+  }
+
+  struct StepRow: Identifiable {
+    let id: String
+    let title: String
+    let done: Bool
+  }
+
+  struct TimerButton: Identifiable {
+    let id: String
+    let query: [String: String?]
+  }
+
+  func steps(_ f: [String: Any]?, _ idle: WTask?) -> [StepRow] {
+    let list: [StepRow]
+    if let f = f {
+      list = ((f["steps"] as? [[String: Any]]) ?? []).map {
+        StepRow(id: ($0["id"] as? String) ?? "", title: ($0["title"] as? String) ?? "", done: ($0["done"] as? Bool) ?? false)
+      }
+    } else {
+      list = (idle?.steps ?? []).map { StepRow(id: $0.id, title: $0.title, done: $0.done) }
+    }
+    let current = f?["step"] as? String
+    return list.sorted { a, b in a.done != b.done ? !a.done : (a.id == current) && b.id != current }
+  }
+
+  func buttons(_ state: FocusState?, _ idle: Bool, _ top: WTask?) -> [TimerButton] {
+    guard !idle, let s = state else {
+      if let t = top {
+        return [TimerButton(id: "▶ Start", query: ["op": "start", "id": t.id]), TimerButton(id: "Pick another", query: ["op": "pick"])]
+      }
+      return [TimerButton(id: "Pick a task", query: ["op": "pick"])]
+    }
+    var out: [TimerButton] = []
+    if s.ready {
+      out.append(TimerButton(id: "▶ Round \(s.round)", query: ["op": "resume"]))
+    } else if s.onBreak {
+      out.append(TimerButton(id: "Skip break", query: ["op": "skip"]))
+      out.append(TimerButton(id: "+5", query: ["op": "add"]))
+    } else if s.running {
+      out.append(TimerButton(id: "Pause", query: ["op": "pause"]))
+      out.append(TimerButton(id: "+5", query: ["op": "add"]))
+    } else {
+      out.append(TimerButton(id: "▶ Resume", query: ["op": "resume"]))
+      out.append(TimerButton(id: "+5", query: ["op": "add"]))
+    }
+    out.append(TimerButton(id: "Stop", query: ["op": "stop"]))
+    return out
+  }
+
+  func footer(_ snap: Snapshot, _ current: String?) -> String {
+    let total = snap.everything.reduce(0) { $0 + $1.focusToday }
+    let next = snap.tasks.filter { $0.id != current && !$0.locked }.prefix(2).map { $0.title }.joined(separator: ", ")
+    return [total > 0 ? "Today \(focusMinutes(total))" : nil, next.isEmpty ? nil : "next: \(next)"]
+      .compactMap { $0 }.joined(separator: " · ")
+  }
+}
+
+struct FocusTimerWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "FocusTimer", provider: PlainProvider(hourly: true)) { FocusTimerView(entry: $0) }
+      .configurationDisplayName("Focus timer")
+      .description("A pomodoro countdown on one task and its steps. Start, pause and skip open the app.")
+      .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+  }
+}
+
 // MARK: - All of them
 
 @main
@@ -1284,5 +1450,6 @@ struct TaskBlocksWidgets: WidgetBundle {
     GlanceWidget()
     DayPlanWidget()
     ModeWidget()
+    FocusTimerWidget()
   }
 }

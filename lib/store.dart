@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'day_plan.dart' show PlanMove;
 import 'dropbox.dart';
+import 'focus_timer.dart';
 import 'gantt.dart';
 import 'google.dart';
 import 'home_widgets.dart';
@@ -170,6 +171,7 @@ class AppStore extends ChangeNotifier {
       }
       seenVersion = s['seenVersion'] as String?;
       deviceModeChoice = ModeChoice.tryParse(s['modeChoice']);
+      focusNow = FocusTimer.tryParse(s['focusTimer']);
       places.addAll([for (final p in s['places'] as List? ?? []) ?Place.tryParse(p)]);
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
@@ -193,6 +195,8 @@ class AppStore extends ChangeNotifier {
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
     refreshMode(applyStart: false);
+    // Item 102: a focus timer left running moves on to where it would be now.
+    if (focusNow != null && !tickFocus()) _focusChanged();
     if (_cleanArchive()) await _writeData();
     notifyListeners();
     await applyPending();
@@ -362,6 +366,7 @@ class AppStore extends ChangeNotifier {
       'quickFilter': quickFilter.name,
       if (seenVersion != null) 'seenVersion': seenVersion,
       if (deviceModeChoice != null) 'modeChoice': deviceModeChoice!.toJson(),
+      if (focusNow != null) 'focusTimer': focusNow!.toJson(),
       if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
@@ -1671,6 +1676,187 @@ class AppStore extends ChangeNotifier {
     boardLanes = lanes ?? boardLanes;
     notifyListeners();
     saveDeviceSettings();
+  }
+
+  // --- Item 102, part 4: the focus timer ---
+
+  Timer? _focusTick;
+
+  /// Starts a focus round on [t] (and [stepId]), replacing any timer running.
+  void startFocus(Task t, {String? stepId}) {
+    final now = DateTime.now();
+    final old = focusNow;
+    if (old != null) _creditFocus(old, now);
+    final len = data.focusSettings.lengthOf(FocusPhase.focus);
+    focusNow = FocusTimer(taskId: t.id, stepId: stepId, length: len, end: now.add(len), runFrom: now);
+    _focusChanged();
+  }
+
+  /// Moves the timer on to what happens at [now]: rounds that ended become breaks, breaks that
+  /// ended wait for the next round. Returns whether anything changed. Runs every few seconds
+  /// while the app is open and when it opens.
+  bool tickFocus([DateTime? at]) {
+    final f = focusNow;
+    if (f == null) return false;
+    final now = at ?? DateTime.now();
+    if (!data.active.any((t) => t.id == f.taskId)) {
+      // Ticked off or deleted (here or on another device).
+      stopFocus();
+      return true;
+    }
+    var changed = false;
+    while (f.end != null && !now.isBefore(f.end!)) {
+      final end = f.end!;
+      changed = true;
+      if (f.phase == FocusPhase.focus) {
+        _creditFocus(f, end);
+        f.phase = f.round % data.focusSettings.every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak;
+        f.length = data.focusSettings.lengthOf(f.phase);
+        f.end = end.add(f.length);
+        f.runFrom = null;
+      } else {
+        // The break is over: the next round waits for Start.
+        f.phase = FocusPhase.focus;
+        f.round++;
+        f.length = data.focusSettings.lengthOf(FocusPhase.focus);
+        f.end = null;
+        f.left = f.length;
+        f.heldBreak = true;
+      }
+    }
+    if (changed) _focusChanged();
+    return changed;
+  }
+
+  void pauseFocus() {
+    final f = focusNow;
+    if (f == null || f.end == null) return;
+    final now = DateTime.now();
+    if (f.phase == FocusPhase.focus) _creditFocus(f, now);
+    f.left = f.remaining(now);
+    f.end = null;
+    f.runFrom = null;
+    _focusChanged();
+  }
+
+  /// Carries on after a pause, or starts the round waiting after a break.
+  void resumeFocus() {
+    final f = focusNow;
+    if (f == null || f.end != null) return;
+    final now = DateTime.now();
+    f.end = now.add(f.left ?? f.length);
+    f.left = null;
+    f.heldBreak = false;
+    if (f.phase == FocusPhase.focus) f.runFrom = now;
+    _focusChanged();
+  }
+
+  /// Five more minutes on this round or break.
+  void addFocusTime([Duration more = const Duration(minutes: 5)]) {
+    final f = focusNow;
+    if (f == null) return;
+    f.length += more;
+    if (f.end != null) {
+      f.end = f.end!.add(more);
+    } else {
+      f.left = (f.left ?? f.length - more) + more;
+    }
+    _focusChanged();
+  }
+
+  /// Ends a break early and starts the next round.
+  void skipBreak() {
+    final f = focusNow;
+    if (f == null) return;
+    final now = DateTime.now();
+    if (f.phase == FocusPhase.focus && f.end != null) return;
+    if (f.phase.isBreak) f.round++;
+    f
+      ..phase = FocusPhase.focus
+      ..length = data.focusSettings.lengthOf(FocusPhase.focus)
+      ..left = null
+      ..heldBreak = false;
+    f
+      ..end = now.add(f.length)
+      ..runFrom = now;
+    _focusChanged();
+  }
+
+  void stopFocus() {
+    final f = focusNow;
+    if (f == null) return;
+    _creditFocus(f, DateTime.now());
+    focusNow = null;
+    _focusChanged();
+  }
+
+  /// Moves the session to another step of the same task (null = the task as a whole).
+  void setFocusStep(String? stepId) {
+    final f = focusNow;
+    if (f == null) return;
+    f.stepId = stepId;
+    _focusChanged();
+  }
+
+  /// Saves the focus time since the round started or resumed on the task: whole minutes on
+  /// [Task.focus] for the day, and the day counts as worked on.
+  void _creditFocus(FocusTimer f, DateTime until) {
+    final from = f.runFrom;
+    if (from == null || f.phase != FocusPhase.focus) return;
+    f.runFrom = until;
+    final t = data.task(f.taskId);
+    if (t == null) return;
+    final midnight = DateTime(from.year, from.month, from.day + 1);
+    // Split at midnight, so each day gets its own minutes.
+    final parts = until.isAfter(midnight)
+        ? {
+            dayKey(from): f.carry + midnight.difference(from).inSeconds,
+            dayKey(until): until.difference(midnight).inSeconds.clamp(0, 24 * 3600),
+          }
+        : {dayKey(from): f.carry + until.difference(from).inSeconds.clamp(0, 24 * 3600)};
+    var secs = 0;
+    var any = false;
+    parts.forEach((k, s) {
+      final mins = s ~/ 60;
+      secs += s % 60;
+      if (mins > 0) {
+        t.focus[k] = (t.focus[k] ?? 0) + mins;
+        any = true;
+      }
+    });
+    f.carry = secs;
+    if (any) {
+      t.worked.add(dayKey(until));
+      changed(task: t);
+    }
+  }
+
+  void _focusChanged() {
+    final f = focusNow;
+    _focusTick?.cancel();
+    if (f != null) {
+      // Wakes up as the phase ends, to move on and reschedule.
+      final end = f.end;
+      if (end != null) {
+        _focusTick = Timer(end.difference(DateTime.now()) + const Duration(milliseconds: 200), () => tickFocus());
+      }
+    }
+    unawaited(_focusDnd(f != null && f.running && f.phase == FocusPhase.focus));
+    unawaited(reminders?.showFocus(f, f == null ? null : data.task(f.taskId)));
+    unawaited(reminders?.schedule(data));
+    unawaited(widgets?.push(data));
+    unawaited(saveDeviceSettings());
+    notifyListeners();
+  }
+
+  bool _dndOn = false;
+
+  /// Do not disturb during focus rounds, when switched on (Android, with access granted).
+  Future<void> _focusDnd(bool on) async {
+    if (!data.focusSettings.dnd && !_dndOn) return;
+    final want = on && data.focusSettings.dnd;
+    if (want == _dndOn) return;
+    if (await Native.setDoNotDisturb(want)) _dndOn = want;
   }
 
   // --- Item 102: focus modes ---

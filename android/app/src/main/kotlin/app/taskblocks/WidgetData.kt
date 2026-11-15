@@ -667,6 +667,7 @@ object WidgetData {
           BurnDownWidget::class.java,
           DayPlanWidget::class.java,
           ModeWidget::class.java, // Item 102.
+          FocusTimerWidget::class.java, // Item 102, part 4.
       )
 
   fun refreshAll(c: Context) {

@@ -10,6 +10,7 @@ import '../csv_export.dart';
 import '../csv_import.dart';
 import '../day_plan.dart' show TrayItem, describeLength;
 import '../input_parse.dart';
+import '../focus_timer.dart';
 import '../models.dart';
 import '../modes.dart';
 import '../changelog.dart';
@@ -30,6 +31,7 @@ import 'kanban_page.dart';
 import '../habits.dart';
 import 'achievements_page.dart';
 import 'habits_page.dart';
+import 'focus_page.dart';
 import 'gantt_page.dart';
 import 'matrix_page.dart';
 import 'search_page.dart';
@@ -114,6 +116,7 @@ class HomePageState extends State<HomePage> {
     });
     _lifecycle = AppLifecycleListener(onResume: () {
       store.refreshMode();
+      store.tickFocus();
       store.checkAutoModes(force: true);
       setState(() {}); // Colours and snoozes may have moved on while it was hidden.
       store.syncIfStale();
@@ -240,6 +243,33 @@ class HomePageState extends State<HomePage> {
 
   /// Item 102: the mode picker, from the Focus mode widget or quick settings tile.
   void openModeSheet() => showModeSheet(context, store);
+
+  /// Item 102, part 4: the focus timer screen, after [op] (pause, resume, add, stop, skip, or
+  /// start with [taskId] and [stepId]) from a widget or notification.
+  void openFocusTimer({String? op, String? taskId, String? stepId}) {
+    final t = store.data.task(taskId);
+    switch (op) {
+      case 'start' when t != null:
+        store.startFocus(t, stepId: stepId);
+      case 'pause':
+        store.pauseFocus();
+      case 'resume':
+        store.resumeFocus();
+      case 'add':
+        store.addFocusTime();
+      case 'skip':
+        store.skipBreak();
+      case 'stop':
+        store.stopFocus();
+        return;
+      case 'pick':
+        pickFocusTask(context, store);
+        return;
+    }
+    // Not twice on top of each other.
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    openFocus(context, store);
+  }
 
   void openBoard({String? stageId}) => _open(context, KanbanPage(store: store, initialStage: stageId));
 
@@ -654,6 +684,7 @@ class HomePageState extends State<HomePage> {
               'events' => _open(context, EventsPage(store: store)),
               'starred' => _open(context, StarredPage(store: store)),
               'mode' => showModeSheet(context, store),
+              'focus' => focusNow == null ? pickFocusTask(context, store) : openFocus(context, store),
               'paste' => _pasteList(),
               'photo' => importPhoto(context, store),
               'csv' => exportCsv(context, store),
@@ -684,6 +715,7 @@ class HomePageState extends State<HomePage> {
               if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
               const PopupMenuItem(value: 'mode', child: Text('Change mode')),
+              const PopupMenuItem(value: 'focus', child: Text('Focus timer')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'paste', child: Text('Paste a list')),
               if (Native.supported) const PopupMenuItem(value: 'photo', child: Text('Photo of a list')),

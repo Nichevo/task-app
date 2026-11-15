@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'day_plan.dart' show layoutDay;
+import 'focus_timer.dart';
 import 'gantt.dart';
 import 'habits.dart';
 import 'models.dart';
@@ -25,6 +26,7 @@ class HomeWidgets {
     'Calendar', 'Glance', // Item 90.
     'DayPlan', // Item 101.
     'Mode', // Item 102.
+    'FocusTimer', // Item 102, part 4.
   ];
 
   static const _channel = MethodChannel('app.taskblocks/widgets');
@@ -71,6 +73,7 @@ class HomeWidgets {
     'app.taskblocks.BurnDownWidget',
     'app.taskblocks.DayPlanWidget', // Item 101.
     'app.taskblocks.ModeWidget', // Item 102.
+    'app.taskblocks.FocusTimerWidget', // Item 102, part 4.
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -106,6 +109,14 @@ class HomeWidgets {
     final modes = modeWidgetData(data, now);
     return jsonEncode({
       ...?modes,
+      // Item 102, part 4: the focus timer, for the Focus timer widget.
+      'focusTimer': ?focusTimerData(data, now),
+      'focusLengths': [
+        data.focusSettings.focus,
+        data.focusSettings.shortBreak,
+        data.focusSettings.longBreak,
+        data.focusSettings.every,
+      ],
       'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,
@@ -128,6 +139,7 @@ class HomeWidgets {
               'due': t.dueAt?.millisecondsSinceEpoch,
               'locked': data.isLocked(t),
               'star': t.starred,
+              if (focusOn(t, now) case final m when m > 0) 'focusToday': m,
               if (modes != null)
                 if (modesHiding(data, t, now) case final h when h.isNotEmpty) 'hide': h,
               if (t.isSnoozed(now)) 'snoozed': true,
@@ -187,6 +199,29 @@ class HomeWidgets {
           if (taskBurnDown(t, data, now) case final b?) 'task:${t.id}': _burn(b),
       },
     });
+  }
+
+  /// Item 102, part 4: the running focus timer: its task and steps, the phase and when it ends
+  /// (or the time left while paused). The widgets move it on through the break themselves.
+  static Map<String, Object?>? focusTimerData(AppData data, DateTime now) {
+    final f = focusNow;
+    final t = f == null ? null : data.task(f.taskId);
+    if (f == null || t == null) return null;
+    return {
+      'task': t.id,
+      'title': t.title,
+      if (f.stepId != null) 'step': f.stepId,
+      'steps': [
+        for (final s in t.steps) {'id': s.id, 'title': s.title, if (s.done) 'done': true},
+      ],
+      'phase': f.phase.name,
+      'round': f.round,
+      'length': f.length.inSeconds,
+      if (f.end != null) 'end': f.end!.millisecondsSinceEpoch,
+      if (f.end == null) 'left': f.remaining(now).inSeconds,
+      if (f.heldBreak) 'ready': true,
+      'today': focusOn(t, now),
+    };
   }
 
   /// Item 102: what the widgets need to follow the focus modes: each mode's name, colour and
