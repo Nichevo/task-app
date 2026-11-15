@@ -1,6 +1,7 @@
 package app.taskblocks
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -66,6 +67,25 @@ class MainActivity : FlutterActivity() {
             result.success(
                 PlaceStore.save(
                     this, call.argument<String>("places")!!, call.argument<Boolean>("summary") ?: false, call.argument<String>("dir")!!))
+        // Item 102: Do not disturb during focus rounds. Without access, opens the page to grant it.
+        "dndAllowed" -> result.success(getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted)
+        "askDnd" -> {
+          try {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+          } catch (e: Exception) {}
+          result.success(null)
+        }
+        "setDnd" -> {
+          val nm = getSystemService(NotificationManager::class.java)
+          if (!nm.isNotificationPolicyAccessGranted) {
+            result.success(false)
+          } else {
+            nm.setInterruptionFilter(
+                if (call.argument<Boolean>("on") == true) NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                else NotificationManager.INTERRUPTION_FILTER_ALL)
+            result.success(true)
+          }
+        }
         "batteryUnrestricted" ->
             result.success(getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName))
         "askBatteryUnrestricted" -> {

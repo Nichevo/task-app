@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.3', 'November 2026', [
+    'New: a focus timer. Pick a task (or one of its steps) and work in rounds: 25 minutes of focus, a 5 minute break, and a 15 minute break after every fourth round. Start it from the timer button on a task, "Start focus" on a Day plan block, the ⋮ menu, or the Start focus button on a reminder.',
+    'While a round runs, the countdown sits beside the mode chip in the top bar and in a notification you can see from the lock screen. Other tasks\' reminders wait until your break, and the app tells you when it\'s time for a break and when the break is over. Pause, +5 minutes, skip the break or stop at any time.',
+    'Minutes you focus are saved on the task (and sync with it), and count as a day worked on it. Statistics gets a Focus time section: the last two weeks, your best day and the tasks you focused on most.',
+    'Change the lengths in the timer\'s settings (the gear on the Focus screen). On Android you can also turn on Do not disturb during focus rounds; the app asks for access the first time.',
+    'New widget, Focus timer (Android, best at 4x3, and iPad): the ring and countdown, the task and its steps (tick them off from the widget) and buttons to pause, add time, skip the break or stop. With no timer running, it offers to start one.',
+  ]),
   Release('1.12.2', 'November 2026', [
     'Focus modes on the home screen: widgets now follow the mode you are in, so the task list, focus, board, matrix and Today\'s plan widgets leave out what the mode hides. Urgent tasks still show. They change by themselves when the schedule moves on, even with the app closed. Prefer the whole list on your widgets? Turn off "Widgets follow the mode" in Settings, Focus modes.',
     'New widget, Focus mode (Android and iPad, and the iPad Lock Screen): the mode you are in, when it changes and how many tasks are resting. Tap it to pick another mode.',

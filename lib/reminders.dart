@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'focus_timer.dart';
 import 'habits.dart';
 import 'models.dart';
 import 'modes.dart';
@@ -115,10 +116,27 @@ class Reminders {
   /// The task whose reminder was tapped to start the app, if any.
   String? startedFromTask;
 
+  /// Item 102: the focus timer's notification was tapped (open the Focus screen), or "Start
+  /// focus" pressed on a Day plan reminder (task id, step id).
+  VoidCallback? onOpenFocus;
+  void Function(String taskId, String? stepId)? onStartFocus;
+  bool startedFromFocus = false;
+  (String, String?)? startedFocusOn;
+
+  static Map? _payload(String? p) {
+    if (p == null || p.isEmpty) return null;
+    try {
+      return jsonDecode(p) as Map;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The task a tapped reminder is about (none for the summaries and button presses).
   static String? tappedTask(NotificationResponse? r) {
     final payload = r?.payload;
     if (r == null || r.actionId != null || payload == null || payload.isEmpty) return null;
+    if (_payload(payload)?['focus'] == true) return null;
     try {
       return (jsonDecode(payload) as Map)['task'] as String?;
     } catch (_) {
@@ -146,6 +164,10 @@ class Reminders {
       DarwinNotificationAction.plain('snoozeTmrw', 'Tomorrow'),
     ]),
     // Repeating tasks: Skip moves it to the next date without ticking it off.
+    // Item 102: a Day plan block starting.
+    DarwinNotificationCategory('slot', actions: [
+      DarwinNotificationAction.plain('focus', 'Start focus', options: {DarwinNotificationActionOption.foreground}),
+    ]),
     DarwinNotificationCategory('dueRepeat', actions: [
       DarwinNotificationAction.plain('done', 'Done'),
       DarwinNotificationAction.plain('skip', 'Skip'),
@@ -160,6 +182,15 @@ class Reminders {
     await _plugin.initialize(
       settings: InitializationSettings(android: const AndroidInitializationSettings('@drawable/ic_notification'), iOS: _darwin),
       onDidReceiveNotificationResponse: (r) async {
+        final p = _payload(r.payload);
+        if (r.actionId == 'focus' && p?['task'] is String) {
+          onStartFocus?.call(p!['task'] as String, p['step'] as String?);
+          return;
+        }
+        if (r.actionId == null && p?['focus'] == true) {
+          onOpenFocus?.call();
+          return;
+        }
         if (r.actionId == null && _isReview(r.payload)) {
           onOpenReview?.call();
           return;
@@ -178,7 +209,13 @@ class Reminders {
     final launch = await _plugin.getNotificationAppLaunchDetails();
     startedFromReview =
         (launch?.didNotificationLaunchApp ?? false) && _isReview(launch?.notificationResponse?.payload);
-    if (launch?.didNotificationLaunchApp ?? false) startedFromTask = tappedTask(launch?.notificationResponse);
+    if (launch?.didNotificationLaunchApp ?? false) {
+      startedFromTask = tappedTask(launch?.notificationResponse);
+      final r = launch!.notificationResponse;
+      final p = _payload(r?.payload);
+      startedFromFocus = r?.actionId == null && p?['focus'] == true;
+      if (r?.actionId == 'focus' && p?['task'] is String) startedFocusOn = (p!['task'] as String, p['step'] as String?);
+    }
     await _plugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
@@ -225,6 +262,8 @@ class Reminders {
       // Item 102: reminders a mode holds back depend on the mode in force and how long it lasts.
       modeNow.mode?.id,
       modeNow.reach?.toIso8601String(),
+      // Item 102: the focus timer's end, and the reminders it holds till the break.
+      focusNow?.toJson(),
       data.done.length,
       data.archived.length,
       for (final t in data.active)
@@ -254,8 +293,17 @@ class Reminders {
     var budget = 200;
     // Item 102: reminders a focus mode holds back, by the mode and when it ends.
     final held = <(String, DateTime), List<String>>{};
-    bool add(int id, DateTime when, String title, String body, Task t, ReminderKind kind, {bool habit = false}) {
+    // Item 102: while a focus round runs, other tasks' reminders wait till the break.
+    final focus = focusNow;
+    final focusEnd = focus != null && focus.phase == FocusPhase.focus ? focus.end : null;
+    heldForFocus = 0;
+    bool add(int id, DateTime when, String title, String body, Task t, ReminderKind kind,
+        {bool habit = false, String? step}) {
       if (!when.isAfter(now)) return false;
+      if (focusEnd != null && when.isBefore(focusEnd) && t.id != focus!.taskId) {
+        when = focusEnd.add(const Duration(seconds: 5));
+        heldForFocus++;
+      }
       final by = heldBy(data, t, when, now);
       if (by != null) {
         // Habits just pause; the rest are listed when the mode ends.
@@ -263,7 +311,7 @@ class Reminders {
         if (!habit && end != null) (held[(by.name, end)] ??= []).add(t.title);
         return false;
       }
-      out.add(PlannedReminder(id, when, title, body, t, kind));
+      out.add(PlannedReminder(id, when, title, body, t, kind, step: step));
       budget--;
       return true;
     }
@@ -324,12 +372,29 @@ class Reminders {
           final step = sl.stepId == null ? null : t.steps.where((x) => x.id == sl.stepId).firstOrNull;
           if (sl.stepId != null && (step == null || step.done)) continue;
           add(slotReminderId(sl.id), sl.start, 'Planned now, ${hm.format(sl.start)} to ${hm.format(sl.end)}',
-              step == null ? t.title : '${step.title}\nPart of: ${t.title}', t, ReminderKind.step);
+              step == null ? t.title : '${step.title}\nPart of: ${t.title}', t, ReminderKind.slot,
+              step: sl.stepId);
         }
       }
     }
     if (data.overdueMode == OverdueMode.daily) out.addAll(dailySummaries(data, now));
     out.addAll(heldSummaries(held));
+    // Item 102: the end of the focus round or break.
+    if (focus != null && focus.end != null && focus.end!.isAfter(now)) {
+      final t = data.task(focus.taskId);
+      if (t != null) {
+        out.add(PlannedReminder(
+          focusEndId,
+          focus.end!,
+          focus.phase == FocusPhase.focus ? 'Time for a break' : 'Break\'s over',
+          focus.phase == FocusPhase.focus
+              ? 'Round ${focus.round} on "${t.title}" is done. ${data.focusSettings.lengthOf(focus.round % data.focusSettings.every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak).inMinutes} minutes off.'
+              : 'Ready for round ${focus.round + 1} on "${t.title}"?',
+          t,
+          ReminderKind.focus,
+        ));
+      }
+    }
     return out;
   }
 
@@ -351,6 +416,52 @@ class Reminders {
     return out;
   }
 
+  /// Item 102: how many reminders the running focus round holds till the break (from the last
+  /// [plan]).
+  static int heldForFocus = 0;
+
+  /// Item 102: the focus timer's notifications.
+  static const focusEndId = -950000001, focusOngoingId = -950000002;
+
+  /// Item 102: the ongoing notification while the focus timer runs (Android counts down in it);
+  /// null [f] takes it away.
+  Future<void> showFocus(FocusTimer? f, Task? t) async {
+    if (!_ready) return;
+    try {
+      if (f == null || t == null || !Platform.isAndroid) {
+        await _plugin.cancel(id: focusOngoingId);
+        return;
+      }
+      final now = DateTime.now();
+      final step = f.stepId == null ? null : t.steps.where((s) => s.id == f.stepId).firstOrNull;
+      final what = f.phase == FocusPhase.focus ? 'Round ${f.round}' : f.phase.label;
+      await _plugin.show(
+        id: focusOngoingId,
+        title: f.running ? '$what · ${t.title}' : '$what · paused · ${t.title}',
+        body: step?.title ?? (f.running ? 'Tap to open the timer' : '${clockText(f.remaining(now))} left'),
+        payload: jsonEncode({'focus': true}),
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            'focus',
+            'Focus timer',
+            channelDescription: 'The countdown while the focus timer runs',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            autoCancel: false,
+            onlyAlertOnce: true,
+            showWhen: f.running,
+            when: f.end?.millisecondsSinceEpoch,
+            usesChronometer: f.running,
+            chronometerCountDown: f.running,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Could not show the focus timer: $e');
+    }
+  }
+
   /// Item 102: the ids of the "mode is over" summaries, below the Day plan's.
   static int heldSummaryId(int i) => -900000000 - i;
 
@@ -368,6 +479,8 @@ class Reminders {
         'dir': dir,
         if (r.kind == ReminderKind.due || r.kind == ReminderKind.dueRepeat) 'title': r.task!.title,
         if (r.kind == ReminderKind.dueRepeat) 'repeat': true,
+        if (r.step != null) 'step': r.step,
+        if (r.kind == ReminderKind.focus) 'focus': true,
       });
 
   /// A snooze from a reminder's button reminds again when it ends, set right away, so it comes
@@ -408,21 +521,33 @@ class Reminders {
     try {
       await _plugin.cancelAllPendingNotifications();
       for (final r in plan(data, now)) {
-        await _plugin.zonedSchedule(
-          id: r.id,
-          title: r.title,
-          body: r.body,
-          payload: r.task == null ? null : payloadFor(r, dir),
-          // A UTC time is the same moment wherever the phone is.
-          scheduledDate: tz.TZDateTime.from(r.when.toUtc(), tz.UTC),
-          notificationDetails: switch (r.kind) {
-            ReminderKind.due => _due,
-            ReminderKind.dueRepeat => _dueRepeat,
-            ReminderKind.step => _stepDue,
-            ReminderKind.summary => _summary(r.body),
-          },
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        );
+        Future<void> set(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+              id: r.id,
+              title: r.title,
+              body: r.body,
+              payload: r.task == null ? null : payloadFor(r, dir),
+              // A UTC time is the same moment wherever the phone is.
+              scheduledDate: tz.TZDateTime.from(r.when.toUtc(), tz.UTC),
+              notificationDetails: switch (r.kind) {
+                ReminderKind.due => _due,
+                ReminderKind.dueRepeat => _dueRepeat,
+                ReminderKind.step => _stepDue,
+                ReminderKind.summary => _summary(r.body),
+                ReminderKind.slot => _slot,
+                ReminderKind.focus => _focusEnd,
+              },
+              androidScheduleMode: mode,
+            );
+        if (r.kind == ReminderKind.focus) {
+          // Item 102: a timer should ring on time; without exact alarms it rings when Android lets it.
+          try {
+            await set(AndroidScheduleMode.exactAllowWhileIdle);
+          } catch (_) {
+            await set(AndroidScheduleMode.inexactAllowWhileIdle);
+          }
+        } else {
+          await set(AndroidScheduleMode.inexactAllowWhileIdle);
+        }
       }
       if (data.weeklyReview) await _weeklyReview(data, now);
     } catch (e) {
@@ -566,6 +691,31 @@ class Reminders {
   );
 
   /// A step's reminder: opens its task, with no Done or Snooze buttons (those act on a task).
+  /// Item 102: a Day plan block starting, with a button to start the focus timer on it.
+  static const _slot = NotificationDetails(
+    iOS: DarwinNotificationDetails(categoryIdentifier: 'slot'),
+    android: AndroidNotificationDetails(
+      'due',
+      'Due tasks',
+      channelDescription: 'Reminders when a task is due',
+      importance: Importance.high,
+      priority: Priority.high,
+      actions: [AndroidNotificationAction('focus', 'Start focus', showsUserInterface: true)],
+    ),
+  );
+
+  /// Item 102: a focus round or break ending.
+  static const _focusEnd = NotificationDetails(
+    iOS: DarwinNotificationDetails(interruptionLevel: InterruptionLevel.timeSensitive),
+    android: AndroidNotificationDetails(
+      'focusEnd',
+      'Focus timer: round and break ends',
+      channelDescription: 'When a focus round or break is over',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+  );
+
   static const _stepDue = NotificationDetails(
     iOS: DarwinNotificationDetails(),
     android: AndroidNotificationDetails(
@@ -579,11 +729,11 @@ class Reminders {
 
 }
 
-enum ReminderKind { due, dueRepeat, step, summary }
+enum ReminderKind { due, dueRepeat, step, summary, slot, focus }
 
 /// One reminder to set: when, what it says and the task it opens (none for the daily summary).
 class PlannedReminder {
-  const PlannedReminder(this.id, this.when, this.title, this.body, this.task, this.kind);
+  const PlannedReminder(this.id, this.when, this.title, this.body, this.task, this.kind, {this.step});
 
   final int id;
   final DateTime when;
@@ -591,6 +741,9 @@ class PlannedReminder {
   final String body;
   final Task? task;
   final ReminderKind kind;
+
+  /// Item 102: the step a Day plan block is for (its "Start focus" button focuses on it).
+  final String? step;
 
   @override
   String toString() => '$title at $when ($body)';

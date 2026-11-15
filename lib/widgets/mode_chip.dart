@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../models.dart';
 import '../modes.dart';
 import '../store.dart';
+import '../focus_timer.dart';
+import '../screens/focus_page.dart';
 import '../screens/modes_page.dart';
 
 /// Item 102: the icon for a mode's icon name.
@@ -60,6 +62,17 @@ class ModeTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chip = _chip(context);
+    // Item 102, part 4: the focus timer's countdown beside it while it runs.
+    if (focusNow == null) return chip;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Flexible(child: chip),
+      const SizedBox(width: 6),
+      FocusCountdown(store: store),
+    ]);
+  }
+
+  Widget _chip(BuildContext context) {
     final m = modeNow.mode;
     final until = modeNow.until;
     final now = DateTime.now();

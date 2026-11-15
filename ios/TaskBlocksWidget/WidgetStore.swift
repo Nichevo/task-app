@@ -41,6 +41,20 @@ struct WTask {
   var streakUnit = "day"
   /** Item 102: the focus modes this task is hidden in (unless it breaks through). */
   var hide: [String] = []
+  /** Item 102, part 4: minutes on the focus timer today. */
+  var focusToday = 0
+}
+
+/** Item 102, part 4: the focus timer as it stands at a moment (the app's timer moved on). */
+struct FocusState {
+  var phase: String
+  var round: Int
+  var end: Date?
+  var left: TimeInterval
+  var length: TimeInterval
+  var ready: Bool
+  var running: Bool { end != nil }
+  var onBreak: Bool { phase != "focus" }
 }
 
 /** Item 102: a focus mode as the widgets see it: its name, colour and what breaks through. */
@@ -126,6 +140,10 @@ struct Snapshot {
   var addedDone: [String: AddedDone] = [:]
   var burn: [String: Burn] = [:]
   var plan: [WPlan] = []
+  /** Item 102, part 4: the running focus timer as the app shared it, and its lengths
+   * (focus, short break, long break minutes, rounds before the long break). */
+  var focusTimer: [String: Any]? = nil
+  var focusLengths = [25, 5, 15, 4]
   /** Item 101: free time in working hours (the app's view, before calendar events). */
   var planFree: [(start: Date, end: Date)] = []
 
@@ -159,6 +177,57 @@ struct Snapshot {
   func hiddenCount(at date: Date) -> Int {
     guard let m = mode(at: date) else { return 0 }
     return everything.filter { m.hides($0, now: date) }.count
+  }
+
+  /** Item 102, part 4: the timer at [date], moved on through the break as the app would. */
+  func focus(at date: Date) -> FocusState? {
+    guard let f = focusTimer else { return nil }
+    var phase = (f["phase"] as? String) ?? "focus"
+    var round = (f["round"] as? NSNumber)?.intValue ?? 1
+    var length = (f["length"] as? NSNumber)?.doubleValue ?? 1500
+    var end = (f["end"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
+    var ready = (f["ready"] as? Bool) ?? false
+    var moved = false
+    let every = max(focusLengths[3], 1)
+    var guardCount = 0
+    while let e = end, date >= e, guardCount < 4 {
+      guardCount += 1
+      moved = true
+      if phase == "focus" {
+        phase = round % every == 0 ? "longBreak" : "shortBreak"
+        length = Double(phase == "longBreak" ? focusLengths[2] : focusLengths[1]) * 60
+        end = e.addingTimeInterval(length)
+      } else {
+        phase = "focus"
+        round += 1
+        length = Double(focusLengths[0]) * 60
+        end = nil
+        ready = true
+      }
+    }
+    let left: TimeInterval
+    if let e = end {
+      left = e.timeIntervalSince(date)
+    } else if ready && (moved || f["left"] == nil) {
+      left = length
+    } else {
+      left = (f["left"] as? NSNumber)?.doubleValue ?? length
+    }
+    return FocusState(phase: phase, round: round, end: end, left: left, length: length, ready: ready)
+  }
+
+  /** Item 102, part 4: when the timer's phases end between [from] and [to], and each minute
+   * while it runs, so the ring keeps up. */
+  func focusTimes(from: Date, to: Date) -> [Date] {
+    guard let s = focus(at: from), let e = s.end else { return [] }
+    var out: [Date] = [e]
+    if let next = focus(at: e.addingTimeInterval(1))?.end { out.append(next) }
+    var t = from.addingTimeInterval(60)
+    while t < min(e, to) && out.count < 70 {
+      out.append(t)
+      t = t.addingTimeInterval(60)
+    }
+    return out.filter { $0 > from && $0 < to }
   }
 
   /** Item 102: when the mode changes between [from] and [to], so the widgets redraw then. */
@@ -262,6 +331,7 @@ struct Snapshot {
       }
       t.worked = worked(id, o)
       t.hide = (o["hide"] as? [String]) ?? []
+      t.focusToday = (o["focusToday"] as? NSNumber)?.intValue ?? 0
       s.everything.append(t)
     }
     if (root["modeWidgets"] as? Bool) ?? false {
@@ -277,6 +347,9 @@ struct Snapshot {
         return (start: f, end: e, id: id)
       }
     }
+    s.focusTimer = root["focusTimer"] as? [String: Any]
+    let lengths = ints(root["focusLengths"])
+    if lengths.count == 4 { s.focusLengths = lengths }
     let nowMode = s.mode(at: Date())
     s.all = s.everything.filter { nowMode?.hides($0, now: Date()) != true }
     for o in (root["habits"] as? [[String: Any]]) ?? [] {
@@ -436,7 +509,8 @@ enum W {
   static func redrawTimes(_ snap: Snapshot, now: Date, hours: Int) -> [Date] {
     let hourly = (0..<hours).map { now.addingTimeInterval(Double($0) * 3600) }
     let end = now.addingTimeInterval(Double(hours) * 3600)
-    return (hourly + snap.snoozeEnds(from: now, to: end) + snap.modeChanges(from: now, to: end)).sorted()
+    return (hourly + snap.snoozeEnds(from: now, to: end) + snap.modeChanges(from: now, to: end)
+      + snap.focusTimes(from: now, to: end)).sorted()
   }
 
   /** A light tile colour for a stage: its own colour washed out, else one from a set. */

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'changelog.dart';
+import 'focus_timer.dart';
 import 'modes.dart';
 
 /// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
@@ -69,6 +70,7 @@ class Task {
     this.planStart,
     this.planDue,
     Set<String>? worked,
+    Map<String, int>? focus,
     this.workedAt,
     this.habit = false,
     this.habitGoal = HabitGoal.daily,
@@ -85,6 +87,7 @@ class Task {
         slots = slots ?? [],
         alsoAfter = alsoAfter ?? [],
         worked = worked ?? {},
+        focus = focus ?? {},
         habitDays = habitDays ?? {1, 2, 3, 4, 5},
         habitPauses = habitPauses ?? [],
         moves = moves ?? [],
@@ -102,7 +105,7 @@ class Task {
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
-    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always',
+    'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
   };
 
   final String id;
@@ -227,6 +230,9 @@ class Task {
 
   /// Item 75: the days (yyyy-MM-dd) it was worked on, ticked without finishing it.
   final Set<String> worked;
+
+  /// Item 102: minutes on the focus timer, by day (yyyy-MM-dd).
+  final Map<String, int> focus;
 
   /// Item 88: when today's day was last ticked as worked, so an undated task's colour can start
   /// again from that moment (the days in [worked] only hold the date).
@@ -426,6 +432,7 @@ class Task {
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
         if (worked.isNotEmpty) 'worked': worked.toList()..sort(),
+        if (focus.isNotEmpty) 'focus': focus,
         if (workedAt != null) 'wAt': workedAt!.toIso8601String(),
         if (habit) 'habit': true,
         if (habit) 'hGoal': habitGoal.name,
@@ -484,6 +491,10 @@ class Task {
         planStart: _date(j['planStart']),
         planDue: _date(j['planDue']),
         worked: {for (final d in j['worked'] as List? ?? []) ?d as String?},
+        focus: {
+          for (final e in (j['focus'] as Map? ?? {}).entries)
+            if (e.value is num) e.key as String: (e.value as num).toInt(),
+        },
         workedAt: _date(j['wAt']),
         habit: j['habit'] as bool? ?? false,
         habitGoal: HabitGoal.values.where((g) => g.name == j['hGoal']).firstOrNull ?? HabitGoal.daily,
@@ -1639,7 +1650,9 @@ class AppData {
     List<ModeLog>? modeLog,
     this.modeAsk = false,
     this.modeWidgets = true,
-  })  : active = active ?? [],
+    FocusSettings? focusSettings,
+  })  : focusSettings = focusSettings ?? FocusSettings(),
+        active = active ?? [],
         modes = modes ?? [],
         modeSchedule = modeSchedule ?? [],
         modeLog = modeLog ?? [],
@@ -1899,6 +1912,9 @@ class AppData {
   /// Item 102: home screen widgets show only what the mode in force shows.
   bool modeWidgets;
 
+  /// Item 102: the focus timer's lengths and Do not disturb choice.
+  final FocusSettings focusSettings;
+
   FocusMode? mode(String? id) => modes.where((m) => m.id == id).firstOrNull;
 
   /// Another device has saved this data with a newer version of the app.
@@ -1913,7 +1929,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk', 'modeWidgets',
+    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk', 'modeWidgets', 'focusTimer',
   };
 
   /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
@@ -1980,6 +1996,7 @@ class AppData {
         if (modeChoice != null) 'modeChoice': modeChoice!.toJson(),
         if (modeAsk) 'modeAsk': true,
         if (!modeWidgets) 'modeWidgets': false,
+        if (!focusSettings.isDefault) 'focusTimer': focusSettings.toJson(),
         if (lists && modeLog.isNotEmpty) 'modeLog': [for (final l in modeLog) l.toJson()],
       };
 
@@ -2099,6 +2116,7 @@ class AppData {
         modeLog: [for (final l in j['modeLog'] as List? ?? []) ?ModeLog.tryParse(l)],
         modeAsk: j['modeAsk'] as bool? ?? false,
         modeWidgets: j['modeWidgets'] as bool? ?? true,
+        focusSettings: FocusSettings.parse(j['focusTimer']),
         extra: unknownFields(j, _known),
       );
   }
@@ -2296,6 +2314,7 @@ AppData mergeData(AppData a, AppData b) {
     modeLog: mergeModeLogs(a.modeLog, b.modeLog),
     modeAsk: settingsFrom.modeAsk,
     modeWidgets: settingsFrom.modeWidgets,
+    focusSettings: settingsFrom.focusSettings,
     unreadable: {for (final u in [...a.unreadable, ...b.unreadable]) jsonEncode(u): u}.values.toList(),
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},

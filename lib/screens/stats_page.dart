@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
+import '../focus_timer.dart';
 import '../models.dart';
 import '../modes.dart';
 import '../stats.dart';
@@ -77,6 +78,7 @@ class _StatsPageState extends State<StatsPage> {
             ..._timing(context, s, from),
             ..._kanban(context, s, from),
             ..._modes(context, from),
+            ..._focus(context, from),
             const SizedBox(height: 24),
             Text('By category', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
@@ -196,6 +198,68 @@ class _StatsPageState extends State<StatsPage> {
             const Text('•  '),
             Expanded(child: Text(f)),
           ]),
+        ),
+    ];
+  }
+
+  /// Item 102, part 4: time on the focus timer: the last 14 days, and the tasks it went on.
+  List<Widget> _focus(BuildContext context, DateTime? from) {
+    final data = widget.store.data;
+    final tasks = [...data.active, ...data.archived];
+    final byDay = focusByDay(tasks);
+    if (byDay.isEmpty) return [];
+    final now = DateTime.now();
+    final fromKey = from == null ? '' : dayKey(from);
+    final inPeriod = <Task, int>{};
+    for (final t in tasks) {
+      final m = t.focus.entries.where((e) => e.key.compareTo(fromKey) >= 0).fold(0, (a, e) => a + e.value);
+      if (m > 0) inPeriod[t] = m;
+    }
+    final total = inPeriod.values.fold(0, (a, b) => a + b);
+    final days = [for (var i = 13; i >= 0; i--) DateTime(now.year, now.month, now.day - i)];
+    final most = days.map((d) => byDay[dayKey(d)] ?? 0).fold(0, (a, b) => a > b ? a : b);
+    final top = inPeriod.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final best = byDay.entries.where((e) => e.key.compareTo(fromKey) >= 0).fold<MapEntry<String, int>?>(
+        null, (b, e) => b == null || e.value > b.value ? e : b);
+    final scheme = Theme.of(context).colorScheme;
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    return [
+      _heading(context, 'Focus timer', 'Minutes on the focus timer, by day (last 14 days) and by task'),
+      SizedBox(
+        height: 90,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          for (final d in days)
+            Expanded(
+              child: Tooltip(
+                message: '${DateFormat('EEE d MMM').format(d)}: ${focusText(byDay[dayKey(d)] ?? 0)}',
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: most == 0 ? 2 : 2 + 86 * (byDay[dayKey(d)] ?? 0) / most,
+                  decoration: BoxDecoration(
+                    color: d.day == now.day ? scheme.primary : scheme.primary.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ),
+      Row(children: [
+        Text(DateFormat('d MMM').format(days.first), style: hint),
+        const Spacer(),
+        Text('Today ${focusText(byDay[dayKey(now)] ?? 0)}', style: hint),
+      ]),
+      const SizedBox(height: 8),
+      Text('${focusText(total)} focused${from == null ? ' in all' : ' in this period'}'
+          '${best == null ? '' : ', most on ${DateFormat('EEE d MMM').format(DateTime.parse(best.key))} (${focusText(best.value)})'}.'),
+      const SizedBox(height: 4),
+      for (final e in top.take(5))
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(e.key.title),
+          subtitle: e.key.estimate == null ? null : Text('${focusText(focusTotal(e.key))} of about ${focusText(e.key.estimate!)} in all'),
+          trailing: Text(focusText(e.value)),
         ),
     ];
   }

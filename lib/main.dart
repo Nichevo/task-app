@@ -68,8 +68,18 @@ class _TaskAppState extends State<TaskApp> {
     );
     _takeShared();
     widget.reminders?.onOpenTask = (id) => _onHome((home) => home.openTask(id));
+    // Item 102: the focus timer's notification, and "Start focus" on a Day plan reminder.
+    widget.reminders?.onOpenFocus = () => _onHome((home) => home.openFocusTimer());
+    widget.reminders?.onStartFocus = (id, step) => _onHome((home) => home.openFocusTimer(op: 'start', taskId: id, stepId: step));
     widget.ready?.then((_) => _onHome((home) {
           home.maybeShowWhatsNew();
+          final r = widget.reminders;
+          final on = r?.startedFocusOn;
+          if (on != null) {
+            home.openFocusTimer(op: 'start', taskId: on.$1, stepId: on.$2);
+          } else if (r?.startedFromFocus ?? false) {
+            home.openFocusTimer();
+          }
           final id = widget.reminders?.startedFromTask;
           if (id != null) home.openTask(id);
         }));
@@ -122,6 +132,8 @@ class _TaskAppState extends State<TaskApp> {
           home.openDayPlan();
         case 'mode':
           home.openModeSheet(); // Item 102: the Focus mode widget and quick settings tile.
+        case 'focus':
+          home.openFocusTimer(op: q['op'], taskId: q['id'], stepId: q['step']); // Item 102: Focus timer widget.
       }
     });
   }
