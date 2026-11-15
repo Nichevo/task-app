@@ -1424,3 +1424,12 @@ modes in the statistics; the top bar has no room for more icons.
   driving block open `editDrive`.
 - Tests: test/day_plan_tray_test.dart, task_where_test.dart, panel_test, steps_edit_test.
 
+### 104: opened task card (version 1.12.5) ☑
+
+- The owner chose mock-up option C (time bar and chips, with a row of buttons along the bottom),
+  plus location, length and repeats. `TaskBlock._details` is now `_Details` (stateful: "+N more"
+  chips, ticked steps, "N more steps"). `TimeBar`, `cardChips`, `shortWhen`, `daysFrom` in
+  lib/widgets/task_block.dart. New `TaskBlock` params: `data` (drive time, default reminder),
+  `showCategory` (false when grouped by category), `onPlan` (Plan a time sheet). `onBoard` now
+  opens the board and shows only for tasks on it; adding to the board stays on the task page.
+- Tests: test/open_card_test.dart.
