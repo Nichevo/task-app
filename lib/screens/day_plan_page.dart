@@ -42,6 +42,43 @@ class _DayPlanPageState extends State<DayPlanPage> {
   final _timelineKeys = [GlobalKey(), GlobalKey()];
   bool _trayOpen = false;
 
+  /// The tray's category chip ('' = no category, null = all).
+  String? _trayCat;
+
+  /// The tray narrowed to [_trayCat], and chips for the categories it holds.
+  List<TrayItem> _trayShown(List<TrayItem> tray) =>
+      _trayCat == null ? tray : tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == _trayCat).toList();
+
+  Widget _trayCats(List<TrayItem> tray, {EdgeInsets padding = const EdgeInsets.fromLTRB(14, 0, 14, 6)}) {
+    final ids = <String>{for (final i in tray) data.category(i.task.categoryId)?.id ?? ''};
+    if (ids.length < 2) return const SizedBox();
+    String name(String id) => id.isEmpty ? 'No category' : data.category(id)!.name;
+    return SizedBox(
+      height: 38,
+      child: ListView(scrollDirection: Axis.horizontal, padding: padding, children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: ChoiceChip(
+            visualDensity: VisualDensity.compact,
+            label: const Text('All'),
+            selected: _trayCat == null,
+            onSelected: (_) => setState(() => _trayCat = null),
+          ),
+        ),
+        for (final id in [for (final c in data.categories) if (ids.contains(c.id)) c.id, if (ids.contains('')) ''])
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: ChoiceChip(
+              visualDensity: VisualDensity.compact,
+              label: Text('${name(id)} ${tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == id).length}'),
+              selected: _trayCat == id,
+              onSelected: (_) => setState(() => _trayCat = _trayCat == id ? null : id),
+            ),
+          ),
+      ]),
+    );
+  }
+
   // A block being moved (press and hold) or stretched (bottom edge), and by how far.
   PlanBlock? _moving;
   PlanBlock? _resizing;
@@ -209,11 +246,16 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 icon: const Icon(Icons.filter_list),
                 onSelected: (v) {
                   if (v == 'events') return _toggleEvents();
+                  if (v == 'ticked') {
+                    s.showTicked = !s.showTicked;
+                    return store.dayPlanChanged();
+                  }
                   s.show = v as DayShow;
                   store.dayPlanChanged();
                 },
                 itemBuilder: (_) => [
                   CheckedPopupMenuItem(value: 'events', checked: s.showEvents, child: const Text('Calendar events')),
+                  CheckedPopupMenuItem(value: 'ticked', checked: s.showTicked, child: const Text('Show ticked')),
                   const PopupMenuDivider(),
                   for (final v in DayShow.values)
                     CheckedPopupMenuItem(
@@ -1080,8 +1122,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
-  Widget _trayBar(BuildContext context, List<TrayItem> tray) {
+  Widget _trayBar(BuildContext context, List<TrayItem> all) {
     final theme = Theme.of(context);
+    final tray = _trayShown(all);
     return Material(
       color: theme.colorScheme.surfaceContainer,
       elevation: 3,
@@ -1095,7 +1138,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               child: Row(children: [
                 Expanded(
                   child: Text(
-                    tray.isEmpty ? 'Nothing waiting to be planned' : 'To plan for ${DateFormat('EEE d').format(_day)} (${tray.length})',
+                    all.isEmpty ? 'Nothing waiting to be planned' : 'To plan for ${DateFormat('EEE d').format(_day)} (${all.length})',
                     style: theme.textTheme.titleSmall,
                   ),
                 ),
@@ -1103,6 +1146,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               ]),
             ),
           ),
+          if (_trayOpen) _trayCats(all),
           if (tray.isNotEmpty)
             _trayOpen
                 ? ConstrainedBox(
@@ -1125,8 +1169,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
-  Widget _trayPanel(BuildContext context, List<TrayItem> tray) {
+  Widget _trayPanel(BuildContext context, List<TrayItem> all) {
     final theme = Theme.of(context);
+    final tray = _trayShown(all);
     return ColoredBox(
       color: theme.colorScheme.surfaceContainer,
       child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 16), children: [
@@ -1134,7 +1179,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
           padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
           child: Text('To plan · drag onto a time', style: theme.textTheme.titleSmall),
         ),
-        if (tray.isEmpty)
+        _trayCats(all, padding: const EdgeInsets.fromLTRB(10, 0, 10, 8)),
+        if (all.isEmpty)
           Padding(
             padding: const EdgeInsets.all(14),
             child: Text('Nothing waiting. Switch "On the Day plan" on a task, or plan one with +.',
@@ -1153,9 +1199,64 @@ class _DayPlanPageState extends State<DayPlanPage> {
     await showPlanTimeSheet(context, store, t, day: _day);
   }
 
-  Future<void> _planTray(TrayItem i) => showPlanTimeSheet(context, store, i.task, step: i.step, day: _day);
+  Future<void> _planTray(TrayItem i) async {
+    final missed = i.missed;
+    if (missed == null) {
+      await showPlanTimeSheet(context, store, i.task, step: i.step, day: _day);
+      return;
+    }
+    // A missed time: move it rather than plan another.
+    final now = DateTime.now();
+    final from = snapUp(now, s.snap);
+    final today = DateTime(now.year, now.month, now.day);
+    final sameTime = today.add(Duration(minutes: missed.start.hour * 60 + missed.start.minute));
+    final todayAt = sameTime.isBefore(from) ? from : sameTime;
+    final free = layoutDay(data, today, events: _events).firstFree(missed.minutes, from: from);
+    final hm = DateFormat('HH:mm');
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(title: Text(i.title), subtitle: Text('${i.why} · ${describeLength(missed.minutes)}')),
+          ListTile(
+            leading: const Icon(Icons.today),
+            title: Text('Move to today, ${hm.format(todayAt)}'),
+            onTap: () => Navigator.pop(c, 'today'),
+          ),
+          if (free != null)
+            ListTile(
+              leading: const Icon(Icons.schedule),
+              title: Text('Next free gap, ${hm.format(free)}'),
+              onTap: () => Navigator.pop(c, 'free'),
+            ),
+          ListTile(
+            leading: const Icon(Icons.edit_calendar),
+            title: const Text('Choose a time…'),
+            onTap: () => Navigator.pop(c, 'choose'),
+          ),
+        ]),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'choose') {
+      await showPlanTimeSheet(context, store, i.task, slot: missed);
+      return;
+    }
+    _moveMissed(i, choice == 'free' ? free! : todayAt);
+  }
+
+  /// Moves a missed time to [start], with Undo.
+  void _moveMissed(TrayItem i, DateTime start) {
+    final missed = i.missed!;
+    final was = missed.start;
+    store.updateSlot(i.task, missed, start: start);
+    _changedSnack('Moved "${i.title}" to ${DateFormat('EEE HH:mm').format(start)}',
+        () => store.updateSlot(i.task, missed, start: was));
+  }
 
   void _planDropped(TrayItem i, DateTime start) {
+    if (i.missed != null) return _moveMissed(i, start);
     final slot = store.planTime(i.task, start, i.minutes(data), step: i.step);
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -1189,9 +1290,32 @@ class _DayPlanPageState extends State<DayPlanPage> {
     return yes ? moves : const [];
   }
 
+  /// A band that leaves room is moving: what's planned inside it, to move with it as Settings'
+  /// "When a bar moves" says (ask, always or never).
+  Future<List<PlanMove>?> _bandFor(PlanBlock b, Duration d) async {
+    final moves = insideBand(data, b, d);
+    if (moves.isEmpty || data.ganttPush == GanttPush.never) return const [];
+    if (data.ganttPush == GanttPush.always) return moves;
+    final n = moves.length;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Move what\'s inside it too?'),
+        content: Text('$n planned time${n == 1 ? ' is' : 's are'} inside "${b.title}". Move '
+            '${n == 1 ? 'it' : 'them'} with it?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Leave them')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Move them')),
+        ],
+      ),
+    );
+    if (yes == null) return null;
+    return yes ? moves : const [];
+  }
+
   Future<void> _shift(PlanBlock b, int minutes) async {
     final d = Duration(minutes: minutes);
-    final push = await _pushFor(b, b.start.add(d), b.slot.minutes);
+    final push = b.shared ? await _bandFor(b, d) : await _pushFor(b, b.start.add(d), b.slot.minutes);
     if (push == null || !mounted) return;
     final before = b.start;
     final inside = [for (final st in b.inside) (st, st.start)];
@@ -1203,7 +1327,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
     store.applyPlanMoves(push);
     _changedSnack(
       '"${b.title}" now starts ${DateFormat('HH:mm').format(before.add(d))}'
-      '${push.isEmpty ? '' : ', and ${_moved(push)} moved later'}',
+      '${push.isEmpty ? '' : b.shared ? ', with ${_moved(push).replaceFirst(' other', ' thing')} inside it' : ', and ${_moved(push)} moved later'}',
       () {
         store.applyPlanMoves(push, back: true);
         for (final (st, at) in inside) {

@@ -108,6 +108,7 @@ class _PlanSheetState extends State<_PlanSheet> {
     final days = [for (var i = 0; i < 6; i++) today.add(Duration(days: i))];
     if (!days.contains(_day)) days.insert(0, _day);
     final clashes = _clashes();
+    final early = tooEarlyFor(data, widget.task, _step, _start);
     final gapDefault = s.gapMinutes;
     final step = _step;
     // Free time on that day without this one, for the "first free gap" button.
@@ -216,6 +217,19 @@ class _PlanSheetState extends State<_PlanSheet> {
             )
           else
             Text('No clashes', style: TextStyle(color: theme.hintColor)),
+          // Item 101: starting before something it comes after is finished.
+          if (early.isNotEmpty)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: theme.colorScheme.errorContainer, borderRadius: BorderRadius.circular(10)),
+              child: Text(
+                'Too early: it comes after ${early.map((e) => '"${e.$1}" (planned until '
+                    '${DateUtils.isSameDay(e.$2, _start) ? hm.format(e.$2) : DateFormat('EEE d MMM, HH:mm').format(e.$2)})').join(' and ')}',
+                style: TextStyle(color: theme.colorScheme.onErrorContainer),
+              ),
+            ),
           if (firstFree != null && firstFree != _start)
             Align(
               alignment: Alignment.centerLeft,

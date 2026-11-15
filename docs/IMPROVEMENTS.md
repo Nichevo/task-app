@@ -1267,4 +1267,9 @@ plan choice in the Fold side panel. Default gap after a block = the time step (o
   `WidgetData.planRows`, `TaskListService.planRow`, picker preview `widget_preview_day_plan`); iPad
   kind `DayPlan` (`planRows`, `DayPlanView`). Ticking: step, else worked today when `later`, else
   the task. Today's events (now with end times) are mixed in. `taskblocks://dayplan` opens it.
-- Tests: test/day_plan_3_test.dart.
+- Gaps from the plan doc, added in the same PR: list rows drag onto the panel's Day plan
+  (`HomePage._planDrag`, `LongPressDraggable<TrayItem>`); `tooEarlyFor` in the Plan a time sheet;
+  `insideBand` moves a "leave room" band's contents (asks per `ganttPush`); `DayPlanSettings.showTicked`
+  ("ticked", saved only when off); tray category chips; `TrayItem.missed` with Move to today / Next
+  free gap; widget free time `planFree` (Android `freeRows`, iPad free rows, trimmed by events).
+- Tests: test/day_plan_3_test.dart, test/day_plan_4_test.dart.

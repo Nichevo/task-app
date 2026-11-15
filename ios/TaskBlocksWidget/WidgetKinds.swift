@@ -1097,6 +1097,7 @@ struct PlanRow: Identifiable {
   let end: Date
   var plan: WPlan? = nil
   var task: WTask? = nil
+  var free = false
 }
 
 /** Today's planned times from the Day plan, with today's timed events, in time order. Tasks and
@@ -1109,8 +1110,24 @@ func planRows(_ snap: Snapshot, now: Date) -> [PlanRow] {
     let title = p.task.map { "\(p.title) · \($0)" } ?? p.title
     return PlanRow(id: p.id + "/" + (p.step ?? "") + "/\(p.at.timeIntervalSince1970)", title: title, start: p.at, end: p.end, plan: p, task: t)
   }
-  out += Events.today(now).filter { !$0.allDay }.map {
-    PlanRow(id: "ev:" + $0.id, title: $0.title, start: $0.start, end: $0.end)
+  let events = Events.today(now).filter { !$0.allDay }
+  out += events.map { PlanRow(id: "ev:" + $0.id, title: $0.title, start: $0.start, end: $0.end) }
+  // Free time still to come, less calendar events, 15 minutes or more.
+  var spans: [(Date, Date)] = snap.planFree.filter { cal.isDate($0.start, inSameDayAs: now) && $0.end > now }
+    .map { (max($0.start, now), $0.end) }
+  for e in events {
+    spans = spans.flatMap { (s, f) -> [(Date, Date)] in
+      if e.end <= s || e.start >= f { return [(s, f)] }
+      var parts: [(Date, Date)] = []
+      if e.start > s { parts.append((s, e.start)) }
+      if e.end < f { parts.append((e.end, f)) }
+      return parts
+    }
+  }
+  for (s, f) in spans where f.timeIntervalSince(s) >= 15 * 60 {
+    let m = Int(f.timeIntervalSince(s) / 60)
+    let label = m < 60 ? "\(m) min" : m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60)"
+    out.append(PlanRow(id: "free:\(s.timeIntervalSince1970)", title: "Free \(label)", start: s, end: f, free: true))
   }
   return out.sorted { $0.start < $1.start }
 }
@@ -1136,6 +1153,8 @@ struct DayPlanView: View {
         HStack(spacing: 6) {
           if let p = r.plan, let t = r.task {
             tick(p, t, now: now)
+          } else if r.free {
+            Color.clear.frame(width: 20, height: 1)
           } else {
             Image(systemName: "calendar").font(.caption).foregroundStyle(.secondary).frame(width: 20)
           }
@@ -1150,7 +1169,8 @@ struct DayPlanView: View {
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-              r.task.map { W.colour(snap, $0, now: now) } ?? Color(red: 0.89, green: 0.93, blue: 0.96),
+              r.task.map { W.colour(snap, $0, now: now) }
+                ?? (r.free ? Color.secondary.opacity(0.08) : Color(red: 0.89, green: 0.93, blue: 0.96)),
               in: RoundedRectangle(cornerRadius: 6))
           }
         }
@@ -1192,7 +1212,7 @@ struct DayPlanWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "DayPlan", provider: PlainProvider(hourly: true)) { DayPlanView(entry: $0) }
       .configurationDisplayName("Today's plan")
-      .description("The times planned on the Day plan today, with your calendar events.")
+      .description("The times planned on the Day plan today, with your calendar events and free time.")
       .supportedFamilies([.systemMedium, .systemLarge, .systemExtraLarge])
   }
 }

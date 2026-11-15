@@ -218,6 +218,7 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
     b.hidden = categoryHidden(data, b.task.categoryId);
   }
   if (!s.hiddenStrip) blocks = blocks.where((b) => !b.hidden).toList();
+  if (!s.showTicked) blocks = blocks.where((b) => !b.done).toList();
 
   // Steps inside their task's own planned time become part of its block.
   final top = <PlanBlock>[];
@@ -380,6 +381,47 @@ List<PlanLink> _links(AppData data, List<PlanBlock> shown) {
   return links;
 }
 
+/// What is planned inside [band] (a block that leaves room) on its day: open blocks starting
+/// within its time, moved by [shift] when the band moves.
+List<PlanMove> insideBand(AppData data, PlanBlock band, Duration shift) => [
+      for (final x in blocksOn(data, band.start))
+        if (!identical(x.slot, band.slot) &&
+            !x.shared &&
+            x.slot.doneAt == null &&
+            !x.start.isBefore(band.start) &&
+            x.start.isBefore(band.end))
+          PlanMove(x.task, x.slot, x.start, x.start.add(shift)),
+    ];
+
+/// What a time starting at [start] for [task] (or its [step]) would be too early for: each task
+/// or step it comes after that still has an open planned time ending after [start], with when
+/// that time ends (the latest one). Shown in the Plan a time sheet as you choose.
+List<(String, DateTime)> tooEarlyFor(AppData data, Task task, TaskStep? step, DateTime start) {
+  DateTime? lastEnd(Iterable<TimeSlot> slots) {
+    DateTime? e;
+    for (final x in slots) {
+      if (x.doneAt == null && x.end.isAfter(start) && (e == null || x.end.isAfter(e))) e = x.end;
+    }
+    return e;
+  }
+
+  final out = <(String, DateTime)>[];
+  if (step == null) {
+    for (final id in task.afterIds) {
+      final p = data.task(id);
+      if (p == null || p.closedAt != null) continue;
+      if (lastEnd(p.slots) case final e?) out.add((p.title, e));
+    }
+  } else {
+    for (final id in step.afterIds) {
+      final p = task.steps.where((x) => x.id == id).firstOrNull;
+      if (p == null || p.done) continue;
+      if (lastEnd(task.slotsOf(p)) case final e?) out.add((p.title, e));
+    }
+  }
+  return out;
+}
+
 /// A planned time to move: what [pushAfter] wants changed.
 class PlanMove {
   const PlanMove(this.task, this.slot, this.from, this.to);
@@ -459,14 +501,17 @@ double dayLoad(AppData data, DateTime day, {List<CalendarEvent> events = const [
 
 /// Something waiting in the "To plan" tray, with why it's there.
 class TrayItem {
-  const TrayItem(this.task, this.why, {this.step});
+  const TrayItem(this.task, this.why, {this.step, this.missed});
   final Task task;
   final TaskStep? step;
   final String why;
+
+  /// A planned time that went by without being ticked: planning it again moves this one.
+  final TimeSlot? missed;
   String get title => step?.title ?? task.title;
 
   /// Length to plan it for: its estimate, else the default.
-  int minutes(AppData data) => step == null ? task.estimate ?? data.dayPlan.length : data.dayPlan.length;
+  int minutes(AppData data) => missed?.minutes ?? (step == null ? task.estimate ?? data.dayPlan.length : data.dayPlan.length);
 }
 
 /// The "To plan" tray for [day]: tasks on the Day plan with no time coming up, plus (as Settings
@@ -489,12 +534,14 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
       final missed = own.where((x) => x.doneAt == null && x.end.isBefore(now)).toList()
         ..sort((a, b) => b.start.compareTo(a.start));
       String? why;
+      TimeSlot? missedSlot;
       final due = t.dueAt;
       final bar = s.trayGantt && t.gantt ? barFor(t, data) : null;
       if (s.trayDue && due != null && _sameDay(due, day)) {
         why = due.isBefore(now) ? 'Overdue' : 'Due ${DateFormat('HH:mm').format(due)}';
       } else if (!upcoming && missed.isNotEmpty) {
         why = 'Missed ${fmt.format(missed.first.start)}, ${DateFormat('HH:mm').format(missed.first.start)}';
+        missedSlot = missed.first;
       } else if (bar != null && !bar.start.isAfter(d0) && !bar.end.isBefore(d0)) {
         why = bar.start == bar.end ? 'Gantt: this day' : 'Gantt: ${fmt.format(bar.start)} to ${fmt.format(bar.end)}';
       } else if (s.trayInProgress &&
@@ -508,7 +555,7 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
                 ? 'Overdue'
                 : 'Due ${fmt.format(due)}';
       }
-      if (why != null) (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why));
+      if (why != null) (why == 'Overdue' ? dueFirst : out).add(TrayItem(t, why, missed: missedSlot));
     }
     if (s.trayDue && s.show != DayShow.tasks) {
       for (final st in t.steps) {

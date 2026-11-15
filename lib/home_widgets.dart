@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
+import 'day_plan.dart' show layoutDay;
 import 'gantt.dart';
 import 'habits.dart';
 import 'models.dart';
@@ -147,6 +148,8 @@ class HomeWidgets {
       // Item 101: the Today's plan widget: planned times for the coming week (it shows today's,
       // so it keeps up when the day changes before the app is opened).
       'plan': dayPlanRows(data, now),
+      // Free time in working hours on those days (the widgets take out calendar events).
+      'planFree': dayPlanFree(data, now),
       // Item 78: habits, for the Worked today widget's Habits choice.
       'habits': [
         for (final t in data.habits)
@@ -210,6 +213,16 @@ class HomeWidgets {
     }
     rows.sort((a, b) => a.$1.compareTo(b.$1));
     return [for (final r in rows) r.$2];
+  }
+
+  /// Item 101: free stretches in working hours from today for a week, as [start, end] in ms.
+  static List<List<int>> dayPlanFree(AppData data, DateTime now) {
+    final from = DateTime(now.year, now.month, now.day);
+    return [
+      for (var i = 0; i < 7; i++)
+        for (final f in layoutDay(data, from.add(Duration(days: i))).free)
+          [f.start.millisecondsSinceEpoch, f.end.millisecondsSinceEpoch],
+    ];
   }
 
   static Map<String, Object?> _addedDone(List<Bucket> b) => {

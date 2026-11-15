@@ -84,6 +84,8 @@ struct Snapshot {
   var addedDone: [String: AddedDone] = [:]
   var burn: [String: Burn] = [:]
   var plan: [WPlan] = []
+  /** Item 101: free time in working hours (the app's view, before calendar events). */
+  var planFree: [(start: Date, end: Date)] = []
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
@@ -225,6 +227,10 @@ struct Snapshot {
       return WPlan(
         id: str(o["id"]), step: o["step"] as? String, title: str(o["title"]), task: o["task"] as? String, at: at,
         end: date(o["end"]) ?? at, later: (o["later"] as? Bool) ?? false)
+    }
+    s.planFree = ((root["planFree"] as? [[NSNumber]]) ?? []).compactMap { a in
+      guard a.count == 2 else { return nil }
+      return (Date(timeIntervalSince1970: a[0].doubleValue / 1000), Date(timeIntervalSince1970: a[1].doubleValue / 1000))
     }
     for (k, v) in (root["burn"] as? [String: [String: Any]]) ?? [:] {
       s.burn[k] = Burn(

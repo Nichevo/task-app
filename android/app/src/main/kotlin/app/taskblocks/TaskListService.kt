@@ -96,6 +96,15 @@ class TaskListService : RemoteViewsService() {
       v.setTextViewText(R.id.row_due, WidgetData.timeRange(t.due ?: 0L, t.end))
       v.setTextColor(R.id.row_due, 0xDD000000.toInt())
       v.setViewVisibility(R.id.row_snooze, View.GONE)
+      v.setViewVisibility(R.id.row_tick, View.VISIBLE)
+      if (t.free) {
+        // Free time: a pale row with no box; tapping it opens the Day plan.
+        v.setInt(R.id.row, "setBackgroundColor", 0xFFF1F4F3.toInt())
+        v.setTextColor(R.id.row_due, 0x99000000.toInt())
+        v.setViewVisibility(R.id.row_tick, View.INVISIBLE)
+        v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "dayplan"))
+        return v
+      }
       if (t.event) {
         v.setImageViewResource(R.id.row_tick, R.drawable.ic_widget_event)
         v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "home"))

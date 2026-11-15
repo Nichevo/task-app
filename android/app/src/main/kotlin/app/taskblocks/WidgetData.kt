@@ -58,6 +58,8 @@ data class WidgetTask(
     val parent: String? = null,
     val later: Boolean = false,
     val planned: Boolean = false,
+    /** Item 101: a free stretch on the Today's plan widget. */
+    val free: Boolean = false,
 )
 
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
@@ -406,9 +408,48 @@ object WidgetData {
               planned = true,
           ))
     }
-    out.addAll(todayEvents(c).filter { it.due != null && it.due >= from })
+    val events = todayEvents(c).filter { it.due != null && it.due >= from }
+    out.addAll(events)
+    out.addAll(freeRows(snap, events, from))
     out.sortBy { it.due }
     return out
+  }
+
+  /**
+   * Today's free time from the app (working hours less planned times and their gaps), less
+   * today's calendar events and what has gone by: stretches of 15 minutes or more.
+   */
+  private fun freeRows(snap: Snapshot, events: List<WidgetTask>, from: Long): List<WidgetTask> {
+    val now = System.currentTimeMillis()
+    val arr = snap.root.optJSONArray("planFree") ?: JSONArray()
+    var spans = ArrayList<Pair<Long, Long>>()
+    for (i in 0 until arr.length()) {
+      val a = arr.optJSONArray(i) ?: continue
+      val s = maxOf(a.optLong(0), now)
+      val e = a.optLong(1)
+      if (a.optLong(0) >= from && a.optLong(0) < from + DAY && e > s) spans.add(s to e)
+    }
+    for (ev in events) {
+      val es = ev.due ?: continue
+      val ee = ev.end ?: es
+      val next = ArrayList<Pair<Long, Long>>()
+      for ((s, e) in spans) {
+        if (ee <= s || es >= e) {
+          next.add(s to e)
+          continue
+        }
+        if (es > s) next.add(s to es)
+        if (ee < e) next.add(ee to e)
+      }
+      spans = next
+    }
+    return spans
+        .filter { it.second - it.first >= 15 * 60_000L }
+        .map { (s, e) ->
+          val mins = ((e - s) / 60_000L).toInt()
+          val label = if (mins < 60) "$mins min" else if (mins % 60 == 0) "${mins / 60} h" else "${mins / 60} h ${mins % 60}"
+          WidgetTask("free:$s", "Free $label", null, s, s, locked = true, star = false, end = e, free = true)
+        }
   }
 
   /** "09:00–10:30". */
