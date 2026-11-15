@@ -1273,3 +1273,54 @@ plan choice in the Fold side panel. Default gap after a block = the time step (o
   ("ticked", saved only when off); tray category chips; `TrayItem.missed` with Move to today / Next
   free gap; widget free time `planFree` (Android `freeRows`, iPad free rows, trimmed by events).
 - Tests: test/day_plan_3_test.dart, test/day_plan_4_test.dart.
+
+
+## 102. Focus modes (part 1 of 4) ☑ (version 1.12.0)
+
+Feedback: the app has a lot of tools; depending on the time of day or week it would be better to
+turn some of it off: at work the work category and tools, at the weekend chores, when travelling
+travel, with work hidden away. Urgent or coming-up things must not get lost. Later: working from
+home makes mixed days; a pomodoro focus timer with a widget (4x3 is the owner's favourite size);
+modes in the statistics; the top bar has no room for more icons.
+
+- lib/modes.dart: `FocusMode` (name, colour, icon, `cats` Show/Quiet/Hide by category id with ''
+  for none and `otherCats` for categories added later, `toolsOff` (`ModeTool`), `panel`, `filter`,
+  `newCategory`, break-through rules `overdue`/`due` (`DueWithin`)/`starred`/`planned`/`red`),
+  `ModeSlot` weekly schedule (`scheduledAt`, `nextScheduleChange`, `scheduleSegments`,
+  `paintSchedule`), `ModeChoice` (a mode picked by hand until a time; empty mode = back to the
+  schedule), `ModeLog` stretches and `minutesPerMode`/`modeStats`, `starterModes` (guessed from
+  category names) and `starterSchedule` (Day plan working hours on weekdays, Weekend Fri 18:00 to
+  Sun 20:00). `everythingId` = Everything, never stored.
+- `modeNow` (one per app) holds the mode in force, `peek`, `until`, `byHand`; `showOf`,
+  `breakThrough`, `shows`, `toolOn`. `AppData.inMode(t)`; `boardTasks`, `ganttTasks` and
+  `matrixTasks` follow it (the Kanban statistics use every board task). Calendar, agenda, Day plan
+  blocks (as Hidden strips) and its tray follow it too. Statistics and Achievements count everything.
+- AppData: `modes` (merged by id), `modeSchedule` (from the newer settings), `modeChoice` (for
+  every device; the newer `at` wins), `modeLog` (merged by id, a year kept). Device setting
+  `modeChoice` for this device only. `DoneRecord.mode` and `.outside` (ticked off from a hidden
+  category).
+- `AppStore.refreshMode` (load, sync, each minute on screen, resume): hand choice (newer of device
+  and shared, while it lasts), else the schedule, else Everything; a change resets Peek, applies the
+  mode's filter chip and panel view, and logs. `_logMode` fills in the schedule's changes while the
+  app was closed. `chooseMode`, `setPeek`, `addMode`, `modeChanged`, `deleteMode` (its schedule
+  goes), `moveMode`, `setModeSchedule`, `addStarterModes`. No modes = nothing logged.
+- Home list: `ModeTitle` (lib/widgets/mode_chip.dart) replaces "Tasks"; the switch sheet picks a
+  mode and how long (schedule change, 1 hour, end of today, a date, until changed) and whether
+  other devices follow. "Still needs you" strip (five, then "and N more"), a "Quiet: ..." heading
+  at the bottom (closed until tapped), a "N tasks in ... resting. Peek" footer. New tasks typed in
+  go to the mode's category when nothing else picks one.
+- Top bar: in a mode its tools pick the icons (Settings' icon switches apply in Everything); icons
+  that don't fit the pane's width (about 48 each beside a 160 wide title) go to the ⋮ menu, which
+  also leaves out tools that are off and has "Change mode". The side panel leaves out views whose
+  tool is off.
+- lib/screens/modes_page.dart: Settings, Focus modes: list (drag to reorder), Everything, Weekly
+  schedule, New mode; mode page (look, categories, tools, starting point, break-through rules;
+  rename, copy, delete); schedule page (paint by dragging down a day in 15-minute steps with a mode
+  or the Everything rubber; tap a stretch for exact times; copy Monday to the weekdays).
+- Statistics: Focus modes section (share bar, time, done, per hour, facts).
+- Tests: test/modes_test.dart.
+- Next: 1.12.1 held reminders for hidden categories with a summary when the mode ends, habit
+  pauses, switching by place (Office, Home on weekdays = Home office) and calendar event (Flight,
+  Trip, WFH), Ask before switching, per-task Always show. 1.12.2 widgets follow the mode, a mode
+  switch on a widget, Android quick settings tile. 1.12.3 focus timer (25/5, 15 after 4), 4x3 "Focus timer"
+  widget (the existing Focus widget shows the top task) plus 2x2 and 4x2.

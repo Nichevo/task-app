@@ -279,7 +279,7 @@ class Stats {
     final weeks = now.difference(start).inHours / (24 * 7);
 
     final longest = [
-      for (final t in data.boardTasks)
+      for (final t in data.active.where((t) => t.kanban))
         if ((data.stage(t.stageId), t.stageSince) case (final st?, final since?)) (t, st, now.difference(since)),
     ]..sort((x, y) => y.$3.compareTo(x.$3));
 

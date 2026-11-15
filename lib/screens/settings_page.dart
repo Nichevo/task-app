@@ -23,6 +23,7 @@ import 'kanban_page.dart';
 import 'places_page.dart';
 import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
+import 'modes_page.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
 const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour before', 1440: '1 day before', 10080: '1 week before'};
@@ -936,6 +937,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 ]),
               ),
             Text('Every reminder has Done and Snooze buttons.', style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
+            const Divider(height: 40),
+            // Item 102.
+            _heading('Focus modes'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.filter_center_focus),
+              title: Text(data.modes.isEmpty ? 'Set up modes' : '${data.modes.length} mode${data.modes.length == 1 ? '' : 's'}: ${data.modes.map((m) => m.name).join(', ')}'),
+              subtitle: const Text('Work, Weekend, Travel...: which categories and tools show, and a weekly schedule'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ModesPage(store: store))),
+            ),
             const Divider(height: 40),
             Row(children: [
               Expanded(child: _heading('Categories')),

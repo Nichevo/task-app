@@ -88,8 +88,8 @@ List<(String, List<AgendaItem>)> agendaGroups(AppData data, DateTime now) {
   final end = today.add(const Duration(days: 8));
   final items = <AgendaItem>[
     for (final t in data.active)
-      if (t.dueAt != null && t.dueAt!.isBefore(end) && !t.isSnoozed(now)) AgendaItem(t, t.dueAt!),
-    for (final t in data.active)
+      if (t.dueAt != null && t.dueAt!.isBefore(end) && !t.isSnoozed(now) && data.inMode(t)) AgendaItem(t, t.dueAt!),
+    for (final t in data.active.where(data.inMode))
       for (final s in t.steps)
         if (s.dueAt != null && !s.done && s.dueAt!.isBefore(end)) AgendaItem(t, s.dueAt!, step: s),
   ]..sort((a, b) => a.when.compareTo(b.when));
