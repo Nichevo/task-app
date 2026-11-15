@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:task_blocks/day_plan.dart';
 import 'package:task_blocks/home_widgets.dart';
 import 'package:task_blocks/main.dart';
-import 'package:task_blocks/screens/side_panel.dart';
 import 'package:task_blocks/models.dart';
 import 'package:task_blocks/store.dart';
 
