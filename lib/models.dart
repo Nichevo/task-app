@@ -1638,6 +1638,7 @@ class AppData {
     this.modeChoice,
     List<ModeLog>? modeLog,
     this.modeAsk = false,
+    this.modeWidgets = true,
   })  : active = active ?? [],
         modes = modes ?? [],
         modeSchedule = modeSchedule ?? [],
@@ -1895,6 +1896,9 @@ class AppData {
   /// Item 102: ask before a place or calendar event switches mode (otherwise it just switches).
   bool modeAsk;
 
+  /// Item 102: home screen widgets show only what the mode in force shows.
+  bool modeWidgets;
+
   FocusMode? mode(String? id) => modes.where((m) => m.id == id).firstOrNull;
 
   /// Another device has saved this data with a newer version of the app.
@@ -1909,7 +1913,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk',
+    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk', 'modeWidgets',
   };
 
   /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
@@ -1975,6 +1979,7 @@ class AppData {
         if (modeSchedule.isNotEmpty) 'modeSchedule': [for (final m in modeSchedule) m.toJson()],
         if (modeChoice != null) 'modeChoice': modeChoice!.toJson(),
         if (modeAsk) 'modeAsk': true,
+        if (!modeWidgets) 'modeWidgets': false,
         if (lists && modeLog.isNotEmpty) 'modeLog': [for (final l in modeLog) l.toJson()],
       };
 
@@ -2093,6 +2098,7 @@ class AppData {
         modeChoice: ModeChoice.tryParse(j['modeChoice']),
         modeLog: [for (final l in j['modeLog'] as List? ?? []) ?ModeLog.tryParse(l)],
         modeAsk: j['modeAsk'] as bool? ?? false,
+        modeWidgets: j['modeWidgets'] as bool? ?? true,
         extra: unknownFields(j, _known),
       );
   }
@@ -2289,6 +2295,7 @@ AppData mergeData(AppData a, AppData b) {
     },
     modeLog: mergeModeLogs(a.modeLog, b.modeLog),
     modeAsk: settingsFrom.modeAsk,
+    modeWidgets: settingsFrom.modeWidgets,
     unreadable: {for (final u in [...a.unreadable, ...b.unreadable]) jsonEncode(u): u}.values.toList(),
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},

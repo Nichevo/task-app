@@ -1351,3 +1351,22 @@ modes in the statistics; the top bar has no room for more icons.
   every mode and is never held.
 - The Day plan's "Start focus" button moves to part 4 with the timer.
 - Tests: test/modes_test.dart (part 2 group).
+
+### 102, part 3 of 4 ☑ (version 1.12.2)
+
+- Widget data (`HomeWidgets.modeWidgetData`): `modes` (Everything as id 'all', then each mode's
+  name, colour and its overdue/due/starred rules), `modeLine` ([start, end, mode id] from the
+  start of today for 8 days: the mode in force until `ModeNow.reach`, then the schedule), and on
+  each task `hide` (the modes that hide it, less Always show, planned today and gone red, which
+  only the app can tell). Left out when there are no modes or `AppData.modeWidgets` is off
+  (Settings, Focus modes, "Widgets follow the mode").
+- Android: `WidgetMode` in WidgetData.kt picks the mode at draw time and `Snapshot` leaves out
+  what it hides (overdue, due within and starred still get through), so every widget follows;
+  `hiddenByMode` counts them. The 15-minute refresh job moves widgets on with the schedule.
+  `ModeWidget` (2x1, "Focus mode") shows the mode, until when and how many are resting, and opens
+  taskblocks://mode (the app's mode sheet). `ModeTileService`: quick settings tile, lit while a
+  mode is on, subtitle "to 17:00"; tap opens the sheet.
+- iPad: `WMode` and `Snapshot.everything` / `mode(at:)` in WidgetStore.swift; `Snapshot.at(date)`
+  filters by the mode at that time and the timelines redraw when the mode changes. New kind
+  "Mode" (small, and Lock Screen rectangular).
+- Tests: test/modes_test.dart (part 3 group).

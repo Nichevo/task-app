@@ -1217,6 +1217,54 @@ struct DayPlanWidget: Widget {
   }
 }
 
+// MARK: - Focus mode (item 102)
+
+struct ModeView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: PlainEntry
+
+  var body: some View {
+    let snap = entry.snap
+    let now = entry.date
+    let m = snap.mode(at: now)
+    let name = m?.name ?? "Everything"
+    let colour = m?.colour ?? Color(red: 0, green: 0.42, blue: 0.42)
+    let hm = Date.FormatStyle(date: .omitted, time: .shortened)
+    let until: String? = snap.modeEnds(at: now).map {
+      Calendar.current.isDate($0, inSameDayAs: now) ? "to \($0.formatted(hm))" : "till \($0.formatted(.dateTime.weekday(.abbreviated)))"
+    }
+    let hidden = snap.hiddenCount(at: now)
+    let detail = [until, hidden > 0 ? "\(hidden) resting" : nil].compactMap { $0 }.joined(separator: " · ")
+    if family == .accessoryRectangular {
+      VStack(alignment: .leading) {
+        Label(name, systemImage: "scope").font(.headline)
+        Text(detail.isEmpty ? "Focus mode" : detail).font(.caption)
+      }
+      .widgetURL(W.link("mode"))
+      .containerBackground(.clear, for: .widget)
+    } else {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Focus mode").font(.caption).foregroundStyle(.secondary)
+        Spacer(minLength: 0)
+        Circle().fill(colour).frame(width: 26, height: 26)
+        Text(name).font(.title3.bold()).lineLimit(2)
+        Text(detail.isEmpty ? "Tap to change" : detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+      }
+      .widgetURL(W.link("mode"))
+      .widgetCard()
+    }
+  }
+}
+
+struct ModeWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "Mode", provider: PlainProvider(hourly: true)) { ModeView(entry: $0) }
+      .configurationDisplayName("Focus mode")
+      .description("The focus mode you are in and when it changes. Tap to pick another.")
+      .supportedFamilies([.systemSmall, .accessoryRectangular])
+  }
+}
+
 // MARK: - All of them
 
 @main
@@ -1235,5 +1283,6 @@ struct TaskBlocksWidgets: WidgetBundle {
     CalendarWidget()
     GlanceWidget()
     DayPlanWidget()
+    ModeWidget()
   }
 }

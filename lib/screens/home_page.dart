@@ -238,6 +238,9 @@ class HomePageState extends State<HomePage> {
 
   void openStats() => _open(context, StatsPage(store: store));
 
+  /// Item 102: the mode picker, from the Focus mode widget or quick settings tile.
+  void openModeSheet() => showModeSheet(context, store);
+
   void openBoard({String? stageId}) => _open(context, KanbanPage(store: store, initialStage: stageId));
 
   /// The archive: in the right-hand pane on wide screens, its own page otherwise.

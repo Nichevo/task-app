@@ -9,6 +9,7 @@ import 'day_plan.dart' show layoutDay;
 import 'gantt.dart';
 import 'habits.dart';
 import 'models.dart';
+import 'modes.dart';
 import 'stats.dart';
 
 typedef WidgetMove = ({String task, String? step, String stage, DateTime at});
@@ -23,6 +24,7 @@ class HomeWidgets {
     'TaskList', 'Summary', 'Focus', 'Checklist', 'Month', 'Board', 'Matrix', 'Worked', 'Chart', 'QuickAdd',
     'Calendar', 'Glance', // Item 90.
     'DayPlan', // Item 101.
+    'Mode', // Item 102.
   ];
 
   static const _channel = MethodChannel('app.taskblocks/widgets');
@@ -68,6 +70,7 @@ class HomeWidgets {
     'app.taskblocks.AddedDoneWidget',
     'app.taskblocks.BurnDownWidget',
     'app.taskblocks.DayPlanWidget', // Item 101.
+    'app.taskblocks.ModeWidget', // Item 102.
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -100,7 +103,9 @@ class HomeWidgets {
   static String widgetJson(AppData data, DateTime now) {
     final stats = Stats(data, now);
     final fortnight = dayKey(now.subtract(const Duration(days: 14)));
+    final modes = modeWidgetData(data, now);
     return jsonEncode({
+      ...?modes,
       'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,
@@ -123,6 +128,8 @@ class HomeWidgets {
               'due': t.dueAt?.millisecondsSinceEpoch,
               'locked': data.isLocked(t),
               'star': t.starred,
+              if (modes != null)
+                if (modesHiding(data, t, now) case final h when h.isNotEmpty) 'hide': h,
               if (t.isSnoozed(now)) 'snoozed': true,
               if (t.isSnoozed(now)) 'snoozedUntil': t.snoozedUntil!.millisecondsSinceEpoch,
               if (t.kanban) 'stage': (data.stage(t.stageId) ?? data.stages.firstOrNull)?.id,
@@ -180,6 +187,66 @@ class HomeWidgets {
           if (taskBurnDown(t, data, now) case final b?) 'task:${t.id}': _burn(b),
       },
     });
+  }
+
+  /// Item 102: what the widgets need to follow the focus modes: each mode's name, colour and
+  /// what breaks through, and a timeline of the mode in force for the next 8 days (the current
+  /// mode until it ends, then the weekly schedule). Null when there are no modes, or the widgets
+  /// are set to show everything. Everything is listed as a mode ('all') that hides nothing.
+  static Map<String, Object?>? modeWidgetData(AppData data, DateTime now) {
+    if (data.modes.isEmpty || !data.modeWidgets) return null;
+    // From the start of today, so the data (and the widgets) only change when the mode does.
+    final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    final end = DateTime(now.year, now.month, now.day + 8);
+    final line = <List<Object>>[];
+    final reach = modeNow.reach;
+    final current = modeNow.mode?.id ?? everythingId;
+    if (reach == null || !reach.isBefore(end)) {
+      line.add([start, end.millisecondsSinceEpoch, current]);
+    } else {
+      line.add([start, reach.millisecondsSinceEpoch, current]);
+      for (final (m, a, b) in scheduleSegments(data.modeSchedule, reach, end)) {
+        line.add([a.millisecondsSinceEpoch, b.millisecondsSinceEpoch, data.mode(m) == null ? everythingId : m]);
+      }
+    }
+    return {
+      'modeWidgets': true,
+      'modes': [
+        {'id': everythingId, 'name': 'Everything', 'colour': 0xFF006A6A},
+        for (final m in data.modes)
+          {
+            'id': m.id,
+            'name': m.name,
+            'colour': m.colour,
+            if (!m.overdue) 'overdue': false,
+            'due': m.due.name,
+            if (!m.starred) 'starred': false,
+          },
+      ],
+      'modeLine': line,
+    };
+  }
+
+  /// Item 102: the modes that hide [t] (the widgets still let it through when it is overdue,
+  /// due soon or starred, as each mode says; "always show", "planned today" and "gone red" are
+  /// worked out here).
+  static List<String> modesHiding(AppData data, Task t, DateTime now) {
+    if (t.alwaysShow) return const [];
+    return [
+      for (final m in data.modes)
+        if (m.showFor(data, t.categoryId) == CatShow.hide && _quietBreak(data, m, t, now) == null) m.id,
+    ];
+  }
+
+  /// Why [t] breaks through [m] for reasons the widgets can't work out themselves.
+  static String? _quietBreak(AppData data, FocusMode m, Task t, DateTime now) {
+    final probe = ModeNow()..mode = FocusMode.fromJson({
+      ...m.toJson(),
+      'overdue': false,
+      'due': DueWithin.off.name,
+      'starred': false,
+    });
+    return probe.breakThrough(data, t, now);
   }
 
   /// Item 101: open planned times from the start of today for a week, in time order. "later"
