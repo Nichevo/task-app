@@ -650,6 +650,19 @@ class _SettingsPageState extends State<SettingsPage> {
         value: d.hiddenStrip,
         onChanged: (v) => _set(() => d.hiddenStrip = v),
       ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Show calendar events'),
+        subtitle: const Text('Your phone\'s events show in grey and count as busy time (the calendars chosen under Calendar events)'),
+        value: d.showEvents,
+        onChanged: (v) => _set(() => d.showEvents = v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Remind me when a planned time starts'),
+        value: d.remindStart,
+        onChanged: (v) => _set(() => d.remindStart = v),
+      ),
     ];
   }
 

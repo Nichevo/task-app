@@ -9,6 +9,15 @@ class Release {
 }
 
 const releases = [
+  Release('1.11.1', 'November 2026', [
+    'Day plan: your phone\'s calendar events show on the timeline in grey, read-only, and count as busy time, so free time and how full a day is include them. All-day events show as chips above the timeline. Tap one to see it, or to hide events; turn them on or off from the filter button or Settings, Day plan. If the app can\'t read your calendar yet, an "Allow calendar" button asks.',
+    'An event that overlaps a planned block is a clash, side by side with a red outline, and the gap after a block stops where an event starts.',
+    'Tasks that come after another task, and steps that come after another step, are joined by a line from the one they wait for. A block planned to start before what it waits for is finished (on that day or a later one) gets a red "Too early" tag and line, and the day\'s summary counts them.',
+    'Moving a block later or making it longer now moves what comes after it on that day, keeping the gaps, until a free stretch takes up the slack. It follows the Gantt setting "When a bar moves": ask, always or never. Ticked blocks and blocks that leave room stay put, steps inside a task move with it, and Undo puts everything back.',
+    'Plan the steps back to back: from a task\'s page (pick a day and start time; each step takes the default length with the usual gap) or from a task block\'s menu, which fits its steps inside the block\'s own time. Steps that come after another step go after it.',
+    'A reminder when each planned time starts ("Planned now, 14:00 to 14:45"). Turn it off in Settings, Day plan.',
+    'Quick add: type "@14:00 45m" (or "@2pm 1.5h", "@9") in the add box to plan the new task on the Day plan at that time, on its due day or today (tomorrow if the time has gone). A chip shows what was picked up.',
+  ]),
   Release('1.11.0', 'November 2026', [
     'New: the Day plan. One day as a timeline from morning to evening, with each task or step that has a planned time drawn as a block as tall as the time it takes. Open it from the Calendar (the new Day button, which the Calendar icon then remembers), from the ⋮ menu, or switch on its own top bar icon in Settings.',
     'Give a task a time from its page ("On the Day plan", then "Plan a time"), or a step from its menu: the day, the start, how long it takes in 15-minute steps (starting from the task\'s "Time needed"), the gap to leave after it, and whether it leaves room for other tasks. A task can be planned more than once, on one day or several.',

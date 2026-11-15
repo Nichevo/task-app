@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../csv_export.dart';
 import '../csv_import.dart';
+import '../day_plan.dart' show describeLength;
 import '../input_parse.dart';
 import '../models.dart';
 import '../changelog.dart';
@@ -932,7 +933,8 @@ class _AddBarState extends State<_AddBar> {
         box: p.box,
         board: p.board,
         gantt: p.gantt,
-        star: p.star);
+        star: p.star,
+        plan: _ignoreDate ? null : p.plan);
     _source = null;
     _input.clear();
     _ignoreDate = _ignoreCategory = false;
@@ -963,6 +965,7 @@ class _AddBarState extends State<_AddBar> {
   Widget build(BuildContext context) {
     final p = _input.text.trim().isEmpty ? null : _parsed;
     final due = _ignoreDate ? null : p?.due;
+    final plan = _ignoreDate ? null : p?.plan;
     final categoryId = _forcedCategory ?? (_ignoreCategory ? null : p?.categoryId);
     final category = data.category(categoryId);
     final showCategoryChip = category != null && (_forcedCategory != null || data.autoCategory != AutoCategory.off);
@@ -971,7 +974,7 @@ class _AddBarState extends State<_AddBar> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true)
+          if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true || plan != null)
             Align(
               alignment: Alignment.centerLeft,
               child: Wrap(spacing: 6, children: [
@@ -993,6 +996,15 @@ class _AddBarState extends State<_AddBar> {
                   InputChip(
                     avatar: const Icon(Icons.event, size: 18),
                     label: Text('Due ${dateTimeFmt.format(due)}'),
+                    tooltip: 'Picked from what you typed. Tap ✕ to keep the words instead.',
+                    onDeleted: () => setState(() => _ignoreDate = true),
+                  ),
+                // Item 101: "@14:00 45m" plans a time on the Day plan.
+                if (plan != null)
+                  InputChip(
+                    avatar: const Icon(Icons.view_day_outlined, size: 18),
+                    label: Text('Day plan ${DateFormat('EEE HH:mm').format(plan.at)}, '
+                        '${describeLength(plan.minutes ?? data.dayPlan.length)}'),
                     tooltip: 'Picked from what you typed. Tap ✕ to keep the words instead.',
                     onDeleted: () => setState(() => _ignoreDate = true),
                   ),

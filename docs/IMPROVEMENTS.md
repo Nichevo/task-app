@@ -1229,3 +1229,27 @@ plan choice in the Fold side panel. Default gap after a block = the time step (o
   code), before/after link lines, "Too early", pushing what comes after, plan steps back to back,
   start reminders, quick add. Then (1.11.2): Fold side panel Day plan, two days side by side on
   wide screens, Today's plan widget.
+
+### 101, part 2: events, links, pushing, reminders, quick add ☑ (version 1.11.1)
+
+- Native calendar events now carry an end time (Android `Instances.END`, iPad `endDate`;
+  `CalendarEvent.end`, same as the start from older code).
+- lib/day_plan.dart: `Placed` base for `PlanBlock` and `EventBlock`; `layoutDay(..., events:)`
+  puts timed events in the clash columns, cuts gaps short at them and takes them out of free
+  time; all-day events listed apart; `dayLoad(..., events:)`. `DayPlanSettings.showEvents`
+  (default on) and `remindStart` (default on).
+- Links: `PlanLink` for a task's first block after the last block that day of each task it comes
+  after (`afterIds`), and for steps after steps (`TaskStep.afterIds`); `PlanBlock.tooEarly` when
+  what it waits for has an open planned time ending after it starts (any day).
+- `pushAfter(data, block, newStart, newMinutes)` → `PlanMove`s: a chain push that keeps each gap
+  and stops at the first free stretch; bands, ticked blocks and earlier blocks stay, steps inside
+  a task move with it, and a step inside its task only pushes the task's other steps.
+  `AppStore.applyPlanMoves(back:)` for Undo. The page asks/always/never per `data.ganttPush`.
+- `AppStore.planStepsInOrder(t, start, {each, gap, within})` (respects step links) and
+  `removeSlots`; task page "Plan the steps back to back", block menu "Plan its steps inside this
+  time".
+- Reminders: `Reminders.slotReminderId` (below every step id), one per open planned time in the
+  coming week; planned times are part of `scheduleKey`.
+- Quick add: `takePlanTime` ("@14:00 45m", "@2pm 1.5h", "@9"), `ParsedInput.planAt`/`planMinutes`
+  /`plan`, passed through `addTask(plan:)` and `_applyNew` (also the inbox, email and board +).
+- Tests: test/day_plan_2_test.dart.

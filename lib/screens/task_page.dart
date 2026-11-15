@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../day_plan.dart' show describeLength;
+import '../day_plan.dart' show describeLength, snapUp;
 import '../gantt.dart';
 import '../habits.dart';
 import '../models.dart';
@@ -1142,6 +1142,15 @@ class _TaskPageState extends State<TaskPage> {
               if (await showPlanTimeSheet(context, store, task) && mounted) setState(() {});
             },
           ),
+        if (!archived && task.steps.any((x) => !x.done && task.slotsOf(x).every((sl) => sl.doneAt != null)))
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 72, right: 16),
+            leading: const Icon(Icons.low_priority),
+            title: const Text('Plan the steps back to back'),
+            subtitle: Text('Steps without a time, in order, ${describeLength(data.dayPlan.length)} each '
+                'with ${describeLength(data.dayPlan.gapMinutes)} between'),
+            onTap: () => _planStepsInOrder(context),
+          ),
         if (slots.isNotEmpty)
           ListTile(
             contentPadding: const EdgeInsets.only(left: 72, right: 16),
@@ -1156,6 +1165,46 @@ class _TaskPageState extends State<TaskPage> {
           ),
       ],
     ];
+  }
+
+  /// Item 101: plans the steps without a time one after another from a chosen day and time.
+  Future<void> _planStepsInOrder(BuildContext context) async {
+    final now = DateTime.now();
+    final day = await showDatePicker(
+      context: context,
+      helpText: 'Plan the steps on',
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (day == null || !context.mounted) return;
+    final s = data.dayPlan;
+    final next = snapUp(now.add(Duration(minutes: s.snap)), s.snap);
+    final time = await showTimePicker(
+      context: context,
+      helpText: 'First step starts at',
+      initialTime: DateUtils.isSameDay(day, now) && next.day == now.day
+          ? TimeOfDay.fromDateTime(next)
+          : TimeOfDay(hour: s.workStart ~/ 60, minute: s.workStart % 60),
+    );
+    if (time == null || !context.mounted) return;
+    final start = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    final added = widget.store.planStepsInOrder(task, start);
+    setState(() {});
+    if (added.isEmpty) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('Planned ${added.length} step${added.length == 1 ? '' : 's'} from '
+            '${DateFormat('HH:mm').format(start)} to ${DateFormat('HH:mm').format(added.last.end)}'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            widget.store.removeSlots(task, added);
+            if (mounted) setState(() {});
+          },
+        ),
+      ));
   }
 
   /// Item 72: On the Gantt chart, start, how long it takes, milestone and progress.

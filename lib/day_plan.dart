@@ -2,19 +2,52 @@ import 'package:intl/intl.dart';
 
 import 'gantt.dart';
 import 'models.dart';
+import 'native.dart' show CalendarEvent;
 
 /// Item 101: the Day plan. Everything here is plain logic (what goes where on one day), so it can
 /// be tested without a screen; lib/screens/day_plan_page.dart draws it.
 
+/// Something with a time on the timeline: a planned block or a phone calendar event. Both take
+/// part in clashes and fill up the day.
+abstract class Placed {
+  DateTime get start;
+  DateTime get end;
+
+  /// Overlaps another ordinary block or event (not one that leaves room).
+  bool clash = false;
+
+  /// Side by side with what it clashes with: its column and how many there are.
+  int column = 0;
+  int columns = 1;
+
+  /// Sits on top of a block that leaves room (drawn to the right of its band).
+  bool inBand = false;
+
+  bool overlaps(Placed o) => start.isBefore(o.end) && o.start.isBefore(end);
+}
+
+/// A timed event from the phone's calendar: read-only, drawn grey.
+class EventBlock extends Placed {
+  EventBlock(this.event);
+  final CalendarEvent event;
+  @override
+  DateTime get start => event.start;
+  @override
+  DateTime get end => event.end.isAfter(event.start) ? event.end : event.start.add(const Duration(minutes: 15));
+  int get minutes => end.difference(start).inMinutes;
+}
+
 /// One planned time on the day: a task's or a step's [slot].
-class PlanBlock {
+class PlanBlock extends Placed {
   PlanBlock(this.task, this.slot, {this.step});
 
   final Task task;
   final TaskStep? step;
   final TimeSlot slot;
 
+  @override
   DateTime get start => slot.start;
+  @override
   DateTime get end => slot.end;
   bool get shared => slot.shared;
 
@@ -28,23 +61,23 @@ class PlanBlock {
   /// Its category is hidden: drawn as a faint strip (or not at all).
   bool hidden = false;
 
-  /// Overlaps another ordinary block (not one that leaves room).
-  bool clash = false;
-
-  /// Side by side with what it clashes with: its column and how many there are.
-  int column = 0;
-  int columns = 1;
-
-  /// Sits on top of a block that leaves room (drawn to the right of its band).
-  bool inBand = false;
+  /// Planned to start before something it comes after is finished.
+  bool tooEarly = false;
 
   /// Its task's block, when this is a step planned inside its task's time.
   PlanBlock? frame;
 
   /// Steps planned inside this task's time, drawn inside its block.
   final List<PlanBlock> inside = [];
+}
 
-  bool overlaps(PlanBlock o) => start.isBefore(o.end) && o.start.isBefore(end);
+/// A "comes after" link between two blocks on the day: [to] waits for [from].
+class PlanLink {
+  const PlanLink(this.from, this.to);
+  final PlanBlock from, to;
+
+  /// [to] starts before [from] ends.
+  bool get tooEarly => to.start.isBefore(from.end) && !from.done;
 }
 
 /// A stretch of time on the day: a gap after a block, or free time.
@@ -57,7 +90,8 @@ class Span {
 
 /// Everything on one day, laid out.
 class DayLayout {
-  DayLayout(this.day, this.blocks, this.gaps, this.free, {required this.workStart, required this.workEnd});
+  DayLayout(this.day, this.blocks, this.gaps, this.free,
+      {required this.workStart, required this.workEnd, this.events = const [], this.allDay = const [], this.links = const []});
 
   final DateTime day;
 
@@ -71,6 +105,19 @@ class DayLayout {
   final List<Span> free;
 
   final DateTime workStart, workEnd;
+
+  /// The phone's timed events that day (empty when they are turned off).
+  final List<EventBlock> events;
+
+  /// The phone's all-day events that day, shown as chips above the timeline.
+  final List<CalendarEvent> allDay;
+
+  /// "Comes after" links between blocks shown that day.
+  final List<PlanLink> links;
+
+  int get eventMinutes => _union([for (final e in events) Span(e.start, e.end)]);
+
+  int get tooEarly => all.where((b) => b.tooEarly).length;
 
   Iterable<PlanBlock> get all sync* {
     for (final b in blocks) {
@@ -97,7 +144,7 @@ class DayLayout {
     return total;
   }
 
-  int get clashes => blocks.where((b) => b.clash).length;
+  int get clashes => blocks.where((b) => b.clash).length + events.where((e) => e.clash).length;
 
   int get hiddenMinutes => _union([for (final b in blocks.where((b) => b.hidden)) Span(b.start, b.end)]);
 
@@ -160,8 +207,12 @@ List<PlanBlock> blocksOn(AppData data, DateTime day) {
 
 /// Lays out [day]: steps inside their task's block, bands that leave room, clashes side by side,
 /// the gaps after blocks and the free time left in working hours.
-DayLayout layoutDay(AppData data, DateTime day) {
+///
+/// [events] are the phone's calendar events (any days; only [day]'s are used, and none when
+/// they are turned off).
+DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = const []}) {
   final s = data.dayPlan;
+  final (timed, allDay) = eventsOn(data, day, events);
   var blocks = blocksOn(data, day);
   for (final b in blocks) {
     b.hidden = categoryHidden(data, b.task.categoryId);
@@ -197,12 +248,14 @@ DayLayout layoutDay(AppData data, DateTime day) {
 
   // Ordinary blocks over a band that leaves room sit on top of it and aren't clashes.
   final bands = shown.where((b) => b.shared && !b.hidden).toList();
-  final plain = shown.where((b) => !b.shared && !b.hidden).toList();
+  final plain = <Placed>[...shown.where((b) => !b.shared && !b.hidden), ...timed]
+    ..sort((a, b) => a.start.compareTo(b.start));
   for (final b in plain) {
     b.inBand = bands.any(b.overlaps);
   }
-  // Clashes: ordinary blocks that overlap, put side by side in columns, cluster by cluster.
-  var cluster = <PlanBlock>[];
+  // Clashes: ordinary blocks and events that overlap, put side by side in columns, cluster by
+  // cluster.
+  var cluster = <Placed>[];
   DateTime? clusterEnd;
   void close() {
     final cols = <DateTime>[];
@@ -236,14 +289,15 @@ DayLayout layoutDay(AppData data, DateTime day) {
 
   // Gaps after each ordinary block, cut short by whatever comes next.
   final gaps = <Span>[];
-  final busy = <Span>[];
+  final busy = <Span>[for (final e in timed) Span(e.start, e.end)];
+  final solid = <Placed>[...shown.where((b) => !b.shared), ...timed];
   for (final b in shown.where((b) => !b.shared)) {
     busy.add(Span(b.start, b.end));
     final g = b.slot.gapAfter ?? s.gapMinutes;
     if (g <= 0) continue;
     var gEnd = b.end.add(Duration(minutes: g));
-    for (final o in shown) {
-      if (!o.shared && o.start.isAfter(b.start) && !o.start.isBefore(b.end) && o.start.isBefore(gEnd)) gEnd = o.start;
+    for (final o in solid) {
+      if (o.start.isAfter(b.start) && !o.start.isBefore(b.end) && o.start.isBefore(gEnd)) gEnd = o.start;
     }
     if (gEnd.isAfter(b.end)) {
       gaps.add(Span(b.end, gEnd));
@@ -267,12 +321,123 @@ DayLayout layoutDay(AppData data, DateTime day) {
   }
   if (we.difference(cursor).inMinutes >= 5) free.add(Span(cursor, we));
 
-  return DayLayout(day, shown, gaps, free, workStart: ws, workEnd: we);
+  return DayLayout(day, shown, gaps, free,
+      workStart: ws, workEnd: we, events: timed, allDay: allDay, links: _links(data, shown));
+}
+
+/// [day]'s events from [events]: the timed ones as blocks, and the all-day ones. None when
+/// Settings turn events off.
+(List<EventBlock>, List<CalendarEvent>) eventsOn(AppData data, DateTime day, List<CalendarEvent> events) {
+  if (!data.dayPlan.showEvents) return (const [], const []);
+  final d0 = DateTime(day.year, day.month, day.day), d1 = d0.add(const Duration(days: 1));
+  final timed = <EventBlock>[], allDay = <CalendarEvent>[];
+  for (final e in events) {
+    if (e.allDay) {
+      // All-day events end at midnight after their last day.
+      final end = e.end.isAfter(e.start) ? e.end : e.start.add(const Duration(days: 1));
+      if (e.start.isBefore(d1) && end.isAfter(d0)) allDay.add(e);
+    } else if (_sameDay(e.start, day)) {
+      timed.add(EventBlock(e));
+    }
+  }
+  timed.sort((a, b) => a.start.compareTo(b.start));
+  return (timed, allDay);
+}
+
+/// Links between blocks shown: a task's first block after the last block of each task it comes
+/// after, and a step's block after the blocks of the steps it comes after. Marks blocks planned
+/// before what they wait for is finished (on any day) as [PlanBlock.tooEarly].
+List<PlanLink> _links(AppData data, List<PlanBlock> shown) {
+  final all = [for (final b in shown) ...[b, ...b.inside]];
+  final links = <PlanLink>[];
+  for (final b in all) {
+    if (b.done) continue;
+    if (b.step == null) {
+      final preds = b.task.afterIds;
+      if (preds.isEmpty) continue;
+      // Only the task's first block that day gets the line.
+      if (all.any((o) => o.step == null && identical(o.task, b.task) && o.start.isBefore(b.start))) continue;
+      for (final id in preds) {
+        final from = all.where((a) => a.task.id == id).fold<PlanBlock?>(null, (m, a) => m == null || a.end.isAfter(m.end) ? a : m);
+        if (from != null) links.add(PlanLink(from, b));
+        final pt = data.task(id);
+        if (pt != null && pt.closedAt == null && pt.slots.any((x) => x.doneAt == null && x.end.isAfter(b.start))) {
+          b.tooEarly = true;
+        }
+      }
+    } else {
+      for (final id in b.step!.afterIds) {
+        for (final a in all.where((a) => identical(a.task, b.task) && a.step?.id == id)) {
+          links.add(PlanLink(a, b));
+        }
+        final ps = b.task.steps.where((x) => x.id == id).firstOrNull;
+        if (ps != null && !ps.done && b.task.slotsOf(ps).any((x) => x.doneAt == null && x.end.isAfter(b.start))) {
+          b.tooEarly = true;
+        }
+      }
+    }
+  }
+  return links;
+}
+
+/// A planned time to move: what [pushAfter] wants changed.
+class PlanMove {
+  const PlanMove(this.task, this.slot, this.from, this.to);
+  final Task task;
+  final TimeSlot slot;
+  final DateTime from, to;
+}
+
+/// What comes after [b] on its day, moved later so nothing overlaps once [b] runs from
+/// [newStart] for [newMinutes]: each block that would now start before the end of the one in
+/// front (plus its gap) moves to just after it, in a chain, until a free stretch takes up the
+/// slack. Blocks that leave room, ticked blocks and steps inside [b] stay put; steps inside a
+/// moved task move with it. Earlier blocks never move.
+List<PlanMove> pushAfter(AppData data, PlanBlock b, DateTime newStart, int newMinutes) {
+  final s = data.dayPlan;
+  final day = b.start;
+  final blocks = blocksOn(data, day).where((x) => !x.shared).toList();
+  // Steps inside a task's time move with the task, so only outer blocks are pushed.
+  final outer = <PlanBlock>[];
+  final insideOf = <PlanBlock, List<PlanBlock>>{};
+  for (final x in blocks) {
+    final frame = x.step == null
+        ? null
+        : blocks
+            .where((f) => f.step == null && identical(f.task, x.task) && !f.start.isAfter(x.start) && !f.end.isBefore(x.end))
+            .firstOrNull;
+    if (frame != null) {
+      (insideOf[frame] ??= []).add(x);
+    } else {
+      outer.add(x);
+    }
+  }
+  bool isB(PlanBlock x) => identical(x.slot, b.slot);
+  final mine = insideOf.entries.where((e) => isB(e.key)).expand((e) => e.value).map((e) => e.slot).toSet();
+  // A step stretched inside its task's time pushes only within that task's other steps.
+  final frame = insideOf.entries.where((e) => e.value.any(isB)).map((e) => e.key).firstOrNull;
+  final pool = frame == null ? outer : insideOf[frame]!;
+  final candidates = pool
+      .where((x) => !isB(x) && !mine.contains(x.slot) && x.slot.doneAt == null && !x.start.isBefore(b.start))
+      .toList()
+    ..sort((a, c) => a.start.compareTo(c.start));
+  var frontier = newStart.add(Duration(minutes: newMinutes + (b.slot.gapAfter ?? s.gapMinutes)));
+  final moves = <PlanMove>[];
+  for (final x in candidates) {
+    if (!x.start.isBefore(frontier)) break;
+    final shift = frontier.difference(x.start);
+    moves.add(PlanMove(x.task, x.slot, x.start, frontier));
+    for (final st in insideOf[x] ?? const <PlanBlock>[]) {
+      moves.add(PlanMove(st.task, st.slot, st.start, st.start.add(shift)));
+    }
+    frontier = frontier.add(Duration(minutes: x.slot.minutes + (x.slot.gapAfter ?? s.gapMinutes)));
+  }
+  return moves;
 }
 
 /// How full [day] is: planned minutes inside working hours over the working minutes (above 1
 /// when over-full). Bands that leave room don't count.
-double dayLoad(AppData data, DateTime day) {
+double dayLoad(AppData data, DateTime day, {List<CalendarEvent> events = const []}) {
   final s = data.dayPlan;
   final ws = _at(day, s.workStart), we = _at(day, s.workEnd);
   final work = we.difference(ws).inMinutes;
@@ -284,6 +449,10 @@ double dayLoad(AppData data, DateTime day) {
     final st = b.start.isBefore(ws) ? ws : b.start, en = b.end.isAfter(we) ? we : b.end;
     if (en.isAfter(st)) spans.add(Span(st, en));
     outside += b.end.difference(b.start).inMinutes - (en.isAfter(st) ? en.difference(st).inMinutes : 0);
+  }
+  for (final e in eventsOn(data, day, events).$1) {
+    final st = e.start.isBefore(ws) ? ws : e.start, en = e.end.isAfter(we) ? we : e.end;
+    if (en.isAfter(st)) spans.add(Span(st, en));
   }
   return (_union(spans) + outside) / work;
 }

@@ -30,12 +30,16 @@ class CalendarEvent {
     required this.start,
     required this.allDay,
     this.location,
-  });
+    DateTime? end,
+  }) : end = end ?? start;
 
   final String id;
   final String calendarId;
   final String title;
   final DateTime start;
+
+  /// Item 101: when it ends (the same as [start] from older native code).
+  final DateTime end;
   final bool allDay;
   final String? location;
 }
@@ -100,6 +104,7 @@ class Native {
           start: DateTime.fromMillisecondsSinceEpoch((e['start'] as num).toInt()),
           allDay: e['allDay'] as bool? ?? false,
           location: e['location'] as String?,
+          end: e['end'] is num ? DateTime.fromMillisecondsSinceEpoch((e['end'] as num).toInt()) : null,
         ),
     ];
   }

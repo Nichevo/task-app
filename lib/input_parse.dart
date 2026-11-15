@@ -9,7 +9,15 @@ enum CategorySource { none, tag, keyword, learned }
 /// What the app read out of a typed line: the words, a due date and a category.
 class ParsedInput {
   const ParsedInput(this.title,
-      {this.due, this.categoryId, this.source = CategorySource.none, this.box, this.board = false, this.star = false, this.gantt = false});
+      {this.due,
+      this.categoryId,
+      this.source = CategorySource.none,
+      this.box,
+      this.board = false,
+      this.star = false,
+      this.gantt = false,
+      this.planAt,
+      this.planMinutes});
 
   final String title;
   final DateTime? due;
@@ -23,6 +31,39 @@ class ParsedInput {
 
   /// Item 72: "!gantt".
   final bool gantt;
+
+  /// Item 101: "@14:00 45m" plans a time on the Day plan: when (on the due day, else today, or
+  /// tomorrow once that time has passed) and for how long (null = the default length).
+  final DateTime? planAt;
+  final int? planMinutes;
+
+  /// What [AppStore.addTask] takes for it.
+  ({DateTime at, int? minutes})? get plan => planAt == null ? null : (at: planAt!, minutes: planMinutes);
+}
+
+/// Item 101: takes an "@14:00", "@9", "@2:30pm" time, with an optional length after it ("45m",
+/// "1h", "1.5 h", "90 min"), out of [text]. The time is minutes after midnight.
+({String text, int? at, int? minutes}) takePlanTime(String text) {
+  final re = RegExp(
+    r'(^|\s)@(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?(?:\s+(\d+(?:\.\d+)?)\s*(m|mins?|minutes?|h|hrs?|hours?))?(?=\s|$)',
+    caseSensitive: false,
+  );
+  final m = re.firstMatch(text);
+  if (m == null) return (text: text, at: null, minutes: null);
+  var h = int.parse(m.group(2)!);
+  final min = int.parse(m.group(3) ?? '0');
+  final ap = m.group(4)?.toLowerCase();
+  if (ap == 'pm' && h < 12) h += 12;
+  if (ap == 'am' && h == 12) h = 0;
+  if (h > 23 || min > 59) return (text: text, at: null, minutes: null);
+  int? length;
+  if (m.group(5) case final n?) {
+    final v = double.parse(n);
+    length = (m.group(6)!.toLowerCase().startsWith('h') ? v * 60 : v).round();
+    if (length <= 0) length = null;
+  }
+  final out = text.replaceRange(m.start, m.end, m.group(1)!).replaceAll(RegExp(r'\s+'), ' ').trim();
+  return (text: out, at: h * 60 + min, minutes: length);
 }
 
 /// Item 64: the "!" words the add box understands.
@@ -81,7 +122,15 @@ String? quickWord(AppData data, QuickWord w) {
 ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify = true}) {
   final quick = takeQuickWords(text, data);
   text = quick.text.isEmpty ? text : quick.text;
+  final plan = takePlanTime(text);
+  if (plan.at != null && plan.text.isNotEmpty) text = plan.text;
   final q = QuickDate.parse(text, now);
+  DateTime? planAt;
+  if (plan.at != null && plan.text.isNotEmpty) {
+    final d = q.due ?? now;
+    planAt = DateTime(d.year, d.month, d.day).add(Duration(minutes: plan.at!));
+    if (q.due == null && planAt.isBefore(now)) planAt = planAt.add(const Duration(days: 1));
+  }
   var title = q.title;
   String? categoryId;
   var source = CategorySource.none;
@@ -115,7 +164,15 @@ ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify =
   }
 
   return ParsedInput(title.isEmpty ? text.trim() : title,
-      due: q.due, categoryId: categoryId, source: source, box: quick.box, board: quick.board, star: quick.star, gantt: quick.gantt);
+      due: q.due,
+      categoryId: categoryId,
+      source: source,
+      box: quick.box,
+      board: quick.board,
+      star: quick.star,
+      gantt: quick.gantt,
+      planAt: planAt,
+      planMinutes: planAt == null ? null : plan.minutes);
 }
 
 /// Splits pasted or shared text into one task per line, dropping bullets and numbering.
