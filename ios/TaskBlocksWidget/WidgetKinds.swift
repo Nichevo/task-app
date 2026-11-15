@@ -1088,6 +1088,115 @@ struct GlanceWidget: Widget {
   }
 }
 
+// MARK: - 13. Today's plan (item 101)
+
+struct PlanRow: Identifiable {
+  let id: String
+  let title: String
+  let start: Date
+  let end: Date
+  var plan: WPlan? = nil
+  var task: WTask? = nil
+}
+
+/** Today's planned times from the Day plan, with today's timed events, in time order. Tasks and
+ * steps ticked on a widget drop out. */
+func planRows(_ snap: Snapshot, now: Date) -> [PlanRow] {
+  let cal = Calendar.current
+  var out: [PlanRow] = snap.plan.compactMap { p in
+    guard cal.isDate(p.at, inSameDayAs: now), let t = snap.task(p.id) else { return nil }
+    if let st = p.step, t.steps.contains(where: { $0.id == st && $0.done }) { return nil }
+    let title = p.task.map { "\(p.title) · \($0)" } ?? p.title
+    return PlanRow(id: p.id + "/" + (p.step ?? "") + "/\(p.at.timeIntervalSince1970)", title: title, start: p.at, end: p.end, plan: p, task: t)
+  }
+  out += Events.today(now).filter { !$0.allDay }.map {
+    PlanRow(id: "ev:" + $0.id, title: $0.title, start: $0.start, end: $0.end)
+  }
+  return out.sorted { $0.start < $1.start }
+}
+
+struct DayPlanView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: PlainEntry
+
+  var body: some View {
+    let snap = entry.snap
+    let now = entry.date
+    let rows = planRows(snap, now: now)
+    let fit = family == .systemMedium ? 3 : family == .systemExtraLarge ? 9 : 8
+    let hm = Date.FormatStyle(date: .omitted, time: .shortened)
+    VStack(alignment: .leading, spacing: 4) {
+      Header(title: "Today's plan", url: W.link("dayplan"), add: W.link("add"))
+      if !snap.hasData {
+        EmptyNote(text: openAppFirst)
+      } else if rows.isEmpty {
+        EmptyNote(text: "Nothing planned today. Give tasks a time on the Day plan.")
+      }
+      ForEach(rows.prefix(fit)) { r in
+        HStack(spacing: 6) {
+          if let p = r.plan, let t = r.task {
+            tick(p, t, now: now)
+          } else {
+            Image(systemName: "calendar").font(.caption).foregroundStyle(.secondary).frame(width: 20)
+          }
+          Link(destination: r.task.map { W.open($0.id) } ?? W.link("dayplan")) {
+            HStack(spacing: 6) {
+              Text(r.title).font(.subheadline).lineLimit(1)
+              Spacer(minLength: 4)
+              Text("\(r.start.formatted(hm))–\(r.end.formatted(hm))").font(.caption2).foregroundStyle(Color.black.opacity(0.6))
+            }
+            .foregroundStyle(Color.black.opacity(0.85))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+              r.task.map { W.colour(snap, $0, now: now) } ?? Color(red: 0.89, green: 0.93, blue: 0.96),
+              in: RoundedRectangle(cornerRadius: 6))
+          }
+        }
+      }
+      if rows.count > fit {
+        Text("\(rows.count - fit) more").font(.caption2).foregroundStyle(.secondary)
+      }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+
+  /** Ticks the step, or the task; with more of the task's time planned later, marks it worked
+   * on today instead, as the Day plan does. */
+  @ViewBuilder
+  func tick(_ p: WPlan, _ t: WTask, now: Date) -> some View {
+    if let step = p.step {
+      Button(intent: TickStepAction(task: t.id, step: step)) {
+        Image(systemName: "circle").font(.body).foregroundStyle(.secondary).frame(width: 20)
+      }
+      .buttonStyle(.plain)
+    } else if p.later {
+      let today = W.key(now)
+      let worked = t.worked.contains(today)
+      Button(intent: WorkedDayAction(id: t.id, day: today, on: !worked)) {
+        Image(systemName: worked ? "checkmark.circle.fill" : "circle").font(.body).foregroundStyle(.secondary).frame(width: 20)
+      }
+      .buttonStyle(.plain)
+    } else {
+      Button(intent: TickTaskAction(id: t.id)) {
+        Image(systemName: "circle").font(.body).foregroundStyle(.secondary).frame(width: 20)
+      }
+      .buttonStyle(.plain)
+    }
+  }
+}
+
+struct DayPlanWidget: Widget {
+  var body: some WidgetConfiguration {
+    StaticConfiguration(kind: "DayPlan", provider: PlainProvider(hourly: true)) { DayPlanView(entry: $0) }
+      .configurationDisplayName("Today's plan")
+      .description("The times planned on the Day plan today, with your calendar events.")
+      .supportedFamilies([.systemMedium, .systemLarge, .systemExtraLarge])
+  }
+}
+
 // MARK: - All of them
 
 @main
@@ -1105,5 +1214,6 @@ struct TaskBlocksWidgets: WidgetBundle {
     QuickAddWidget()
     CalendarWidget()
     GlanceWidget()
+    DayPlanWidget()
   }
 }

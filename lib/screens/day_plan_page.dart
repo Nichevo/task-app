@@ -19,7 +19,7 @@ import 'task_page.dart';
 ///
 /// Also the Calendar page's Day mode: [onMode] then switches back to 'month' or 'week'.
 class DayPlanPage extends StatefulWidget {
-  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events});
+  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false});
 
   final AppStore store;
   final DateTime? initialDay;
@@ -28,6 +28,10 @@ class DayPlanPage extends StatefulWidget {
   /// Calendar events to show instead of reading the phone's (for tests and previews).
   final List<CalendarEvent>? events;
 
+  /// In the Fold's side panel (1.11.2): a slimmer bar, a button to open it full size, and the
+  /// tray along the bottom.
+  final bool embedded;
+
   @override
   State<DayPlanPage> createState() => _DayPlanPageState();
 }
@@ -35,7 +39,7 @@ class DayPlanPage extends StatefulWidget {
 class _DayPlanPageState extends State<DayPlanPage> {
   late DateTime _day = dayStart(widget.initialDay ?? DateTime.now());
   final _scroll = ScrollController();
-  final _timelineKey = GlobalKey();
+  final _timelineKeys = [GlobalKey(), GlobalKey()];
   bool _trayOpen = false;
 
   // A block being moved (press and hold) or stretched (bottom edge), and by how far.
@@ -79,7 +83,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
     if (!force && _eventsWeek == monday) return;
     _eventsWeek = monday;
     try {
-      final list = await Native.events(monday, monday.add(const Duration(days: 7)), data.eventCalendars);
+      // A day over, for the second of two days side by side on a Sunday.
+      final list = await Native.events(monday, monday.add(const Duration(days: 8)), data.eventCalendars);
       if (!mounted) return;
       setState(() {
         _events = list;
@@ -152,15 +157,41 @@ class _DayPlanPageState extends State<DayPlanPage> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) => LayoutBuilder(builder: (context, box) {
-        final wide = box.maxWidth >= 840;
+        final embedded = widget.embedded;
+        // Two days side by side need room for both and, beside them, the tray.
+        final canTwo = !embedded && box.maxWidth >= 900;
+        final two = canTwo && store.dayPlanTwoDays;
+        final wide = !embedded && box.maxWidth >= (two ? 1180 : 840);
         final layout = layoutDay(data, _day, events: _events);
+        final next = _day.add(const Duration(days: 1));
+        final layouts = [layout, if (two) layoutDay(data, next, events: _events)];
         final tray = trayFor(data, _day);
+        final fmt = DateFormat(embedded ? 'EEE d MMM' : (wide ? 'EEEE d MMMM' : 'EEE d MMM'));
         return Scaffold(
           appBar: AppBar(
-            title: Text('Day plan · ${DateFormat(wide ? 'EEEE d MMMM' : 'EEE d MMM').format(_day)}'),
+            primary: !embedded,
+            automaticallyImplyLeading: !embedded,
+            toolbarHeight: embedded ? 48 : null,
+            titleTextStyle: embedded ? Theme.of(context).textTheme.titleMedium : null,
+            title: Text(two
+                ? 'Day plan · ${fmt.format(_day)} and ${DateFormat('EEE d').format(next)}'
+                : embedded
+                    ? fmt.format(_day)
+                    : 'Day plan · ${fmt.format(_day)}'),
             actions: [
               IconButton(tooltip: 'Today', icon: const Icon(Icons.today), onPressed: () => _goTo(DateTime.now())),
               IconButton(tooltip: 'Plan a task', icon: const Icon(Icons.add), onPressed: _planAny),
+              if (canTwo)
+                IconButton(
+                  tooltip: two ? 'One day' : 'Two days side by side',
+                  isSelected: two,
+                  icon: const Icon(Icons.view_column_outlined),
+                  selectedIcon: const Icon(Icons.view_column),
+                  onPressed: () {
+                    store.setDayPlanTwoDays(!two);
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+                  },
+                ),
               if (widget.onMode != null) ...[
                 IconButton(
                   tooltip: 'Week view',
@@ -196,6 +227,13 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     ),
                 ],
               ),
+              if (embedded)
+                IconButton(
+                  tooltip: 'Open the Day plan',
+                  icon: const Icon(Icons.open_in_full),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => DayPlanPage(store: store, initialDay: _day, events: widget.events))),
+                ),
             ],
           ),
           body: Column(children: [
@@ -208,9 +246,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       SizedBox(width: 300, child: _trayPanel(context, tray)),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _timeline(context, layout)),
+                      Expanded(child: _timeline(context, layouts)),
                     ])
-                  : _timeline(context, layout),
+                  : _timeline(context, layouts),
             ),
             if (!wide) _trayBar(context, tray),
           ]),
@@ -460,31 +498,72 @@ class _DayPlanPageState extends State<DayPlanPage> {
 
   // --- The timeline ---
 
-  Widget _timeline(BuildContext context, DayLayout l) {
+  /// The day's timeline, or (two days side by side) both days' in one scrolling view, with
+  /// the same hours drawn so they line up.
+  Widget _timeline(BuildContext context, List<DayLayout> ls) {
     final theme = Theme.of(context);
     final ppm = _ppm(context);
-    final (from, to) = _range(l);
+    var (from, to) = _range(ls.first);
+    for (final l in ls.skip(1)) {
+      final (a, b) = _range(l);
+      from = min(from, a);
+      to = max(to, b);
+    }
     final height = (to - from) * ppm + _top * 2;
-    double y(DateTime t) => (t.hour * 60 + t.minute - from + (DateUtils.isSameDay(t, _day) ? 0 : 24 * 60)) * ppm + _top;
+    _rects.clear();
+    final today = dayStart(DateTime.now());
+    final scroll = SingleChildScrollView(
+      controller: _scroll,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        for (var i = 0; i < ls.length; i++) ...[
+          if (i > 0) Container(width: 1, height: height, color: theme.dividerColor),
+          Expanded(child: _dayColumn(context, ls[i], from, to, height, _timelineKeys[i])),
+        ],
+      ]),
+    );
+    if (ls.length == 1) return scroll;
+    return Column(children: [
+      Row(children: [
+        for (final l in ls)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(_gutter, 2, 10, 4),
+              child: Text(
+                '${DateFormat('EEEE d MMM').format(l.day)}${l.day == today ? ' · Today' : ''}'
+                ' · ${describeLength(l.plannedMinutes)} planned',
+                style: theme.textTheme.titleSmall?.copyWith(color: l.day == today ? theme.colorScheme.primary : null),
+              ),
+            ),
+          ),
+      ]),
+      const Divider(height: 1),
+      Expanded(child: scroll),
+    ]);
+  }
+
+  /// One day's column: hour lines, free time, gaps, events, blocks, links and the now line.
+  /// Drops from the tray land on this column's day.
+  Widget _dayColumn(BuildContext context, DayLayout l, int from, int to, double height, GlobalKey key) {
+    final theme = Theme.of(context);
+    final ppm = _ppm(context);
+    final day = l.day;
+    double y(DateTime t) => (t.hour * 60 + t.minute - from + (DateUtils.isSameDay(t, day) ? 0 : 24 * 60)) * ppm + _top;
     double h(int minutes) => minutes * ppm;
     final now = DateTime.now();
     return DragTarget<TrayItem>(
       onAcceptWithDetails: (d) {
-        final box = _timelineKey.currentContext?.findRenderObject() as RenderBox?;
+        final box = key.currentContext?.findRenderObject() as RenderBox?;
         if (box == null) return;
         final local = box.globalToLocal(d.offset);
         final minutes = (local.dy - _top) / ppm + from;
-        final start = snapTime(_day.add(Duration(minutes: minutes.round().clamp(0, 24 * 60 - s.snap))), s.snap);
+        final start = snapTime(day.add(Duration(minutes: minutes.round().clamp(0, 24 * 60 - s.snap))), s.snap);
         _planDropped(d.data, start);
       },
       builder: (context, candidates, _) => Container(
         color: candidates.isNotEmpty ? theme.colorScheme.primaryContainer.withValues(alpha: 0.25) : null,
-        child: SingleChildScrollView(
-          controller: _scroll,
-          child: LayoutBuilder(builder: (context, box) {
+        child: LayoutBuilder(builder: (context, box) {
             final x0 = _gutter, x1 = box.maxWidth - 10;
             final children = <Widget>[];
-            _rects.clear();
             // Hour lines.
             for (var m = (from + 59) ~/ 60 * 60; m <= to; m += 60) {
               final top = (m - from) * ppm + _top;
@@ -589,7 +668,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
-            if (DateUtils.isSameDay(now, _day)) {
+            if (DateUtils.isSameDay(now, day)) {
               final ny = y(now);
               children.add(Positioned(
                 left: x0 - 6,
@@ -608,7 +687,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               children.add(Positioned(
                 left: x0,
                 right: 10,
-                top: y(DateTime(_day.year, _day.month, _day.day).add(Duration(minutes: s.workStart))) + 40,
+                top: y(day.add(Duration(minutes: s.workStart))) + 40,
                 child: Text(
                   'Nothing planned. Drag a task from the "To plan" tray onto a time, or use + to plan one.',
                   textAlign: TextAlign.center,
@@ -616,9 +695,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
-            return SizedBox(key: _timelineKey, height: height, child: Stack(clipBehavior: Clip.none, children: children));
+            return SizedBox(key: key, height: height, child: Stack(clipBehavior: Clip.none, children: children));
           }),
-        ),
       ),
     );
   }

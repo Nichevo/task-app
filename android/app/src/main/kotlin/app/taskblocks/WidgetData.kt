@@ -50,6 +50,14 @@ data class WidgetTask(
     /** Item 78, habits only: the streak and its unit (day or week). */
     val streak: Int = 0,
     val streakUnit: String = "day",
+    /** Item 101, Today's plan rows: when the planned time (or event) ends. [due] is its start. */
+    val end: Long? = null,
+    /** Item 101: a planned step's id, its task's name, and whether more of the task's own time
+     * is planned later (ticking then counts as worked on today). */
+    val stepId: String? = null,
+    val parent: String? = null,
+    val later: Boolean = false,
+    val planned: Boolean = false,
 )
 
 /** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
@@ -324,6 +332,7 @@ object WidgetData {
         f == "star" -> "Starred"
         f == "overdue" -> "Overdue"
         f == "today" -> "Today"
+        f == "plan" -> "Today's plan"
         f.startsWith("cat:") -> {
           val id = f.removePrefix("cat:").removeSuffix("+soon")
           val name = snap.categoryName(id) ?: "Tasks"
@@ -335,6 +344,7 @@ object WidgetData {
 
   /** The tasks a list, summary, today or focus widget shows. */
   fun tasks(c: Context, snap: Snapshot, f: String): List<WidgetTask> {
+    if (f == "plan") return planRows(c, snap)
     val now = System.currentTimeMillis()
     val endOfToday = startOfDay(now) + DAY
     val out = ArrayList<WidgetTask>()
@@ -367,6 +377,46 @@ object WidgetData {
     return out
   }
 
+  /**
+   * Item 101, the Today's plan widget: today's planned times from the Day plan, with today's
+   * calendar events in among them, in time order. A task ticked off on the widget drops out,
+   * and so does a step ticked there.
+   */
+  fun planRows(c: Context, snap: Snapshot): List<WidgetTask> {
+    val from = startOfDay(System.currentTimeMillis())
+    val arr = snap.root.optJSONArray("plan") ?: JSONArray()
+    val out = ArrayList<WidgetTask>()
+    for (i in 0 until arr.length()) {
+      val o = arr.getJSONObject(i)
+      val at = o.optLong("at")
+      if (at < from || at >= from + DAY) continue
+      val task = snap.tasks.firstOrNull { it.id == o.optString("id") } ?: continue
+      val step = o.optString("step").ifEmpty { null }
+      if (step != null && task.steps.any { it.id == step && it.done }) continue
+      out.add(
+          task.copy(
+              title = o.optString("title"),
+              due = at,
+              end = o.optLong("end", at),
+              star = false,
+              steps = emptyList(),
+              stepId = step,
+              parent = o.optString("task").ifEmpty { null },
+              later = o.optBoolean("later"),
+              planned = true,
+          ))
+    }
+    out.addAll(todayEvents(c).filter { it.due != null && it.due >= from })
+    out.sortBy { it.due }
+    return out
+  }
+
+  /** "09:00–10:30". */
+  fun timeRange(start: Long, end: Long?): String {
+    val f = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return if (end == null || end <= start) f.format(Date(start)) else f.format(Date(start)) + "–" + f.format(Date(end))
+  }
+
   fun startOfDay(ms: Long): Long {
     val cal = Calendar.getInstance()
     cal.timeInMillis = ms
@@ -385,7 +435,7 @@ object WidgetData {
     val from = startOfDay(System.currentTimeMillis())
     return try {
       CalendarStore.events(c, from, from + DAY, emptySet()).map {
-        WidgetTask("ev:" + it.id, it.title, null, from, it.start, locked = true, star = false, event = true)
+        WidgetTask("ev:" + it.id, it.title, null, from, it.start, locked = true, star = false, event = true, end = it.end)
       }
     } catch (e: Exception) {
       emptyList()
@@ -493,6 +543,7 @@ object WidgetData {
           WorkedTodayWidget::class.java,
           AddedDoneWidget::class.java,
           BurnDownWidget::class.java,
+          DayPlanWidget::class.java,
       )
 
   fun refreshAll(c: Context) {

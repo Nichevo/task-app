@@ -12,6 +12,7 @@
     <string name="widget_list_desc">Task list: coloured tasks you can tick off or snooze</string>
     <string name="widget_compact_desc">Summary: open and overdue counts and the next 3 due</string>
     <string name="widget_quick_add_desc">Quick add: tap or speak a new task</string>
+    <string name="widget_day_plan_desc">Today\'s plan: the times planned on the Day plan, with your calendar events</string>
     <string name="widget_today_desc">Today: overdue, due today and today\'s calendar events</string>
     <string name="widget_focus_desc">Focus: one big block for your top task</string>
     <string name="widget_checklist_desc">Checklist: the steps of one task, tickable here</string>

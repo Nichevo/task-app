@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.11.2', 'November 2026', [
+    'Fold and tablets: the side panel has a new "Day plan" view, today\'s timeline in a slim column beside your list, with its own "To plan" tray. Switch days with the week strip, and the full-size button opens the whole Day plan. The panel\'s "Timeline" view is now called "Gantt", which is what it shows.',
+    'Day plan on a wide screen: the new columns button shows two days side by side (the day you pick and the next), lined up hour by hour. Drag from the tray onto either day. This device remembers the choice.',
+    'New widget, Today\'s plan (Android and iPad): today\'s planned times in order with their start and end, mixed in with your calendar events, in each task\'s colour. The box ticks a step or the task; when more time is planned for the task later, it counts as worked on today instead, as on the Day plan. Tap the title to open the Day plan.',
+  ]),
   Release('1.11.1', 'November 2026', [
     'Day plan: your phone\'s calendar events show on the timeline in grey, read-only, and count as busy time, so free time and how full a day is include them. All-day events show as chips above the timeline. Tap one to see it, or to hide events; turn them on or off from the filter button or Settings, Day plan. If the app can\'t read your calendar yet, an "Allow calendar" button asks.',
     'An event that overlaps a planned block is a clash, side by side with a red outline, and the gap after a block stops where an event starts.',

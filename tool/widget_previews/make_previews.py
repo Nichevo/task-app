@@ -427,6 +427,12 @@ if __name__ == "__main__":
     task_list("task_list", "All tasks", TASKS)
     task_list("today", "Today", [TASKS[0], ("Team meeting", "09:30", 0, False, True), TASKS[1],
                                  ("Dentist", "14:00", 0, False, True), ("Water the plants", "18:00", 0.4, False)])
+    # Item 101: Today's plan.
+    task_list("day_plan", "Today's plan", [("Clear the inbox", "08:00–08:30", 0.1, False),
+                                           ("Team stand-up", "08:30–08:45", 0, False, True),
+                                           ("Draft the client slides", "09:15–10:45", 0.75, False),
+                                           ("Lunch with Sam", "12:00–12:45", 0, False, True),
+                                           ("Sand the boards · Paint the fence", "13:30–14:30", 0.3, False)])
     compact()
     quick_add()
     focus()

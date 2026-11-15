@@ -7,7 +7,10 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 
-/** Supplies the rows of [TaskListWidget], [TodayWidget] and the list in [CalendarWidget]. */
+/**
+ * Supplies the rows of [TaskListWidget], [TodayWidget], [DayPlanWidget] and the list in
+ * [CalendarWidget].
+ */
 class TaskListService : RemoteViewsService() {
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
       Factory(
@@ -45,6 +48,7 @@ class TaskListService : RemoteViewsService() {
       val v = RemoteViews(c.packageName, if (compact) R.layout.widget_row_compact else R.layout.widget_row)
       val t = items.getOrNull(position) ?: return v
       val s = snap ?: return v
+      if (filter == "plan") return planRow(v, s, t)
       v.setInt(R.id.row, "setBackgroundColor", if (t.event) 0xFFE3EEF6.toInt() else WidgetData.color(s, t))
       val prefix = if (t.star) "★ " else ""
       val progress = if (t.steps.isNotEmpty()) "  ${t.steps.count { it.done }}/${t.steps.size}" else ""
@@ -74,6 +78,45 @@ class TaskListService : RemoteViewsService() {
           v.setOnClickFillInIntent(R.id.row_tick, Intent().putExtra("op", "done").putExtra("id", t.id))
           v.setViewVisibility(R.id.row_snooze, if (snooze) View.VISIBLE else View.GONE)
           v.setOnClickFillInIntent(R.id.row_snooze, Intent().putExtra("op", "snooze").putExtra("id", t.id))
+        }
+      }
+      v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "open").putExtra("id", t.id))
+      return v
+    }
+
+    /**
+     * Item 101, a Today's plan row: the time range, the title (a step with its task's name), in
+     * the task's own colour. The box ticks a step, or the task; when more of the task's time is
+     * planned later it marks the task worked on today instead, as the Day plan does.
+     */
+    private fun planRow(v: RemoteViews, s: Snapshot, t: WidgetTask): RemoteViews {
+      val colour = if (t.event) 0xFFE3EEF6.toInt() else WidgetData.color(s, s.task(t.id) ?: t)
+      v.setInt(R.id.row, "setBackgroundColor", colour)
+      v.setTextViewText(R.id.row_title, if (t.parent != null) "${t.title} · ${t.parent}" else t.title)
+      v.setTextViewText(R.id.row_due, WidgetData.timeRange(t.due ?: 0L, t.end))
+      v.setTextColor(R.id.row_due, 0xDD000000.toInt())
+      v.setViewVisibility(R.id.row_snooze, View.GONE)
+      if (t.event) {
+        v.setImageViewResource(R.id.row_tick, R.drawable.ic_widget_event)
+        v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "home"))
+        return v
+      }
+      val today = WidgetData.todayKey()
+      when {
+        t.stepId != null -> {
+          v.setImageViewResource(R.id.row_tick, R.drawable.ic_widget_box)
+          v.setOnClickFillInIntent(R.id.row_tick, Intent().putExtra("op", "step").putExtra("id", t.id).putExtra("step", t.stepId))
+        }
+        t.later -> {
+          val worked = t.worked.contains(today)
+          v.setImageViewResource(R.id.row_tick, if (worked) R.drawable.ic_widget_box_checked else R.drawable.ic_widget_box)
+          v.setOnClickFillInIntent(
+              R.id.row_tick,
+              Intent().putExtra("op", "worked").putExtra("id", t.id).putExtra("day", today).putExtra("on", (!worked).toString()))
+        }
+        else -> {
+          v.setImageViewResource(R.id.row_tick, R.drawable.ic_widget_box)
+          v.setOnClickFillInIntent(R.id.row_tick, Intent().putExtra("op", "done").putExtra("id", t.id))
         }
       }
       v.setOnClickFillInIntent(R.id.row_text, Intent().putExtra("op", "open").putExtra("id", t.id))

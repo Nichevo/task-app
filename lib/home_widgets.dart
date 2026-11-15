@@ -21,6 +21,7 @@ class HomeWidgets {
   static const _iosKinds = [
     'TaskList', 'Summary', 'Focus', 'Checklist', 'Month', 'Board', 'Matrix', 'Worked', 'Chart', 'QuickAdd',
     'Calendar', 'Glance', // Item 90.
+    'DayPlan', // Item 101.
   ];
 
   static const _channel = MethodChannel('app.taskblocks/widgets');
@@ -65,6 +66,7 @@ class HomeWidgets {
     'app.taskblocks.WorkedTodayWidget',
     'app.taskblocks.AddedDoneWidget',
     'app.taskblocks.BurnDownWidget',
+    'app.taskblocks.DayPlanWidget', // Item 101.
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -142,6 +144,9 @@ class HomeWidgets {
                 ],
             },
       ],
+      // Item 101: the Today's plan widget: planned times for the coming week (it shows today's,
+      // so it keeps up when the day changes before the app is opened).
+      'plan': dayPlanRows(data, now),
       // Item 78: habits, for the Worked today widget's Habits choice.
       'habits': [
         for (final t in data.habits)
@@ -172,6 +177,39 @@ class HomeWidgets {
           if (taskBurnDown(t, data, now) case final b?) 'task:${t.id}': _burn(b),
       },
     });
+  }
+
+  /// Item 101: open planned times from the start of today for a week, in time order. "later"
+  /// says more of the task's own time is planned after it, so ticking it counts as worked on
+  /// that day rather than ticking the task off (as on the Day plan).
+  static List<Map<String, Object?>> dayPlanRows(AppData data, DateTime now) {
+    final from = DateTime(now.year, now.month, now.day), to = from.add(const Duration(days: 7));
+    final rows = <(DateTime, Map<String, Object?>)>[];
+    for (final t in data.active) {
+      if (t.habit) continue;
+      for (final sl in t.slots) {
+        if (sl.doneAt != null || sl.start.isBefore(from) || !sl.start.isBefore(to)) continue;
+        final step = sl.stepId == null ? null : t.steps.where((x) => x.id == sl.stepId).firstOrNull;
+        if (sl.stepId != null && (step == null || step.done)) continue;
+        rows.add((
+          sl.start,
+          {
+            'id': t.id,
+            'slot': sl.id,
+            if (step != null) 'step': step.id,
+            'title': step?.title ?? t.title,
+            if (step != null) 'task': t.title,
+            'at': sl.start.millisecondsSinceEpoch,
+            'end': sl.end.millisecondsSinceEpoch,
+            if (sl.shared) 'shared': true,
+            if (step == null && t.ownSlots.any((x) => !identical(x, sl) && x.doneAt == null && x.start.isAfter(sl.start)))
+              'later': true,
+          }
+        ));
+      }
+    }
+    rows.sort((a, b) => a.$1.compareTo(b.$1));
+    return [for (final r in rows) r.$2];
   }
 
   static Map<String, Object?> _addedDone(List<Bucket> b) => {
