@@ -9,6 +9,16 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.0', 'November 2026', [
+    'New: focus modes. A mode shows only what matters right now: Work, Home office, Weekend, Travel, or any you make. Tap the title of the list (it now reads "Tasks ▾") to pick one; the title becomes the mode\'s coloured chip, with when it changes next. Press and hold the chip to go back to Everything, which is the whole app as it always was.',
+    'Set up the four starter modes in one tap (the app guesses from your category names which are work, home and travel), then change them in Settings, Focus modes. Each category is Show, Quiet (folded under one heading at the bottom of the list) or Hide in each mode.',
+    'Nothing urgent gets lost: a hidden task still shows in "Still needs you" at the top of the list, tagged with why, when it is overdue, due today, starred or has a time on today\'s Day plan (each mode chooses, and can add "gone red"). Hidden tasks rest under a line at the bottom that says how many; Peek shows everything for a moment without changing mode.',
+    'Each mode picks its tools: Kanban, Gantt, Matrix, Calendar, Day plan, Habits, Starred emails, Upcoming events, Statistics and Achievements. Tools that are off leave the top bar, the ⋮ menu and the right-hand panel. A mode can also open the panel on a view, start on a quick filter, and put new tasks in its category.',
+    'The top bar no longer squashes the title: icons that don\'t fit the width move into the ⋮ menu by themselves, so the Fold\'s cover screen keeps the fewest.',
+    'Weekly schedule: paint the week with modes (Settings, Focus modes, Weekly schedule), for example Work on weekdays in your Day plan working hours and Weekend from Friday evening. Picking a mode by hand lasts until the schedule changes, an hour, the end of today, a date or until you change it, on this device or on all of them.',
+    'Lists follow the mode everywhere: the board, Gantt chart, Matrix, Calendar, agenda and Day plan (hidden categories\' planned times leave a faint "Hidden" strip, so you can\'t double-book an hour).',
+    'Statistics has a Focus modes section: time in each mode, tasks done in each and per hour, which mode gets most done, tasks done because they broke through, how often you changed mode by hand and how often you peeked.',
+  ]),
   Release('1.11.2', 'November 2026', [
     'Fold and tablets: the side panel has a new "Day plan" view, today\'s timeline in a slim column beside your list, with its own "To plan" tray. Switch days with the week strip, and the full-size button opens the whole Day plan. The panel\'s "Timeline" view is now called "Gantt", which is what it shows.',
     'Day plan on a wide screen: the new columns button shows two days side by side (the day you pick and the next), lined up hour by hour. Drag from the tray onto either day. This device remembers the choice.',

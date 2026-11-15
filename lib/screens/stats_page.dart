@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../models.dart';
+import '../modes.dart';
 import '../stats.dart';
 import '../store.dart';
 
@@ -75,6 +76,7 @@ class _StatsPageState extends State<StatsPage> {
             ..._repeats(context, s, from),
             ..._timing(context, s, from),
             ..._kanban(context, s, from),
+            ..._modes(context, from),
             const SizedBox(height: 24),
             Text('By category', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
@@ -111,6 +113,92 @@ class _StatsPageState extends State<StatsPage> {
         BucketUnit.week => DateFormat('d MMM').format(b.start),
         BucketUnit.month => DateFormat('MMM yy').format(b.start),
       };
+
+  /// Item 102: time in each focus mode and what got done in it.
+  List<Widget> _modes(BuildContext context, DateTime? from) {
+    final data = widget.store.data;
+    if (data.modes.isEmpty && data.modeLog.isEmpty) return [];
+    final now = DateTime.now();
+    final m = modeStats(data, now, since: from);
+    final total = m.totalMinutes;
+    if (total == 0) return [];
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    String name(String id) => id == everythingId ? 'Everything' : data.mode(id)?.name ?? 'A deleted mode';
+    Color colour(String id) => Color(id == everythingId ? 0xFF7FA3A3 : data.mode(id)?.colour ?? 0xFF9E9E9E);
+    String hours(int minutes) => minutes < 60 ? '$minutes min' : '${(minutes / 60).toStringAsFixed(minutes < 600 ? 1 : 0)} h';
+    final rows = m.minutes.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final ranked = [
+      for (final e in rows)
+        if (e.key != everythingId && m.perHour(e.key) != null) (e.key, m.perHour(e.key)!),
+    ]..sort((a, b) => b.$2.compareTo(a.$2));
+    final facts = <String>[
+      if (rows.where((e) => e.key != everythingId).firstOrNull case final top?)
+        'Most time in a mode: ${name(top.key)}, ${(top.value * 100 / total).round()}% of the time.',
+      if (ranked.isNotEmpty && ranked.first.$2 > 0)
+        'Most done per hour in ${name(ranked.first.$1)}: ${ranked.first.$2.toStringAsFixed(1)} tasks an hour.',
+      if (m.outside > 0)
+        '${m.outside} task${m.outside == 1 ? '' : 's'} from hidden categories got done because ${m.outside == 1 ? 'it' : 'they'} broke through.',
+      '${m.switches} change${m.switches == 1 ? '' : 's'} of mode, ${m.byHand} picked by hand.',
+      if (m.peeks > 0) 'Peeked at everything ${m.peeks} time${m.peeks == 1 ? '' : 's'}.',
+    ];
+    return [
+      _heading(context, 'Focus modes', 'Time in each mode (while it was in force, app open or not) and tasks ticked off in it'),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          height: 18,
+          child: Row(children: [
+            for (final e in rows)
+              if (e.value > 0) Expanded(flex: e.value, child: Container(color: colour(e.key))),
+          ]),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Table(
+        columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(1.1), 2: FlexColumnWidth(0.8), 3: FlexColumnWidth(1)},
+        children: [
+          TableRow(children: [
+            Text('Mode', style: hint),
+            Text('Time', style: hint),
+            Text('Done', style: hint, textAlign: TextAlign.right),
+            Text('Per hour', style: hint, textAlign: TextAlign.right),
+          ]),
+          for (final e in rows)
+            TableRow(children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(children: [
+                  Container(width: 10, height: 10, decoration: BoxDecoration(color: colour(e.key), borderRadius: BorderRadius.circular(3))),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(name(e.key), overflow: TextOverflow.ellipsis)),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text('${hours(e.value)} · ${(e.value * 100 / total).round()}%'),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text('${m.done[e.key] ?? 0}', textAlign: TextAlign.right),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Text(m.perHour(e.key)?.toStringAsFixed(1) ?? '–', textAlign: TextAlign.right),
+              ),
+            ]),
+        ],
+      ),
+      const SizedBox(height: 8),
+      for (final f in facts)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('•  '),
+            Expanded(child: Text(f)),
+          ]),
+        ),
+    ];
+  }
 
   /// Item 52: time in each stage, moves per week, tasks that went backwards, longest waiting.
   List<Widget> _kanban(BuildContext context, Stats s, DateTime? from) {

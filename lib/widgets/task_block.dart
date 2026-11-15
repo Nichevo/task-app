@@ -38,7 +38,11 @@ class TaskBlock extends StatelessWidget {
     this.boxName,
     this.onBoard,
     this.onWorked,
+    this.tag,
   });
+
+  /// Item 102: a short label after the title (why a hidden task breaks through: "Home · Overdue").
+  final String? tag;
 
   final Task task;
   final Color color;
@@ -135,6 +139,17 @@ class TaskBlock extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                               ),
+                              if (tag != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                        color: const Color(0xD01A1C1C), borderRadius: BorderRadius.circular(6)),
+                                    child: Text(tag!,
+                                        style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
                               if (task.starred) _badge(Icons.star, 'Starred', const Color(0xFF8D6E00)),
                               if (task.steps.isNotEmpty)
                                 Padding(

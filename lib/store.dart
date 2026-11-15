@@ -17,6 +17,7 @@ import 'inbox_files.dart';
 import 'input_parse.dart';
 import 'location.dart';
 import 'models.dart';
+import 'modes.dart';
 import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
@@ -168,6 +169,7 @@ class AppStore extends ChangeNotifier {
         filterSaved = true;
       }
       seenVersion = s['seenVersion'] as String?;
+      deviceModeChoice = ModeChoice.tryParse(s['modeChoice']);
       places.addAll([for (final p in s['places'] as List? ?? []) ?Place.tryParse(p)]);
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
@@ -190,6 +192,7 @@ class AppStore extends ChangeNotifier {
     }
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
+    refreshMode(applyStart: false);
     if (_cleanArchive()) await _writeData();
     notifyListeners();
     await applyPending();
@@ -358,6 +361,7 @@ class AppStore extends ChangeNotifier {
       'recordLocation': recordLocation,
       'quickFilter': quickFilter.name,
       if (seenVersion != null) 'seenVersion': seenVersion,
+      if (deviceModeChoice != null) 'modeChoice': deviceModeChoice!.toJson(),
       if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
@@ -453,6 +457,7 @@ class AppStore extends ChangeNotifier {
         final mergedText = jsonEncode(merged.toJson());
         if (mergedText != jsonEncode(data.toJson())) {
           data = merged;
+          refreshMode();
           _cleanArchive();
           await _writeData();
           notifyListeners();
@@ -546,7 +551,19 @@ class AppStore extends ChangeNotifier {
 
   /// The chips in the panel, in order. Never empty: Agenda stays when all are hidden.
   List<PanelView> get shownPanelViews {
-    final v = [for (final v in PanelView.values) if (!panelHidden.contains(v)) v];
+    // Item 102: a mode's tools that are off leave the panel too.
+    bool inMode(PanelView v) => switch (v) {
+          PanelView.matrix => modeNow.toolOn(ModeTool.matrix),
+          PanelView.board => modeNow.toolOn(ModeTool.board),
+          PanelView.timeline => modeNow.toolOn(ModeTool.gantt),
+          PanelView.calendar => modeNow.toolOn(ModeTool.calendar),
+          PanelView.dayPlan => modeNow.toolOn(ModeTool.dayPlan),
+          PanelView.events => modeNow.toolOn(ModeTool.events),
+          PanelView.stats => modeNow.toolOn(ModeTool.stats),
+          PanelView.achievements => modeNow.toolOn(ModeTool.achievements),
+          _ => true,
+        };
+    final v = [for (final v in PanelView.values) if (!panelHidden.contains(v) && inMode(v)) v];
     return v.isEmpty ? [PanelView.agenda] : v;
   }
 
@@ -978,7 +995,9 @@ class AppStore extends ChangeNotifier {
     if (t.kanban && last != null && t.stageId != last.id) _move(t, last, MoveHow.done, at: now, locate: false);
     t.closedAt = now;
     data.archived.insert(0, t);
-    data.done[t.id] = DoneRecord.of(t, now);
+    data.done[t.id] = DoneRecord.of(t, now,
+        mode: modeNow.mode?.id ?? everythingId,
+        outside: modeNow.mode?.showFor(data, t.categoryId) == CatShow.hide);
     _release(t.id, now);
     for (final other in data.active) {
       for (final s in other.steps.where((s) => s.taskId == t.id && !s.done)) {
@@ -1652,6 +1671,180 @@ class AppStore extends ChangeNotifier {
     boardLanes = lanes ?? boardLanes;
     notifyListeners();
     saveDeviceSettings();
+  }
+
+  // --- Item 102: focus modes ---
+
+  /// A mode picked by hand on this device (device-only; [AppData.modeChoice] is for every device).
+  ModeChoice? deviceModeChoice;
+
+  /// The hand choice in force at [now]: the newer of this device's and the shared one, while it
+  /// lasts. A choice with an empty mode means "back to the schedule".
+  ModeChoice? _choiceAt(DateTime now) {
+    final d = deviceModeChoice, s = data.modeChoice;
+    final newest = d == null ? s : (s == null || d.at.isAfter(s.at) ? d : s);
+    if (newest == null || newest.mode.isEmpty || !newest.activeAt(now)) return null;
+    if (newest.mode != everythingId && data.mode(newest.mode) == null) return null;
+    return newest;
+  }
+
+  /// Works out the mode in force ([modeNow]) and logs a change for the statistics. With
+  /// [applyStart], a change also picks the mode's starting filter chip and panel view.
+  /// Returns whether the mode changed.
+  bool refreshMode({DateTime? now, bool applyStart = true}) {
+    final at = now ?? DateTime.now();
+    final choice = _choiceAt(at);
+    final scheduled = scheduledAt(data.modeSchedule, at);
+    final id = choice?.mode ?? (data.mode(scheduled) == null ? everythingId : scheduled);
+    final mode = data.mode(id);
+    final was = modeNow.mode?.id ?? everythingId;
+    final byHand = choice != null;
+    DateTime? until;
+    if (choice != null) {
+      until = choice.until;
+    } else {
+      until = nextScheduleChange(data.modeSchedule, at);
+    }
+    final changed = was != id;
+    modeNow
+      ..mode = mode
+      ..until = until
+      ..byHand = byHand;
+    if (changed) modeNow.peek = false;
+    final logged = _logMode(id, byHand ? 'hand' : (id == everythingId ? 'none' : 'schedule'), at);
+    if (changed && !shownPanelViews.contains(panelView)) panelView = shownPanelViews.first;
+    if (changed && applyStart && mode != null) {
+      final f = QuickFilter.values.where((f) => f.name == mode.filter).firstOrNull;
+      if (f != null) quickFilter = f;
+      final v = PanelView.values.where((v) => v.name == mode.panel).firstOrNull;
+      if (v != null && shownPanelViews.contains(v)) panelView = v;
+    }
+    if (logged) changed ? this.changed() : _markDirty();
+    return changed;
+  }
+
+  void _markDirty() {
+    if (_dir == null && reminders == null && widgets == null) return;
+    _dirty = true;
+    _flushTimer?.cancel();
+    _flushTimer = Timer(const Duration(milliseconds: 400), flush);
+  }
+
+  /// Keeps [AppData.modeLog] in step: the open stretch is closed when the mode changes, and time
+  /// the app was closed is filled in from the schedule (or the end of a hand choice). Returns
+  /// whether the log changed.
+  bool _logMode(String id, String how, DateTime now) {
+    final open = data.modeLog.where((l) => l.end == null).toList();
+    // No modes, no statistics to keep (and nothing written on a plain start-up).
+    if (data.modes.isEmpty) {
+      for (final l in open) {
+        l.end = now;
+      }
+      return open.isNotEmpty;
+    }
+    if (open.length == 1 && open.first.mode == id && open.first.how == how) {
+      // Still the same, unless the schedule went somewhere else and back while the app was shut.
+      final l = open.first;
+      if (how == 'hand' || scheduleSegments(data.modeSchedule, l.start, now).length <= 1) return false;
+    }
+    DateTime? from;
+    for (final l in open) {
+      if (l.how == 'hand') {
+        // A hand choice lasted until its end time, if that has gone by.
+        final c = [deviceModeChoice, data.modeChoice].where((c) => c != null && c.mode == l.mode).firstOrNull;
+        final until = c?.until;
+        l.end = until != null && until.isBefore(now) && until.isAfter(l.start) ? until : now;
+      } else {
+        // A scheduled stretch lasted until the schedule changed.
+        final segs = scheduleSegments(data.modeSchedule, l.start, now);
+        l.end = segs.isEmpty ? now : segs.first.$3;
+      }
+      if (from == null || l.end!.isAfter(from)) from = l.end;
+    }
+    var start = now;
+    if (from != null && how != 'hand') {
+      // Fill in the schedule's changes while the app was closed.
+      for (final (m, s, e) in scheduleSegments(data.modeSchedule, from, now)) {
+        final mid = data.mode(m) == null ? everythingId : m;
+        if (!e.isBefore(now) && mid == id) {
+          start = s;
+          break;
+        }
+        final l = ModeLog.open(mid, s, mid == everythingId ? 'none' : 'schedule')..end = e;
+        data.modeLog.add(l);
+      }
+    }
+    data.modeLog.add(ModeLog.open(id, start, how));
+    final cutoff = now.subtract(const Duration(days: 366));
+    data.modeLog.removeWhere((l) => l.end != null && l.end!.isBefore(cutoff));
+    return true;
+  }
+
+  /// Picks a mode by hand ([everythingId] for Everything) [until] then (null = until changed);
+  /// [everywhere] makes the other devices follow. [mode] null goes back to the schedule.
+  void chooseMode(String? mode, {DateTime? until, bool everywhere = false}) {
+    final c = ModeChoice(mode ?? '', mode == null ? DateTime.now() : until);
+    deviceModeChoice = c;
+    if (everywhere || data.modeChoice != null) data.modeChoice = everywhere ? c : ModeChoice('', DateTime.now());
+    refreshMode();
+    changed();
+    unawaited(saveDeviceSettings());
+  }
+
+  /// "Peek": everything shows until turned off or the mode changes.
+  void setPeek(bool on) {
+    if (modeNow.peek == on) return;
+    modeNow.peek = on;
+    if (on) {
+      final open = data.modeLog.where((l) => l.end == null).lastOrNull;
+      if (open != null) {
+        open.peeks++;
+        _markDirty();
+      }
+    }
+    notifyListeners();
+  }
+
+  void addMode(FocusMode m) {
+    data.modes.add(m);
+    changed(settings: true);
+  }
+
+  /// After a mode is edited in Settings.
+  void modeChanged() {
+    refreshMode(applyStart: false);
+    changed(settings: true);
+  }
+
+  void deleteMode(FocusMode m) {
+    data.modes.remove(m);
+    data.deleted[m.id] = DateTime.now().toUtc();
+    data.modeSchedule.removeWhere((s) => s.mode == m.id);
+    refreshMode();
+    changed(settings: true);
+  }
+
+  void moveMode(int from, int to) {
+    final m = data.modes.removeAt(from);
+    data.modes.insert(to.clamp(0, data.modes.length), m);
+    changed(settings: true);
+  }
+
+  void setModeSchedule(List<ModeSlot> slots) {
+    data.modeSchedule
+      ..clear()
+      ..addAll(slots);
+    refreshMode();
+    changed(settings: true);
+  }
+
+  /// Makes the starter modes (and, when there is no schedule yet, the starter schedule).
+  void addStarterModes() {
+    final made = starterModes(data);
+    data.modes.addAll(made);
+    if (data.modeSchedule.isEmpty) data.modeSchedule.addAll(starterSchedule(data, made));
+    refreshMode(applyStart: false);
+    changed(settings: true);
   }
 
   /// Item 74: shows or hides one top bar icon on this device.

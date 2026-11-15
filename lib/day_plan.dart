@@ -215,7 +215,7 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
   final (timed, allDay) = eventsOn(data, day, events);
   var blocks = blocksOn(data, day);
   for (final b in blocks) {
-    b.hidden = categoryHidden(data, b.task.categoryId);
+    b.hidden = categoryHidden(data, b.task.categoryId) || !data.inMode(b.task);
   }
   if (!s.hiddenStrip) blocks = blocks.where((b) => !b.hidden).toList();
   if (!s.showTicked) blocks = blocks.where((b) => !b.done).toList();
@@ -525,7 +525,7 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
   final out = <TrayItem>[];
   final dueFirst = <TrayItem>[];
   for (final t in data.active) {
-    if (t.habit || categoryHidden(data, t.categoryId)) continue;
+    if (t.habit || categoryHidden(data, t.categoryId) || !data.inMode(t)) continue;
     final own = t.ownSlots.toList();
     if (own.any((x) => _sameDay(x.start, day))) {
       // Planned that day; only its due steps without a time can still be waiting.

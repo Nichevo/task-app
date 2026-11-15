@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'changelog.dart';
+import 'modes.dart';
 
 /// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
 enum GanttPush { ask, always, never }
@@ -1014,6 +1015,8 @@ class DoneRecord {
     this.lateMinutes,
     this.missed = 0,
     this.stageMinutes,
+    this.mode,
+    this.outside = false,
     this.extra = const {},
   });
 
@@ -1021,7 +1024,13 @@ class DoneRecord {
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages'};
+  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages', 'mode', 'outside'};
+
+  /// Item 102: the focus mode it was ticked off in ([everythingId] for none); null on older records.
+  final String? mode;
+
+  /// Item 102: the mode hid its category (it broke through).
+  final bool outside;
 
   final DateTime at;
 
@@ -1058,7 +1067,7 @@ class DoneRecord {
   /// The due time, when it had one and the record is new enough to know it.
   DateTime? get due => lateMinutes == null ? null : at.subtract(Duration(minutes: lateMinutes!));
 
-  factory DoneRecord.of(Task t, DateTime at) => DoneRecord(
+  factory DoneRecord.of(Task t, DateTime at, {String? mode, bool outside = false}) => DoneRecord(
         at: at,
         tookMinutes: at.difference(t.createdAt).inMinutes,
         onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
@@ -1069,6 +1078,8 @@ class DoneRecord {
         lateMinutes: t.dueAt == null ? null : at.difference(t.dueAt!).inMinutes,
         missed: missedCycles(t, at),
         stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
+        mode: mode,
+        outside: outside,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1083,6 +1094,8 @@ class DoneRecord {
         if (lateMinutes != null) 'late': lateMinutes,
         if (missed > 0) 'missed': missed,
         if (stageMinutes != null) 'stages': stageMinutes,
+        if (mode != null) 'mode': mode,
+        if (outside) 'outside': true,
       };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
@@ -1098,6 +1111,8 @@ class DoneRecord {
         stageMinutes: j['stages'] is Map
             ? {for (final e in (j['stages'] as Map).entries) e.key as String: (e.value as num).toInt()}
             : null,
+        mode: j['mode'] as String?,
+        outside: j['outside'] as bool? ?? false,
         extra: unknownFields(j, _known),
       );
 }
@@ -1612,7 +1627,14 @@ class AppData {
     this.urgentDays = 0,
     Map<String, String>? quickWords,
     List<dynamic>? unreadable,
+    List<FocusMode>? modes,
+    List<ModeSlot>? modeSchedule,
+    this.modeChoice,
+    List<ModeLog>? modeLog,
   })  : active = active ?? [],
+        modes = modes ?? [],
+        modeSchedule = modeSchedule ?? [],
+        modeLog = modeLog ?? [],
         dayPlan = dayPlan ?? DayPlanSettings(),
         unreadable = unreadable ?? [],
         hiddenEmails = hiddenEmails ?? {},
@@ -1716,7 +1738,10 @@ class AppData {
   bool ganttStartOnProgress;
 
   /// Item 72: tasks on the Gantt chart.
-  Iterable<Task> get ganttTasks => active.where((t) => t.gantt);
+  Iterable<Task> get ganttTasks => active.where((t) => t.gantt && inMode(t));
+
+  /// Item 102: whether [t] shows in the focus mode in force (always, in Everything).
+  bool inMode(Task t) => modeNow.shows(this, t, DateTime.now());
 
   /// Item 101: the Day plan's settings.
   DayPlanSettings dayPlan;
@@ -1735,7 +1760,7 @@ class AppData {
   KanbanStage? stage(String? id) => stages.where((s) => s.id == id).firstOrNull;
 
   /// Open tasks on the board.
-  Iterable<Task> get boardTasks => active.where((t) => t.kanban);
+  Iterable<Task> get boardTasks => active.where((t) => t.kanban && inMode(t));
 
   /// Repeating tasks moved on without being done, by [SkipRecord.key], for the statistics.
   final Map<String, SkipRecord> skips;
@@ -1826,7 +1851,7 @@ class AppData {
   }
 
   /// Open tasks on the matrix.
-  Iterable<Task> get matrixTasks => active.where((t) => t.matrixBox != null);
+  Iterable<Task> get matrixTasks => active.where((t) => t.matrixBox != null && inMode(t));
 
   /// Whether [address] is on the allowed list.
   bool senderAllowed(String address) {
@@ -1848,6 +1873,20 @@ class AppData {
   /// Item 62: top-level fields from a newer version that this one doesn't know; kept as they are.
   final Map<String, dynamic> extra;
 
+  /// Item 102: focus modes, in the order shown (Everything is not stored).
+  final List<FocusMode> modes;
+
+  /// Item 102: the weekly schedule of modes.
+  final List<ModeSlot> modeSchedule;
+
+  /// Item 102: a mode picked by hand for every device ("Switch my other devices too").
+  ModeChoice? modeChoice;
+
+  /// Item 102: stretches of time in each mode, for the statistics.
+  final List<ModeLog> modeLog;
+
+  FocusMode? mode(String? id) => modes.where((m) => m.id == id).firstOrNull;
+
   /// Another device has saved this data with a newer version of the app.
   bool get newerAppElsewhere => newestApp != null && compareVersions(newestApp!, currentAppVersion) > 0;
 
@@ -1860,7 +1899,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords', 'unreadable',
+    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog',
   };
 
   /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
@@ -1922,6 +1961,10 @@ class AppData {
         if (lists) 'active': active.map((t) => t.toJson()).toList(),
         if (lists) 'archived': archived.map((t) => t.toJson()).toList(),
         if (unreadable.isNotEmpty) 'unreadable': unreadable,
+        if (modes.isNotEmpty) 'modes': [for (final m in modes) m.toJson()],
+        if (modeSchedule.isNotEmpty) 'modeSchedule': [for (final m in modeSchedule) m.toJson()],
+        if (modeChoice != null) 'modeChoice': modeChoice!.toJson(),
+        if (lists && modeLog.isNotEmpty) 'modeLog': [for (final l in modeLog) l.toJson()],
       };
 
   TaskCategory? category(String? id) => categories.where((c) => c.id == id).firstOrNull;
@@ -2031,6 +2074,13 @@ class AppData {
         matrixNames: {for (final e in (j['matrixNames'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
         urgentDays: (j['urgentDays'] as num?)?.toInt() ?? 0,
         quickWords: {for (final e in (j['quickWords'] as Map? ?? {}).entries) e.key as String: '${e.value}'},
+        modes: [
+          for (final m in j['modes'] as List? ?? [])
+            if (m is Map<String, dynamic> && m['id'] is String) FocusMode.fromJson(m),
+        ],
+        modeSchedule: [for (final m in j['modeSchedule'] as List? ?? []) ?ModeSlot.tryParse(m)],
+        modeChoice: ModeChoice.tryParse(j['modeChoice']),
+        modeLog: [for (final l in j['modeLog'] as List? ?? []) ?ModeLog.tryParse(l)],
         extra: unknownFields(j, _known),
       );
   }
@@ -2218,6 +2268,14 @@ AppData mergeData(AppData a, AppData b) {
     matrixNames: settingsFrom.matrixNames,
     urgentDays: settingsFrom.urgentDays,
     quickWords: settingsFrom.quickWords,
+    modes: _mergeById(settingsFrom.modes, olderSettings.modes, (m) => m.id, deleted),
+    modeSchedule: settingsFrom.modeSchedule,
+    // The newer hand choice wins, whichever side changed settings last.
+    modeChoice: switch ((a.modeChoice, b.modeChoice)) {
+      (final x?, final y?) => y.at.isAfter(x.at) ? y : x,
+      (final x, final y) => x ?? y,
+    },
+    modeLog: mergeModeLogs(a.modeLog, b.modeLog),
     unreadable: {for (final u in [...a.unreadable, ...b.unreadable]) jsonEncode(u): u}.values.toList(),
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},

@@ -11,12 +11,14 @@ import '../csv_import.dart';
 import '../day_plan.dart' show TrayItem, describeLength;
 import '../input_parse.dart';
 import '../models.dart';
+import '../modes.dart';
 import '../changelog.dart';
 import '../native.dart';
 import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
 import '../widgets/add_dialogs.dart';
+import '../widgets/mode_chip.dart';
 import '../widgets/task_block.dart';
 import '../widgets/task_colors.dart';
 import 'about_page.dart';
@@ -103,9 +105,13 @@ class HomePageState extends State<HomePage> {
     // Only while the app is on screen: in the background there is nothing to redraw.
     _tick = Timer.periodic(const Duration(minutes: 1), (_) {
       final state = WidgetsBinding.instance.lifecycleState;
-      if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) setState(() {});
+      if (state == null || state == AppLifecycleState.resumed || state == AppLifecycleState.inactive) {
+        // Item 102: the schedule may have moved on to another mode.
+        if (!store.refreshMode()) setState(() {});
+      }
     });
     _lifecycle = AppLifecycleListener(onResume: () {
+      store.refreshMode();
       setState(() {}); // Colours and snoozes may have moved on while it was hidden.
       store.syncIfStale();
       _checkStarred();
@@ -285,24 +291,60 @@ class HomePageState extends State<HomePage> {
 
   /// The open tasks to show, in the chosen order. A search looks through every open task
   /// (snoozed ones too), whatever chip is picked.
-  List<Task> _visibleTasks(DateTime now) {
+  List<Task> _visibleTasks(DateTime now, {CatShow show = CatShow.show}) {
     final q = _query;
+    if (q.isNotEmpty && show != CatShow.show) return const [];
     final shown = q.isNotEmpty
         ? data.active.where((t) => matchesSearch(t, q, data))
         : data.active.where((t) =>
             !t.habit &&
             (_showSnoozed || !t.isSnoozed(now)) &&
+            modeNow.showOf(data, t) == show &&
             passesFilter(t, _filter, now) &&
             !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
   }
+
+  /// Item 102: tasks the mode hides that still need attention, with why.
+  List<(Task, String)> _breaking(DateTime now) {
+    if (!modeNow.filtering || _query.isNotEmpty) return const [];
+    final out = <(Task, String)>[];
+    for (final t in sortTasks(data.active.where((t) => !t.habit && !t.isSnoozed(now)).toList(), data, now)) {
+      if (modeNow.showOf(data, t) != CatShow.hide) continue;
+      final why = modeNow.breakThrough(data, t, now);
+      if (why != null) out.add((t, why));
+    }
+    return out;
+  }
+
+  /// Item 102: the "Still needs you" strip shows all of its tasks.
+  bool _allBreaking = false;
+
+  /// Item 102: the Quiet heading at the bottom is open.
+  bool _quietOpen = false;
+
+  static const _quietKey = '\u0000quiet';
 
   void _closeSearch() => setState(() {
         _searching = false;
         _search.clear();
       });
 
-  List<_Row> _rows(DateTime now) {
+  List<_Row> _rows(DateTime now) => [..._shownRows(now), ..._quietRows(now)];
+
+  /// Item 102: Quiet categories' tasks, folded under one heading at the bottom.
+  List<_Row> _quietRows(DateTime now) {
+    if (!modeNow.filtering) return const [];
+    final quiet = _visibleTasks(now, show: CatShow.quiet);
+    if (quiet.isEmpty) return const [];
+    final names = {for (final t in quiet) data.category(t.categoryId)?.name ?? 'No category'};
+    return [
+      _Header(_quietKey, 'Quiet: ${names.join(', ')}', quiet.length, !_quietOpen),
+      if (_quietOpen) ...quiet.map(_TaskRow.new),
+    ];
+  }
+
+  List<_Row> _shownRows(DateTime now) {
     final tasks = _visibleTasks(now);
     if (!data.groupByCategory) return [for (final t in tasks) _TaskRow(t)];
     final known = {for (final c in data.categories) c.id};
@@ -310,6 +352,8 @@ class HomePageState extends State<HomePage> {
     final rows = <_Row>[];
     for (final (key, name) in [('', 'No category'), for (final c in data.categories) (c.id, c.name)]) {
       final inGroup = tasks.where((t) => keyOf(t) == key).toList();
+      // Item 102: a category the mode doesn't show gets no heading.
+      if (inGroup.isEmpty && modeNow.filtering && modeNow.mode!.showFor(data, key.isEmpty ? null : key) != CatShow.show) continue;
       final collapsed = data.collapsed.contains(key);
       rows.add(_Header(key, name, inGroup.length, collapsed));
       if (!collapsed) rows.addAll(inGroup.map(_TaskRow.new));
@@ -325,7 +369,7 @@ class HomePageState extends State<HomePage> {
     String? category = moved.task.categoryId;
     if (data.groupByCategory) {
       final above = next.take(newIndex).whereType<_Header>().lastOrNull ?? next.whereType<_Header>().first;
-      category = above.key.isEmpty ? null : above.key;
+      if (above.key != _quietKey) category = above.key.isEmpty ? null : above.key;
     }
     final wasSort = data.sort;
     final before = [...data.active];
@@ -426,7 +470,11 @@ class HomePageState extends State<HomePage> {
               open == null &&
               store.panelView == PanelView.dayPlan &&
               store.shownPanelViews.contains(PanelView.dayPlan);
-          final list = _listScaffold(context, wide);
+          final f0 = store.panelFraction ?? 0.4;
+          final paneWidth = !wide
+              ? box.maxWidth
+              : box.maxWidth * (1 - (open == null && store.panelView == PanelView.matrix && f0 < 0.5 ? 0.5 : f0));
+          final list = _listScaffold(context, wide, paneWidth);
           if (!wide) {
             return PopScope(
               canPop: open == null,
@@ -478,7 +526,7 @@ class HomePageState extends State<HomePage> {
     });
   }
 
-  Widget _listScaffold(BuildContext context, bool wide) {
+  Widget _listScaffold(BuildContext context, bool wide, double width) {
     final now = DateTime.now();
     final rows = _rows(now);
     final searching = _query.isNotEmpty;
@@ -489,11 +537,31 @@ class HomePageState extends State<HomePage> {
             .where((t) =>
                 !t.habit && !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
             .length;
-    final showBoardIcon = data.boardTasks.isNotEmpty && store.topIconShown(TopIcon.board);
-    final showMatrixIcon = data.matrixTasks.isNotEmpty && store.topIconShown(TopIcon.matrix);
-    final showGanttIcon = data.ganttTasks.isNotEmpty && store.topIconShown(TopIcon.gantt);
+    final showSearchIcon = store.topIconShown(TopIcon.search);
+    // Item 102: in a mode, its tools decide the icons; in Everything, Settings does. Icons that
+    // don't fit beside the title move into the ⋮ menu.
+    bool want(String icon, ModeTool tool) =>
+        modeNow.mode != null && !modeNow.peek ? modeNow.mode!.toolOn(tool) : store.topIconShown(icon);
+    final candidates = <(String, ModeTool)>[
+      if (data.boardTasks.isNotEmpty && want(TopIcon.board, ModeTool.board)) (TopIcon.board, ModeTool.board),
+      if (data.matrixTasks.isNotEmpty && want(TopIcon.matrix, ModeTool.matrix)) (TopIcon.matrix, ModeTool.matrix),
+      if (data.ganttTasks.isNotEmpty && want(TopIcon.gantt, ModeTool.gantt)) (TopIcon.gantt, ModeTool.gantt),
+      if (want(TopIcon.calendar, ModeTool.calendar)) (TopIcon.calendar, ModeTool.calendar),
+      if (want(TopIcon.dayPlan, ModeTool.dayPlan)) (TopIcon.dayPlan, ModeTool.dayPlan),
+    ];
+    // Room: the pane's width less the title (about 160 for the mode chip), the menu and search.
+    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
+    final icons = {for (final c in candidates.take(room)) c.$1};
+    final showBoardIcon = icons.contains(TopIcon.board);
+    final showMatrixIcon = icons.contains(TopIcon.matrix);
+    final showGanttIcon = icons.contains(TopIcon.gantt);
+    bool tool(ModeTool t) => modeNow.toolOn(t);
     final shownTasks = [for (final r in rows) if (r is _TaskRow) r.task];
     final estimate = describeEstimates(shownTasks);
+    final breaking = _breaking(now);
+    final resting = modeNow.filtering && !searching
+        ? data.active.where((t) => !t.habit && modeNow.showOf(data, t) == CatShow.hide).length - breaking.length
+        : 0;
     return Scaffold(
       appBar: AppBar(
         leading: _searching
@@ -507,7 +575,7 @@ class HomePageState extends State<HomePage> {
                 decoration: const InputDecoration(hintText: 'Search tasks, notes and steps', border: InputBorder.none),
                 onChanged: (_) => setState(() {}),
               )
-            : const Text('Tasks'),
+            : ModeTitle(store: store),
         actions: [
           if (_searching)
             IconButton(
@@ -521,7 +589,7 @@ class HomePageState extends State<HomePage> {
               icon: const Icon(Icons.clear),
               onPressed: () => setState(_search.clear),
             )
-          else if (store.topIconShown(TopIcon.search))
+          else if (showSearchIcon)
             IconButton(
               tooltip: 'Search',
               icon: const Icon(Icons.search),
@@ -534,13 +602,13 @@ class HomePageState extends State<HomePage> {
             IconButton(tooltip: 'Matrix', icon: const Icon(Icons.grid_view), onPressed: openMatrix),
           if (showGanttIcon)
             IconButton(tooltip: 'Gantt chart', icon: const Icon(Icons.view_timeline_outlined), onPressed: openGantt),
-          if (store.topIconShown(TopIcon.calendar))
+          if (icons.contains(TopIcon.calendar))
             IconButton(
               tooltip: 'Calendar',
               icon: const Icon(Icons.calendar_month_outlined),
               onPressed: () => openCalendar(null),
             ),
-          if (store.topIconShown(TopIcon.dayPlan))
+          if (icons.contains(TopIcon.dayPlan))
             IconButton(tooltip: 'Day plan', icon: const Icon(Icons.view_day_outlined), onPressed: openDayPlan),
           PopupMenuButton<String>(
             onSelected: (v) => switch (v) {
@@ -557,6 +625,7 @@ class HomePageState extends State<HomePage> {
               'search' => _open(context, SearchPage(store: store)),
               'events' => _open(context, EventsPage(store: store)),
               'starred' => _open(context, StarredPage(store: store)),
+              'mode' => showModeSheet(context, store),
               'paste' => _pasteList(),
               'photo' => importPhoto(context, store),
               'csv' => exportCsv(context, store),
@@ -573,17 +642,20 @@ class HomePageState extends State<HomePage> {
                 value: 'archive',
                 child: Text(data.archived.isEmpty ? 'Archive' : 'Archive (${data.archived.length})'),
               ),
-              const PopupMenuItem(value: 'stats', child: Text('Statistics')),
-              const PopupMenuItem(value: 'achievements', child: Text('Achievements')),
-              const PopupMenuItem(value: 'habits', child: Text('Habits')),
-              if (!showBoardIcon) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
-              if (!showMatrixIcon) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
-              if (!showGanttIcon) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
-              if (!store.topIconShown(TopIcon.calendar)) const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
-              if (!store.topIconShown(TopIcon.dayPlan)) const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
+              if (tool(ModeTool.stats)) const PopupMenuItem(value: 'stats', child: Text('Statistics')),
+              if (tool(ModeTool.achievements)) const PopupMenuItem(value: 'achievements', child: Text('Achievements')),
+              if (tool(ModeTool.habits)) const PopupMenuItem(value: 'habits', child: Text('Habits')),
+              if (!showBoardIcon && tool(ModeTool.board)) const PopupMenuItem(value: 'board', child: Text('Kanban board')),
+              if (!showMatrixIcon && tool(ModeTool.matrix)) const PopupMenuItem(value: 'matrix', child: Text('Matrix')),
+              if (!showGanttIcon && tool(ModeTool.gantt)) const PopupMenuItem(value: 'gantt', child: Text('Gantt chart')),
+              if (!icons.contains(TopIcon.calendar) && tool(ModeTool.calendar))
+                const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
+              if (!icons.contains(TopIcon.dayPlan) && tool(ModeTool.dayPlan))
+                const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
-              if (Native.supported) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
-              const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
+              if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
+              if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
+              const PopupMenuItem(value: 'mode', child: Text('Change mode')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'paste', child: Text('Paste a list')),
               if (Native.supported) const PopupMenuItem(value: 'photo', child: Text('Photo of a list')),
@@ -667,7 +739,8 @@ class HomePageState extends State<HomePage> {
             ],
           ),
         if (data.showQuickFilters && !_searching) _filterChips(),
-        if (data.habits.isNotEmpty && !_searching) _habitsLine(now),
+        if (data.habits.isNotEmpty && !_searching && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
+        if (breaking.isNotEmpty) _stillNeedsYou(breaking, now),
         if (estimate != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
@@ -678,14 +751,14 @@ class HomePageState extends State<HomePage> {
             ),
           ),
         Expanded(
-          child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0
+          child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0 && resting <= 0 && !modeNow.peek
               ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
               : ReorderableListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   buildDefaultDragHandles: false,
                   itemCount: rows.length,
                   onReorderItem: (o, n) => _onReorder(rows, o, n),
-                  footer: _footer(hiddenCount, snoozedCount),
+                  footer: _footer(hiddenCount, snoozedCount, resting),
                   itemBuilder: (context, i) => switch (rows[i]) {
                     _Header h => _header(h),
                     _TaskRow r => _taskRow(r.task, i, now),
@@ -701,7 +774,7 @@ class HomePageState extends State<HomePage> {
         key: ValueKey('h:${h.key}'),
         padding: const EdgeInsets.fromLTRB(10, 6, 6, 0),
         child: InkWell(
-          onTap: () => store.toggleCollapsed(h.key),
+          onTap: () => h.key == _quietKey ? setState(() => _quietOpen = !_quietOpen) : store.toggleCollapsed(h.key),
           child: Row(children: [
             Icon(h.collapsed ? Icons.chevron_right : Icons.expand_more, size: 22),
             const SizedBox(width: 4),
@@ -710,6 +783,7 @@ class HomePageState extends State<HomePage> {
             ),
             if (h.collapsed || h.count > 0)
               Text('${h.count}', style: TextStyle(color: Theme.of(context).hintColor)),
+            if (h.key != _quietKey)
             IconButton(
               tooltip: 'Add a task to ${h.name}',
               visualDensity: VisualDensity.compact,
@@ -866,11 +940,84 @@ class HomePageState extends State<HomePage> {
     }
   }
 
-  Widget? _footer(int hiddenCount, int snoozedCount) {
-    if (hiddenCount == 0 && snoozedCount == 0) return null;
+  /// Item 102: hidden tasks that still need attention, above the list; five at most until opened.
+  Widget _stillNeedsYou(List<(Task, String)> breaking, DateTime now) {
+    final shown = _allBreaking ? breaking : breaking.take(5).toList();
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.4),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF3A2A1E) : const Color(0xFFFFF4EC),
+        border: Border.all(color: dark ? const Color(0xFF6A4A33) : const Color(0xFFF1CFB4)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+            child: Row(children: [
+              Expanded(
+                child: Text('Still needs you',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: dark ? const Color(0xFFFFC9A0) : const Color(0xFF8A3F12))),
+              ),
+              Text('from hidden categories', style: TextStyle(fontSize: 12, color: theme.hintColor)),
+            ]),
+          ),
+          for (final (t, why) in shown)
+            KeyedSubtree(
+              key: ValueKey('b-${t.id}'),
+              child: TaskBlock(
+                task: t,
+                color: ageColor(t, data.hoursToRed, byDue: data.colourByDue, now: now),
+                tag: '${data.category(t.categoryId)?.name ?? 'No category'} · $why',
+                categoryName: data.category(t.categoryId)?.name,
+                selected: _selectedId == t.id,
+                expanded: _expanded.contains(t.id),
+                onTap: () => setState(() => _expanded.contains(t.id) ? _expanded.remove(t.id) : _expanded.add(t.id)),
+                onOpen: () => _select(t.id),
+                onCheck: data.isLocked(t) ? null : () => _complete(t),
+                onStep: (s) => _toggleStep(t, s),
+                onSkip: () => _skip(t),
+                onWorked: () => store.toggleWorked(t),
+              ),
+            ),
+          if (breaking.length > 5)
+            TextButton(
+              onPressed: () => setState(() => _allBreaking = !_allBreaking),
+              child: Text(_allBreaking ? 'Show fewer' : 'and ${breaking.length - 5} more'),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  Widget? _footer(int hiddenCount, int snoozedCount, [int resting = 0]) {
+    final peeking = modeNow.peek && modeNow.mode != null;
+    if (hiddenCount == 0 && snoozedCount == 0 && resting <= 0 && !peeking) return null;
+    final restingCats = resting <= 0
+        ? const <String>{}
+        : {
+            for (final t in data.active)
+              if (!t.habit && modeNow.showOf(data, t) == CatShow.hide) data.category(t.categoryId)?.name ?? 'No category',
+          };
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Wrap(spacing: 8, children: [
+        if (resting > 0)
+          TextButton.icon(
+            onPressed: () => store.setPeek(true),
+            icon: const Icon(Icons.visibility_outlined),
+            label: Text('$resting task${resting == 1 ? '' : 's'} in ${restingCats.join(', ')} resting. Peek'),
+          ),
+        if (peeking)
+          TextButton.icon(
+            onPressed: () => store.setPeek(false),
+            icon: const Icon(Icons.visibility_off_outlined),
+            label: Text('Showing everything. Back to ${modeNow.mode!.name}'),
+          ),
         if (hiddenCount > 0)
           TextButton.icon(
             onPressed: () => store.setQuickFilter(QuickFilter.all),
@@ -954,13 +1101,19 @@ class _AddBarState extends State<_AddBar> {
     _focus.requestFocus();
   }
 
+  /// Item 102: the category the mode puts new tasks in, when it names one that exists.
+  String? get _modeCategory {
+    final id = modeNow.mode?.newCategory;
+    return id == null || id.isEmpty || data.category(id) == null ? null : id;
+  }
+
   ParsedInput get _parsed => parseInput(_input.text, data, DateTime.now(), classify: _forcedCategory == null);
 
   void _add() {
     final text = _input.text.trim();
     if (text.isEmpty) return;
     final p = _parsed;
-    final category = _forcedCategory ?? (_ignoreCategory ? null : p.categoryId);
+    final category = _forcedCategory ?? (_ignoreCategory ? null : p.categoryId ?? _modeCategory);
     widget.store.addTask(_ignoreDate ? text : p.title,
         due: _ignoreDate ? null : p.due,
         categoryId: category,
@@ -1001,9 +1154,10 @@ class _AddBarState extends State<_AddBar> {
     final p = _input.text.trim().isEmpty ? null : _parsed;
     final due = _ignoreDate ? null : p?.due;
     final plan = _ignoreDate ? null : p?.plan;
-    final categoryId = _forcedCategory ?? (_ignoreCategory ? null : p?.categoryId);
+    final categoryId = _forcedCategory ?? (_ignoreCategory ? null : p?.categoryId ?? (p == null ? null : _modeCategory));
     final category = data.category(categoryId);
-    final showCategoryChip = category != null && (_forcedCategory != null || data.autoCategory != AutoCategory.off);
+    final showCategoryChip = category != null &&
+        (_forcedCategory != null || data.autoCategory != AutoCategory.off || categoryId == _modeCategory);
     return SafeArea(
       top: false,
       child: Padding(

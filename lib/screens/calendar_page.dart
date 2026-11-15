@@ -49,7 +49,7 @@ class _CalendarPageState extends State<CalendarPage> {
         out.putIfAbsent(_dayOf(d), () => []).add(_Due(t, faded));
     for (final t in data.active) {
       final due = t.dueAt;
-      if (due == null) continue;
+      if (due == null || !data.inMode(t)) continue;
       if (!due.isBefore(from) && due.isBefore(to)) add(due, t, false);
       final r = t.repeat;
       if (r == null || r.fromCompletion) continue;
@@ -60,7 +60,7 @@ class _CalendarPageState extends State<CalendarPage> {
       }
     }
     // Item 61: steps with their own date, shown with their task's name.
-    for (final t in data.active) {
+    for (final t in data.active.where(data.inMode)) {
       for (final st in t.steps) {
         final due = st.dueAt;
         if (due == null || st.done || due.isBefore(from) || !due.isBefore(to)) continue;
