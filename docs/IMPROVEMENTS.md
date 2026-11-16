@@ -1433,3 +1433,20 @@ modes in the statistics; the top bar has no room for more icons.
   `showCategory` (false when grouped by category), `onPlan` (Plan a time sheet). `onBoard` now
   opens the board and shows only for tasks on it; adding to the board stays on the task page.
 - Tests: test/open_card_test.dart.
+
+### 105: Day plan, moving vs stretching a block (version 1.12.6) ☑
+
+- The owner often moved a block when meaning to resize it. The stretch handle along the bottom
+  edge is now taller (`stretchHandleHeight`: about a third of the block, 16-28 px; any block 22 px or
+  taller that isn't ticked) and visible (`_StretchHandle`: shaded strip with a two-line grip).
+  On short blocks it stops short of the tick box.
+- Press and hold inside the handle now stretches too (the long-press start position decides), so
+  holding near the bottom never moves the block.
+- Bug found on the way: the day is laid out afresh each frame, so `identical(_moving, b)` never
+  matched and the block never followed the finger (it only jumped on release). Now matched by
+  slot (`_isDragged`), and the block's widgets keep the same shape while lifted (Material +
+  foreground DecoratedBox always present) so the gesture isn't dropped mid-drag.
+- Feedback: heavy haptic + outline for move, light haptic + thick bottom edge for stretch, a
+  selection tick per snap step, and a label on top of the day with the new times
+  (`_dragLabel`).
+- Tests: test/day_plan_drag_test.dart.

@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.6', 'November 2026', [
+    'Day plan: moving a block and changing its length are now easier to tell apart. Each block has a bigger grip along its bottom edge (two short lines on a shaded strip). Drag the grip to make the block longer or shorter; press and hold anywhere else on the block to move it.',
+    'The block now follows your finger while you move or stretch it (before, it stayed put until you let go, so it was hard to see what was happening).',
+    'Holding a finger on the grip now always stretches the block, so it no longer moves the block by mistake when you meant to resize it.',
+    'You can tell which one started: a firm buzz and an outline round the block when it moves, a light tap and a thick bottom edge when it stretches, with a small tick for each step of time. A label shows the new times as you drag ("Moving · 09:30 – 10:15" or "Length 1 h 15 min · ends 10:45").',
+  ]),
   Release('1.12.5', 'November 2026', [
     'A tidier opened task: a time bar runs from when it was added to its due date, with a mark for today and a dot for each step with a date (filled once ticked, red when late). Under it: "14 days ago" and "in 7 days".',
     'Chips show only what the task has: the next step (red when overdue), where it happens with the driving time, how long it takes and how long you have worked on it, how it repeats and the next date, its next Day plan time, the reminder, the days worked this week and "Behind" when less is done than the time gone. More than six fold into "+2 more".',
