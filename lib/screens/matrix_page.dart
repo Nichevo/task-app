@@ -7,6 +7,8 @@ import '../task_list.dart';
 import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
+import '../widgets/tag_widgets.dart';
+import '../tags.dart';
 
 /// Item 60: puts [t] in [box], doing what that box asks for first: Decide offers a due date
 /// (item 89: "No date" puts it there without one),
@@ -100,6 +102,7 @@ class _MatrixPageState extends State<MatrixPage> {
       for (final t in data.matrixTasks)
         if (t.matrixBox == b.id &&
             passesFilter(t, store.matrixFilter, now) &&
+            passesTagFilter(t, store.liveTagFilter) &&
             (cat == null || (cat.isEmpty ? data.category(t.categoryId) == null : t.categoryId == cat)) &&
             (q.isEmpty || matchesSearch(t, q, data)))
           t,
@@ -199,6 +202,8 @@ class _MatrixPageState extends State<MatrixPage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         children: [
+          // Item 107.
+          TagFilterChip(store: store),
           if (cats.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 6),

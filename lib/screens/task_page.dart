@@ -25,6 +25,7 @@ import 'settings_page.dart' show askText, askLines, remindOptions;
 import 'focus_page.dart';
 import 'starred_page.dart' show pickTask;
 import 'steps_edit_page.dart';
+import '../widgets/tag_widgets.dart';
 
 /// Edit a task's name, notes and due date. Changes save as you go.
 class TaskPage extends StatefulWidget {
@@ -845,6 +846,8 @@ class _TaskPageState extends State<TaskPage> {
             },
           ),
         ),
+        // Item 107.
+        TaskTagsTile(store: widget.store, task: task, onChanged: () => setState(() {})),
         ListTile(
           leading: const Icon(Icons.repeat),
           title: const Text('Repeat'),

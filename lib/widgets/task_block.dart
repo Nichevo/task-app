@@ -164,6 +164,22 @@ class TaskBlock extends StatelessWidget {
                                   ),
                                 ),
                               if (task.starred) _badge(Icons.star, 'Starred', const Color(0xFF8D6E00)),
+                              // Item 107: the first tag, and how many more.
+                              if (task.tags.isNotEmpty && !expanded)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Tooltip(
+                                    message: task.tags.map((x) => '#$x').join(' '),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(maxWidth: 110),
+                                      child: Text(
+                                          '#${task.tags.first}${task.tags.length > 1 ? ' +${task.tags.length - 1}' : ''}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12, color: Color(0xAA000000))),
+                                    ),
+                                  ),
+                                ),
                               if (task.steps.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(left: 6),
@@ -533,6 +549,10 @@ List<CardChip> cardChips(Task t, DateTime now,
     }
   }
   if (category != null) out.add(CardChip(category));
+  // Item 107.
+  for (final x in t.tags) {
+    out.add(CardChip('#$x'));
+  }
   return out;
 }
 

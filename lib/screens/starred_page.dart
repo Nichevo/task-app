@@ -100,7 +100,8 @@ class _StarredPageState extends State<StarredPage> {
                       box: p.box,
                       board: p.board,
                       gantt: p.gantt,
-                      star: p.star));
+                      star: p.star,
+                      tags: p.tags));
             },
             child: const Text('Add'),
           ),
