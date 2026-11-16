@@ -896,6 +896,7 @@ class TaskStep {
       this.doneAt,
       this.carried,
       this.taskId,
+      this.linkStepId,
       this.stageId,
       this.dueAt,
       this.remindBefore,
@@ -919,13 +920,18 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'progress', 'after',
+    'start', 'takes', 'progress', 'after', 'linkStep',
   };
 
   final String id;
   String title;
   bool _done;
   String? taskId;
+
+  /// Item 106: the id of another step (in this task or any other) this one is linked to, so
+  /// ticking that step ticks this one, like [taskId] does for a whole task. A step has one or
+  /// the other, not both.
+  String? linkStepId;
 
   bool get done => _done;
 
@@ -1005,6 +1011,7 @@ class TaskStep {
         if (doneAt != null) 'doneAt': doneAt!.toIso8601String(),
         if (carried != null) 'carried': carried,
         if (taskId != null) 'taskId': taskId,
+        if (linkStepId != null) 'linkStep': linkStepId,
         if (stageId != null) 'stage': stageId,
         if (moves.isNotEmpty) 'moves': moves.map((m) => m.toJson()).toList(),
         if (dueAt != null) 'due': dueAt!.toIso8601String(),
@@ -1024,6 +1031,7 @@ class TaskStep {
         doneAt: DateTime.tryParse(j['doneAt'] as String? ?? ''),
         carried: j['carried'] is Map ? Map<String, dynamic>.from(j['carried'] as Map) : null,
         taskId: j['taskId'] as String?,
+        linkStepId: j['linkStep'] as String?,
         stageId: j['stage'] as String?,
         dueAt: DateTime.tryParse(j['due'] as String? ?? ''),
         remindBefore: (j['remind'] as num?)?.toInt(),

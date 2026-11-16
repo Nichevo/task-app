@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.7', 'November 2026', [
+    'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',
+    'The link list is smarter: it shows the other steps of the same task first, then tasks and their steps in the same category, then everything else. Search finds steps by name too.',
+    'Picking a step of the same task asks whether ticking it should tick this one, or whether this step comes after it (starts once it ends).',
+  ]),
   Release('1.12.6', 'November 2026', [
     'Day plan: moving a block and changing its length are now easier to tell apart. Each block has a bigger grip along its bottom edge (two short lines on a shaded strip). Drag the grip to make the block longer or shorter; press and hold anywhere else on the block to move it.',
     'The block now follows your finger while you move or stretch it (before, it stayed put until you let go, so it was hard to see what was happening).',
