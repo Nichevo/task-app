@@ -65,6 +65,8 @@ struct WMode {
   var overdue = true
   var due = "today"
   var starred = true
+  /** Item 108: the focus timer's own lengths in this mode (focus, short, long, every), if set. */
+  var timer: [Int]? = nil
 
   /** Whether [t] is hidden in this mode at [now] (the app works out the other reasons). */
   func hides(_ t: WTask, now: Date) -> Bool {
@@ -131,6 +133,12 @@ struct Snapshot {
   /** Item 102: the focus modes, and which is in force when (start, end, mode id). */
   var modes: [WMode] = []
   var modeLine: [(start: Date, end: Date, id: String)] = []
+  /** Item 108: whether the widgets follow the mode in force (Settings, Focus modes). */
+  var follow = true
+  /** Item 108: this widget's own choice: nil = follow the mode in force, "all", or a mode id. */
+  var pin: String? = nil
+  /** Item 108: a mode picked on the Focus mode widget that the app hasn't seen yet. */
+  var picked: (id: String, until: Date?)? = nil
   var habits: [WTask] = []
   var stages: [WStage] = []
   var boxes: [String: String] = [:]
@@ -144,13 +152,15 @@ struct Snapshot {
    * (focus, short break, long break minutes, rounds before the long break). */
   var focusTimer: [String: Any]? = nil
   var focusLengths = [25, 5, 15, 4]
+  /** Item 108: the lengths set for every mode (focusLengths is the mode in force's own, if it has them). */
+  var baseLengths = [25, 5, 15, 4]
   /** Item 101: free time in working hours (the app's view, before calendar events). */
   var planFree: [(start: Date, end: Date)] = []
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
     var s = self
-    let m = mode(at: date)
+    let m = filterMode(at: date)
     s.all = everything.filter { m?.hides($0, now: date) != true }.map { t in
       var t = t
       if let until = t.snoozedUntil { t.snoozed = until > date }
@@ -159,14 +169,38 @@ struct Snapshot {
     return s
   }
 
-  /** Item 102: the mode in force at [date] (Everything is a mode that hides nothing). */
+  /** Item 108: the same data for a widget with its own focus mode choice. */
+  func pinned(_ p: String?) -> Snapshot {
+    var s = self
+    s.pin = p
+    let now = Date()
+    let m = s.filterMode(at: now)
+    s.all = everything.filter { m?.hides($0, now: now) != true }.map { t in
+      var t = t
+      if let until = t.snoozedUntil { t.snoozed = until > now }
+      return t
+    }
+    return s
+  }
+
+  /** Item 108: the mode a widget filters by at [date]: its own choice, else the mode in force when the widgets follow it. */
+  func filterMode(at date: Date) -> WMode? {
+    if pin == "all" { return nil }
+    if let p = pin, let m = modes.first(where: { $0.id == p }) { return m }
+    return follow ? mode(at: date) : nil
+  }
+
+  /** Item 102: the mode in force at [date] (Everything is a mode that hides nothing). Item 108:
+   * a mode picked on the Focus mode widget comes first, until it ends. */
   func mode(at date: Date) -> WMode? {
+    if let p = picked, p.until == nil || p.until! > date { return modes.first { $0.id == p.id } }
     guard let s = modeLine.first(where: { $0.start <= date && date < $0.end }) else { return nil }
     return modes.first { $0.id == s.id }
   }
 
   /** Item 102: when the mode in force at [date] ends, if before the end of the timeline. */
   func modeEnds(at date: Date) -> Date? {
+    if let p = picked, p.until == nil || p.until! > date { return p.until }
     guard let i = modeLine.firstIndex(where: { $0.start <= date && date < $0.end }) else { return nil }
     var j = i
     while j + 1 < modeLine.count && modeLine[j + 1].id == modeLine[i].id { j += 1 }
@@ -334,23 +368,40 @@ struct Snapshot {
       t.focusToday = (o["focusToday"] as? NSNumber)?.intValue ?? 0
       s.everything.append(t)
     }
-    if (root["modeWidgets"] as? Bool) ?? false {
+    // Item 108: sent even when the widgets don't follow the mode (for the Focus mode widget and
+    // widgets set to a mode of their own); older app versions sent them only when they did.
+    if root["modes"] != nil {
+      s.follow = (root["modeWidgets"] as? Bool) ?? true
       s.modes = ((root["modes"] as? [[String: Any]]) ?? []).map { (o: [String: Any]) -> WMode in
-        WMode(
+        let timer = ints(o["timer"])
+        return WMode(
           id: str(o["id"]), name: str(o["name"]),
           colour: argb((o["colour"] as? NSNumber)?.int64Value ?? 0xFF3F6FB5),
           overdue: (o["overdue"] as? Bool) ?? true, due: (o["due"] as? String) ?? "today",
-          starred: (o["starred"] as? Bool) ?? true)
+          starred: (o["starred"] as? Bool) ?? true, timer: timer.count == 4 ? timer : nil)
       }
       s.modeLine = ((root["modeLine"] as? [[Any]]) ?? []).compactMap { a -> (start: Date, end: Date, id: String)? in
         guard a.count == 3, let f = date(a[0]), let e = date(a[1]), let id = a[2] as? String else { return nil }
         return (start: f, end: e, id: id)
       }
     }
+    if let raw = d.string(forKey: "widget_mode_local"),
+      let o = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any], let id = o["mode"] as? String
+    {
+      let until = (o["until"] as? NSNumber).flatMap { $0.int64Value > 0 ? Date(timeIntervalSince1970: $0.doubleValue / 1000) : nil }
+      s.picked = (id: id, until: until)
+    }
     s.focusTimer = root["focusTimer"] as? [String: Any]
+    // Item 108: the timer as the widget's buttons left it, until the app catches up.
+    if let raw = d.string(forKey: "focus_local"), !raw.isEmpty,
+      let o = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
+    {
+      s.focusTimer = (o["stopped"] as? Bool) == true ? nil : o
+    }
     let lengths = ints(root["focusLengths"])
-    if lengths.count == 4 { s.focusLengths = lengths }
-    let nowMode = s.mode(at: Date())
+    if lengths.count == 4 { s.baseLengths = lengths }
+    s.focusLengths = s.mode(at: Date())?.timer ?? s.baseLengths
+    let nowMode = s.filterMode(at: Date())
     s.all = s.everything.filter { nowMode?.hides($0, now: Date()) != true }
     for o in (root["habits"] as? [[String: Any]]) ?? [] {
       let id = str(o["id"])

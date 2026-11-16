@@ -16,7 +16,7 @@ open class TaskListWidget : AppWidgetProvider() {
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val snap = WidgetData.snapshot(context)
-    for (id in ids) update(context, manager, id, snap, filterFor(context, id))
+    for (id in ids) update(context, manager, id, snap.forWidget(context, id), filterFor(context, id))
     manager.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
   }
 
@@ -36,7 +36,7 @@ open class TaskListWidget : AppWidgetProvider() {
       val ids = m.getAppWidgetIds(ComponentName(c, TaskListWidget::class.java))
       if (ids.isEmpty()) return
       val snap = WidgetData.snapshot(c)
-      for (id in ids) update(c, m, id, snap, WidgetData.filter(c, id))
+      for (id in ids) update(c, m, id, snap.forWidget(c, id), WidgetData.filter(c, id))
       m.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
     }
 
@@ -84,7 +84,7 @@ class TodayWidget : TaskListWidget() {
       val ids = m.getAppWidgetIds(ComponentName(c, TodayWidget::class.java))
       if (ids.isEmpty()) return
       val snap = WidgetData.snapshot(c)
-      for (id in ids) update(c, m, id, snap, "today")
+      for (id in ids) update(c, m, id, snap.forWidget(c, id), "today")
       m.notifyAppWidgetViewDataChanged(ids, R.id.widget_list)
     }
   }

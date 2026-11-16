@@ -21,12 +21,19 @@ struct SnapProvider<I: WidgetConfigurationIntent>: AppIntentTimelineProvider {
     SnapEntry(date: Date(), snap: Snapshot(), config: I())
   }
 
+  /** Item 108: the shared data with the widget's own focus mode choice, if it has one. */
+  func load(_ configuration: I) -> Snapshot {
+    let snap = Snapshot.load()
+    guard let c = configuration as? ModeChoosing else { return snap }
+    return snap.pinned(c.focusMode?.id)
+  }
+
   func snapshot(for configuration: I, in context: Context) async -> SnapEntry<I> {
-    SnapEntry(date: Date(), snap: Snapshot.load(), config: configuration)
+    SnapEntry(date: Date(), snap: load(configuration), config: configuration)
   }
 
   func timeline(for configuration: I, in context: Context) async -> Timeline<SnapEntry<I>> {
-    let snap = Snapshot.load()
+    let snap = load(configuration)
     let now = Date()
     let times = W.redrawTimes(snap, now: now, hours: 6)
     let entries = times.map { SnapEntry(date: $0, snap: snap.at($0), config: configuration) }
@@ -1235,7 +1242,38 @@ struct ModeView: View {
     }
     let hidden = snap.hiddenCount(at: now)
     let detail = [until, hidden > 0 ? "\(hidden) resting" : nil].compactMap { $0 }.joined(separator: " · ")
-    if family == .accessoryRectangular {
+    if family == .systemMedium {
+      // Item 108: a button for each mode (Everything first) switches straight away.
+      VStack(alignment: .leading, spacing: 8) {
+        Link(destination: W.link("mode")) {
+          HStack(spacing: 10) {
+            Circle().fill(colour).frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 1) {
+              Text(name).font(.headline).lineLimit(1)
+              Text(detail.isEmpty ? "Focus mode" : detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+          }
+        }
+        Spacer(minLength: 0)
+        let current = m?.id ?? "all"
+        let shown = Array(snap.modes.prefix(6))
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+          ForEach(shown, id: \.id) { md in
+            Button(intent: ModePickAction(mode: md.id)) {
+              HStack(spacing: 4) {
+                Circle().fill(md.colour).frame(width: 8, height: 8)
+                Text(md.name).font(.caption.bold()).lineLimit(1)
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 6)
+              .background(md.id == current ? md.colour.opacity(0.3) : Color.secondary.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+          }
+        }
+      }
+      .widgetCard()
+    } else if family == .accessoryRectangular {
       VStack(alignment: .leading) {
         Label(name, systemImage: "scope").font(.headline)
         Text(detail.isEmpty ? "Focus mode" : detail).font(.caption)
@@ -1260,8 +1298,8 @@ struct ModeWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: "Mode", provider: PlainProvider(hourly: true)) { ModeView(entry: $0) }
       .configurationDisplayName("Focus mode")
-      .description("The focus mode you are in and when it changes. Tap to pick another.")
-      .supportedFamilies([.systemSmall, .accessoryRectangular])
+      .description("The focus mode you are in and when it changes. Tap to pick another; the wider size has a button for each mode.")
+      .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
   }
 }
 
@@ -1278,7 +1316,7 @@ func focusMinutes(_ m: Int) -> String {
 
 struct FocusTimerView: View {
   @Environment(\.widgetFamily) var family
-  let entry: PlainEntry
+  let entry: SnapEntry<FocusTimerIntent>
 
   var body: some View {
     let snap = entry.snap
@@ -1339,10 +1377,15 @@ struct FocusTimerView: View {
       }
       HStack(spacing: 6) {
         ForEach(buttons(state, f == nil, idle)) { b in
-          Link(destination: W.link("focus", b.query)) {
-            Text(b.id).font(.caption.bold()).foregroundStyle(.white)
-              .padding(.horizontal, 10).padding(.vertical, 6)
-              .background(Color(red: 0.14, green: 0.31, blue: 0.31), in: Capsule())
+          let label = Text(b.id).font(.caption.bold()).foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Color(red: 0.14, green: 0.31, blue: 0.31), in: Capsule())
+          // Item 108: the timer buttons work right here; "Pick" opens the app.
+          if let op = b.query["op"] ?? nil, op != "pick" {
+            Button(intent: FocusOpAction(op: op, task: (b.query["id"] ?? nil) ?? "")) { label }
+              .buttonStyle(.plain)
+          } else {
+            Link(destination: W.link("focus", b.query)) { label }
           }
         }
       }
@@ -1424,9 +1467,11 @@ struct FocusTimerView: View {
 
 struct FocusTimerWidget: Widget {
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: "FocusTimer", provider: PlainProvider(hourly: true)) { FocusTimerView(entry: $0) }
+    AppIntentConfiguration(kind: "FocusTimer", intent: FocusTimerIntent.self, provider: SnapProvider<FocusTimerIntent>()) {
+      FocusTimerView(entry: $0)
+    }
       .configurationDisplayName("Focus timer")
-      .description("A pomodoro countdown on one task and its steps. Start, pause and skip open the app.")
+      .description("A pomodoro countdown on one task and its steps. Start, pause, +5 and skip work right on the widget.")
       .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
   }
 }

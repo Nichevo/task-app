@@ -113,9 +113,9 @@ class WorkedTodayWidget : BaseWidget() {
 /** Rows of [WorkedTodayWidget]: the circle, the title, and the week as seven dots. */
 class WorkedTodayService : RemoteViewsService() {
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-      Factory(applicationContext, intent.getStringExtra("filter") ?: "all")
+      Factory(applicationContext, intent.getStringExtra("filter") ?: "all", intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 0))
 
-  class Factory(private val c: Context, private val filter: String) : RemoteViewsFactory {
+  class Factory(private val c: Context, private val filter: String, private val widgetId: Int = 0) : RemoteViewsFactory {
     private var items: List<WidgetTask> = emptyList()
     private var week: List<String> = emptyList()
     private var today = ""
@@ -123,7 +123,7 @@ class WorkedTodayService : RemoteViewsService() {
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-      items = WorkedTodayWidget.tasks(WidgetData.snapshot(c), filter)
+      items = WorkedTodayWidget.tasks(WidgetData.snapshot(c, widgetId), filter)
       week = thisWeek()
       today = WidgetData.todayKey()
     }

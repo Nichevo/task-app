@@ -35,7 +35,7 @@ class TaskListService : RemoteViewsService() {
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-      val s = WidgetData.snapshot(c)
+      val s = WidgetData.snapshot(c, widgetId)
       snap = s
       items = WidgetData.tasks(c, s, filter)
     }

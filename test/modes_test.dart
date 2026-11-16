@@ -434,11 +434,13 @@ void main() {
       expect(task(planned).containsKey('hide'), isFalse);
       // The same data twice in a day: the widgets aren't redrawn for nothing.
       expect(HomeWidgets.widgetJson(s.data, now), HomeWidgets.widgetJson(s.data, now.add(const Duration(seconds: 5))));
-      // Switched off, or no modes: nothing about modes.
+      // Switched off: the widgets are told not to follow the mode, but still get the modes
+      // (item 108: the Focus mode widget, and widgets set to a mode of their own).
       s.data.modeWidgets = false;
       final off = jsonDecode(HomeWidgets.widgetJson(s.data, now)) as Map<String, dynamic>;
-      expect(off.containsKey('modeLine'), isFalse);
-      expect((off['tasks'] as List).any((x) => (x as Map).containsKey('hide')), isFalse);
+      expect(off['modeWidgets'], isFalse);
+      expect(off.containsKey('modeLine'), isTrue);
+      expect(((off['tasks'] as List).firstWhere((x) => x['id'] == gutters.id) as Map)['hide'], [m.id]);
       expect(AppData.fromJson(jsonDecode(jsonEncode(s.data.toJson()))).modeWidgets, isFalse);
     });
 

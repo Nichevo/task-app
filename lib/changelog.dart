@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.9', 'November 2026', [
+    'Focus timer widget: Start, Pause, Resume, +5, Skip break and Stop now work right on the widget, without opening the app. You still get the "Time for a break" and "Break\'s over" reminders, the countdown in the notification shade (Android) and Do not disturb if you use it. The app catches up with what you pressed the next time it opens.',
+    'Each widget that lists tasks can now have its own focus mode: follow the mode that is on (as before), always show everything, or always show one mode (say Work), whatever mode you are in. Android asks when you place the widget (press and hold it, then the pencil, to change it); on the iPad it is "Focus mode" in Edit Widget. The Focus timer widget has the choice too, for the top task it offers.',
+    'Focus mode widget: make it two rows tall (Android) or pick the wider size (iPad) and it shows a button for each mode. Tap one to switch straight away, until the schedule next changes, without opening the app.',
+    'A focus mode can have its own round lengths, for example 50 minutes with 10 minute breaks at Work and 25/5 at Home. Set them in the focus timer\'s settings (the gear on the Focus screen) under "Round lengths for". A new length starts with the next round or break.',
+    'Settings, Focus modes, "Widgets follow the mode" switched off now only stops widgets that follow the mode; the Focus mode widget still shows the mode you are in.',
+  ]),
   Release('1.12.7', 'November 2026', [
     'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',
     'The link list is smarter: it shows the other steps of the same task first, then tasks and their steps in the same category, then everything else. Search finds steps by name too.',

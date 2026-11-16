@@ -61,6 +61,32 @@ struct TaskQuery: EntityQuery {
   func suggestedEntities() async throws -> [TaskEntity] { all() }
 }
 
+/** Item 108: a widget's own focus mode: Everything (ignore modes) or one mode; none = follow the mode that is on. */
+struct ModeEntity: AppEntity {
+  let id: String
+  let name: String
+
+  static var typeDisplayRepresentation: TypeDisplayRepresentation { "Focus mode" }
+  static var defaultQuery: ModeQuery { ModeQuery() }
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+}
+
+struct ModeQuery: EntityQuery {
+  func all() -> [ModeEntity] {
+    [ModeEntity(id: "all", name: "Everything (ignore focus modes)")]
+      + Snapshot.load().modes.filter { $0.id != "all" }.map { ModeEntity(id: $0.id, name: "Always as in \($0.name)") }
+  }
+  func entities(for identifiers: [String]) async throws -> [ModeEntity] {
+    all().filter { identifiers.contains($0.id) }
+  }
+  func suggestedEntities() async throws -> [ModeEntity] { all() }
+}
+
+/** Item 108: widgets whose Edit Widget has a "Focus mode" choice. */
+protocol ModeChoosing {
+  var focusMode: ModeEntity? { get }
+}
+
 /** Only the tasks that have their own burn-down (two or more steps and a finish date), as on Android. */
 struct BurnTaskOptions: DynamicOptionsProvider {
   func results() async throws -> [TaskEntity] {
@@ -139,54 +165,68 @@ enum ChartMode: String, AppEnum {
 
 // MARK: - One configuration per widget kind
 
-struct TaskListIntent: WidgetConfigurationIntent {
+struct TaskListIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Task list" }
   @Parameter(title: "Show", default: .all) var show: ListShow
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct SummaryIntent: WidgetConfigurationIntent {
+struct SummaryIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Summary" }
   @Parameter(title: "Show", default: .counts) var mode: SummaryMode
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct FocusIntent: WidgetConfigurationIntent {
+struct FocusIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Focus" }
   @Parameter(title: "Show", default: .top) var mode: FocusMode
   @Parameter(title: "Category (top task)") var category: CategoryEntity?
   @Parameter(title: "Stage (now doing)") var stage: StageEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct ChecklistIntent: WidgetConfigurationIntent {
+struct ChecklistIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Checklist" }
   @Parameter(title: "Show", default: .task) var mode: ChecklistMode
   @Parameter(title: "Task") var task: TaskEntity?
   @Parameter(title: "Category (board steps)") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct BoardIntent: WidgetConfigurationIntent {
+struct BoardIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Kanban board" }
   @Parameter(title: "Show", default: .summary) var mode: BoardMode
   @Parameter(title: "Stage") var stage: StageEntity?
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct CategoryIntent: WidgetConfigurationIntent {
+struct CategoryIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Category" }
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
-struct WorkedIntent: WidgetConfigurationIntent {
+struct WorkedIntent: WidgetConfigurationIntent, ModeChoosing {
   static var title: LocalizedStringResource { "Worked today" }
   @Parameter(title: "Show", default: .tasks) var mode: WorkedMode
   @Parameter(title: "Category") var category: CategoryEntity?
+  // Item 108: empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
 
@@ -196,5 +236,13 @@ struct ChartIntent: WidgetConfigurationIntent {
   @Parameter(title: "Category") var category: CategoryEntity?
   // Item 86: a burn-down of one task's steps instead of a category.
   @Parameter(title: "Task (burn-down)", optionsProvider: BurnTaskOptions()) var task: TaskEntity?
+  init() {}
+}
+
+/** Item 108: the Focus timer widget's one choice. */
+struct FocusTimerIntent: WidgetConfigurationIntent, ModeChoosing {
+  static var title: LocalizedStringResource { "Focus timer" }
+  // Empty = follow the focus mode that is on (for the top task it offers).
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }

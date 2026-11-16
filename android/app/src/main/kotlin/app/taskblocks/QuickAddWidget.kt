@@ -20,7 +20,7 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 class QuickAddWidget : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val snap = WidgetData.snapshot(context)
-    for (id in ids) update(context, manager, id, snap)
+    for (id in ids) update(context, manager, id, snap.forWidget(context, id))
   }
 
   override fun onDeleted(context: Context, ids: IntArray) = WidgetData.forget(context, ids)
@@ -35,7 +35,7 @@ class QuickAddWidget : AppWidgetProvider() {
       val ids = m.getAppWidgetIds(ComponentName(c, QuickAddWidget::class.java))
       if (ids.isEmpty()) return
       val snap = WidgetData.snapshot(c)
-      for (id in ids) update(c, m, id, snap)
+      for (id in ids) update(c, m, id, snap.forWidget(c, id))
     }
 
     fun update(c: Context, m: AppWidgetManager, id: Int, snap: Snapshot) {

@@ -294,6 +294,24 @@ class AppStore extends ChangeNotifier {
     }
     final pushed = await widgets?.takePushed() ?? const [];
     if (pushed.isNotEmpty) any = addPushed(pushed).isNotEmpty || any;
+    // Item 108: modes picked on the Focus mode widget, then the Focus timer widget's buttons
+    // (in that order, as a mode can have its own round lengths).
+    final picks = await widgets?.takeModePicks() ?? const <(String, DateTime)>[];
+    for (final (id, at) in picks) {
+      applyModePick(id, at);
+    }
+    final ops = await widgets?.takeFocusOps() ?? const [];
+    for (final o in ops) {
+      applyFocusOp(o.op, o.at, taskId: o.task, stepId: o.step);
+    }
+    if (picks.isNotEmpty || ops.isNotEmpty) {
+      await widgets?.clearWidgetCopies(focus: ops.isNotEmpty, mode: picks.isNotEmpty);
+      // Do not disturb may have been switched by the widget: set it again from what is so now.
+      if (data.focusSettings.dnd) _dndOn = null;
+      tickFocus();
+      _focusChanged();
+      any = true;
+    }
     if (any) notifyListeners();
   }
 
@@ -1732,11 +1750,11 @@ class AppStore extends ChangeNotifier {
   Timer? _focusTick;
 
   /// Starts a focus round on [t] (and [stepId]), replacing any timer running.
-  void startFocus(Task t, {String? stepId}) {
-    final now = DateTime.now();
+  void startFocus(Task t, {String? stepId, DateTime? at}) {
+    final now = at ?? DateTime.now();
     final old = focusNow;
     if (old != null) _creditFocus(old, now);
-    final len = data.focusSettings.lengthOf(FocusPhase.focus);
+    final len = focusLengthsNow(data).lengthOf(FocusPhase.focus);
     focusNow = FocusTimer(taskId: t.id, stepId: stepId, length: len, end: now.add(len), runFrom: now);
     _focusChanged();
   }
@@ -1759,15 +1777,15 @@ class AppStore extends ChangeNotifier {
       changed = true;
       if (f.phase == FocusPhase.focus) {
         _creditFocus(f, end);
-        f.phase = f.round % data.focusSettings.every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak;
-        f.length = data.focusSettings.lengthOf(f.phase);
+        f.phase = f.round % focusLengthsNow(data).every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak;
+        f.length = focusLengthsNow(data).lengthOf(f.phase);
         f.end = end.add(f.length);
         f.runFrom = null;
       } else {
         // The break is over: the next round waits for Start.
         f.phase = FocusPhase.focus;
         f.round++;
-        f.length = data.focusSettings.lengthOf(FocusPhase.focus);
+        f.length = focusLengthsNow(data).lengthOf(FocusPhase.focus);
         f.end = null;
         f.left = f.length;
         f.heldBreak = true;
@@ -1777,10 +1795,10 @@ class AppStore extends ChangeNotifier {
     return changed;
   }
 
-  void pauseFocus() {
+  void pauseFocus({DateTime? at}) {
     final f = focusNow;
     if (f == null || f.end == null) return;
-    final now = DateTime.now();
+    final now = at ?? DateTime.now();
     if (f.phase == FocusPhase.focus) _creditFocus(f, now);
     f.left = f.remaining(now);
     f.end = null;
@@ -1789,10 +1807,10 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Carries on after a pause, or starts the round waiting after a break.
-  void resumeFocus() {
+  void resumeFocus({DateTime? at}) {
     final f = focusNow;
     if (f == null || f.end != null) return;
-    final now = DateTime.now();
+    final now = at ?? DateTime.now();
     f.end = now.add(f.left ?? f.length);
     f.left = null;
     f.heldBreak = false;
@@ -1814,15 +1832,15 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Ends a break early and starts the next round.
-  void skipBreak() {
+  void skipBreak({DateTime? at}) {
     final f = focusNow;
     if (f == null) return;
-    final now = DateTime.now();
+    final now = at ?? DateTime.now();
     if (f.phase == FocusPhase.focus && f.end != null) return;
     if (f.phase.isBreak) f.round++;
     f
       ..phase = FocusPhase.focus
-      ..length = data.focusSettings.lengthOf(FocusPhase.focus)
+      ..length = focusLengthsNow(data).lengthOf(FocusPhase.focus)
       ..left = null
       ..heldBreak = false;
     f
@@ -1831,10 +1849,10 @@ class AppStore extends ChangeNotifier {
     _focusChanged();
   }
 
-  void stopFocus() {
+  void stopFocus({DateTime? at}) {
     final f = focusNow;
     if (f == null) return;
-    _creditFocus(f, DateTime.now());
+    _creditFocus(f, at ?? DateTime.now());
     focusNow = null;
     _focusChanged();
   }
@@ -1880,6 +1898,35 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  /// Item 108: a mode picked on the Focus mode widget at [at]: as picking it in the app's mode
+  /// sheet, until the schedule next changes (the mode the schedule, a place or an event says
+  /// just goes back to that).
+  void applyModePick(String id, DateTime at) {
+    if (id != everythingId && data.mode(id) == null) return;
+    chooseMode(automaticMode == id ? null : id, until: nextScheduleChange(data.modeSchedule, at));
+  }
+
+  /// Item 108: one button pressed on the Focus timer widget at [at], with the timer first moved
+  /// on to then (the widget did the same with its own copy).
+  void applyFocusOp(String op, DateTime at, {String? taskId, String? stepId}) {
+    tickFocus(at);
+    switch (op) {
+      case 'start':
+        final t = data.task(taskId);
+        if (t != null && t.closedAt == null) startFocus(t, stepId: stepId, at: at);
+      case 'pause':
+        pauseFocus(at: at);
+      case 'resume':
+        resumeFocus(at: at);
+      case 'add':
+        addFocusTime();
+      case 'skip':
+        skipBreak(at: at);
+      case 'stop':
+        stopFocus(at: at);
+    }
+  }
+
   void _focusChanged() {
     final f = focusNow;
     _focusTick?.cancel();
@@ -1898,11 +1945,12 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _dndOn = false;
+  /// Whether this app turned Do not disturb on; null = not known (a widget may have changed it).
+  bool? _dndOn = false;
 
   /// Do not disturb during focus rounds, when switched on (Android, with access granted).
   Future<void> _focusDnd(bool on) async {
-    if (!data.focusSettings.dnd && !_dndOn) return;
+    if (!data.focusSettings.dnd && _dndOn == false) return;
     final want = on && data.focusSettings.dnd;
     if (want == _dndOn) return;
     if (await Native.setDoNotDisturb(want)) _dndOn = want;

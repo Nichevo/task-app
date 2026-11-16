@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'focus_timer.dart';
 import 'models.dart';
 import 'pace.dart';
 import 'widgets/task_colors.dart';
@@ -86,6 +87,7 @@ class FocusMode {
     List<String>? places,
     this.placeWhen,
     List<String>? events,
+    this.timer,
     Map<String, dynamic>? extra,
   })  : cats = cats ?? {},
         toolsOff = toolsOff ?? {},
@@ -139,11 +141,15 @@ class FocusMode {
   /// Words in a calendar event's title that switch to this mode while it lasts ("Flight", "WFH").
   final List<String> events;
 
+  /// Item 108: the focus timer's own round lengths in this mode (Work 50/10, Home 25/5); null =
+  /// the lengths set for every mode. Its Do not disturb choice isn't used (that one is shared).
+  FocusSettings? timer;
+
   final Map<String, dynamic> extra;
 
   static const _known = {
     'id', 'name', 'colour', 'icon', 'cats', 'other', 'off', 'panel', 'filter', 'newCat', 'overdue', 'due',
-    'starred', 'red', 'planned', 'habits', 'places', 'placeWhen', 'events',
+    'starred', 'red', 'planned', 'habits', 'places', 'placeWhen', 'events', 'timer',
   };
 
   bool toolOn(ModeTool t) => !toolsOff.contains(t.name);
@@ -182,6 +188,7 @@ class FocusMode {
         if (places.isNotEmpty) 'places': places,
         if (placeWhen != null) 'placeWhen': placeWhen,
         if (events.isNotEmpty) 'events': events,
+        if (timer != null) 'timer': timer!.toJson()..remove('dnd'),
       };
 
   static T _enum<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -210,6 +217,7 @@ class FocusMode {
         places: [for (final p in j['places'] as List? ?? []) if (p is String) p],
         placeWhen: j['placeWhen'] as String?,
         events: [for (final e in j['events'] as List? ?? []) if (e is String) e],
+        timer: j['timer'] is Map ? FocusSettings.parse(j['timer']) : null,
         extra: unknownFields(j, _known),
       );
 }
@@ -394,6 +402,15 @@ List<ModeSlot> paintSchedule(List<ModeSlot> slots, int day, int start, int end, 
 
 /// The mode in force and why, worked out by [AppStore]; read by the screens and filters.
 /// One per app (the screens and the plain functions such as the Day plan's layout all ask it).
+/// Item 108: the focus timer's lengths now: the mode in force's own, else the ones for every
+/// mode. Do not disturb always comes from the shared settings.
+FocusSettings focusLengthsNow(AppData data) {
+  final own = modeNow.mode?.timer;
+  if (own == null) return data.focusSettings;
+  return FocusSettings(
+      focus: own.focus, shortBreak: own.shortBreak, longBreak: own.longBreak, every: own.every, dnd: data.focusSettings.dnd);
+}
+
 class ModeNow {
   /// Null = Everything.
   FocusMode? mode;

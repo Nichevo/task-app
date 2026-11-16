@@ -13,6 +13,10 @@ import android.os.Bundle
 class WidgetConfigActivity : Activity() {
   private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
 
+  /** Item 108: the focus mode question comes last, for widgets that list tasks, when there are modes. */
+  private var modes: List<Triple<String, String, Int>> = emptyList()
+  private var modeAsked = false
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     widgetId =
@@ -25,7 +29,9 @@ class WidgetConfigActivity : Activity() {
     }
     val provider = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)?.provider?.className ?: ""
     val snap = WidgetData.snapshot(this)
+    if (provider.substringAfterLast('.') in modeWidgets) modes = WidgetMode.list(snap.root).filter { it.first != "all" }
     when {
+      provider.endsWith("FocusTimerWidget") -> done()
       provider.endsWith("ChecklistWidget") -> pickTask(snap)
       provider.endsWith("QuickAddWidget") -> pickCategory(snap)
       provider.endsWith("NowDoingWidget") -> pickNow(snap)
@@ -45,9 +51,34 @@ class WidgetConfigActivity : Activity() {
   }
 
   private fun done() {
+    if (!modeAsked && modes.isNotEmpty()) {
+      modeAsked = true
+      pickMode()
+      return
+    }
     WidgetData.refreshAll(this)
     setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
     finish()
+  }
+
+  /** Item 108: follow the focus mode in force, always show everything, or always one mode. */
+  private fun pickMode() {
+    val keys = mutableListOf<String?>(null, "all")
+    val labels = mutableListOf("Follow the focus mode that is on", "Always everything (ignore focus modes)")
+    for ((id, name, _) in modes) {
+      keys.add(id)
+      labels.add("Always as in $name")
+    }
+    val now = WidgetData.modePin(this, widgetId)
+    AlertDialog.Builder(this)
+        .setTitle("Focus mode for this widget")
+        .setSingleChoiceItems(labels.toTypedArray(), keys.indexOf(now).coerceAtLeast(0)) { d, which ->
+          WidgetData.setModePin(this, widgetId, keys[which])
+          d.dismiss()
+          done()
+        }
+        .setOnCancelListener { done() }
+        .show()
   }
 
   private fun pickFilter(snap: Snapshot, showRows: Boolean) {
@@ -220,5 +251,14 @@ class WidgetConfigActivity : Activity() {
         }
         .setOnCancelListener { done() }
         .show()
+  }
+
+  companion object {
+    /** Item 108: widgets that list tasks, so can have a focus mode of their own. */
+    val modeWidgets =
+        setOf(
+            "TaskListWidget", "CompactWidget", "TodayWidget", "FocusWidget", "CalendarWidget", "DayPlanWidget",
+            "BoardSummaryWidget", "StageListWidget", "NowDoingWidget", "BoardStepsWidget", "MatrixWidget",
+            "WorkedTodayWidget", "FocusTimerWidget")
   }
 }
