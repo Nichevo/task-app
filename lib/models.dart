@@ -81,9 +81,11 @@ class Task {
     List<String>? habitPauses,
     this.dayPlan = false,
     List<TimeSlot>? slots,
+    List<String>? tags,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
+        tags = tags ?? [],
         slots = slots ?? [],
         alsoAfter = alsoAfter ?? [],
         worked = worked ?? {},
@@ -106,7 +108,7 @@ class Task {
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
-    'where', 'driveBefore', 'driveAfter',
+    'where', 'driveBefore', 'driveAfter', 'tags',
   };
 
   final String id;
@@ -118,6 +120,10 @@ class Task {
 
   /// The [TaskCategory] it belongs to; null for none.
   String? categoryId;
+
+  /// Item 107: free-form tags ("meeting", "coding"), without the "#", each once whatever the
+  /// case. A task has one category but any number of tags. See tags.dart.
+  final List<String> tags;
 
   /// Starred tasks are kept at the top of their list or category.
   bool starred;
@@ -355,6 +361,7 @@ class Task {
       ..stepsOnBoard = stepsOnBoard
       ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
+    next.tags.addAll(tags);
     next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
     // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
     // from the task's due date; without one to measure from they are left off.
@@ -455,6 +462,7 @@ class Task {
         if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
         if (dayPlan) 'dayPlan': true,
         if (slots.isNotEmpty) 'slots': [for (final s in slots) s.toJson()],
+        if (tags.isNotEmpty) 'tags': tags,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -519,6 +527,10 @@ class Task {
         slots: [
           for (final s in j['slots'] as List? ?? [])
             if (s is Map<String, dynamic>) ?TimeSlot.tryParse(s),
+        ],
+        tags: [
+          for (final x in j['tags'] as List? ?? [])
+            if (x is String && x.trim().isNotEmpty) x.trim(),
         ],
         extra: unknownFields(j, _known),
       )

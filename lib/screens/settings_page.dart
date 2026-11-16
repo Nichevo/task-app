@@ -24,6 +24,8 @@ import 'places_page.dart';
 import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
 import 'modes_page.dart';
+import '../tags.dart';
+import '../widgets/tag_widgets.dart';
 
 /// Choices for the extra reminder before a task is due, in minutes.
 const remindOptions = {0: 'At due time only', 15: '15 min before', 60: '1 hour before', 1440: '1 day before', 10080: '1 week before'};
@@ -515,6 +517,13 @@ class _SettingsPageState extends State<SettingsPage> {
         leading: const Icon(Icons.tag),
         title: const Text('#category'),
         subtitle: Text(cats.isEmpty ? 'Puts it in that category (add categories above)' : 'Puts it in that category: $cats'),
+      ),
+      // Item 107.
+      const ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(Icons.sell_outlined),
+        title: Text('#tag'),
+        subtitle: Text('Any other #word becomes a tag, e.g. #meeting #coding. A task can have several.'),
       ),
       const ListTile(
         contentPadding: EdgeInsets.zero,
@@ -1161,6 +1170,22 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PanelSettingsPage(store: store))),
             ),
+            // Item 107.
+            Builder(builder: (context) {
+              final tags = tagsInUse(data);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.tag),
+                title: const Text('Tags'),
+                subtitle: Text(tags.isEmpty
+                    ? 'Words like meeting or coding on tasks, to filter by'
+                    : tags.map((x) => '#${x.tag}').join(' '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TagsPage(store: store))),
+              );
+            }),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.view_kanban_outlined),

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'models.dart';
+import 'tags.dart';
 import 'quick_date.dart';
 
 /// Where a suggested category came from.
@@ -17,7 +18,8 @@ class ParsedInput {
       this.star = false,
       this.gantt = false,
       this.planAt,
-      this.planMinutes});
+      this.planMinutes,
+      this.tags = const []});
 
   final String title;
   final DateTime? due;
@@ -36,6 +38,9 @@ class ParsedInput {
   /// tomorrow once that time has passed) and for how long (null = the default length).
   final DateTime? planAt;
   final int? planMinutes;
+
+  /// Item 107: "#words" that aren't a category become tags.
+  final List<String> tags;
 
   /// What [AppStore.addTask] takes for it.
   ({DateTime at, int? minutes})? get plan => planAt == null ? null : (at: planAt!, minutes: planMinutes);
@@ -117,9 +122,10 @@ String? quickWord(AppData data, QuickWord w) {
   return (text: out.replaceAll(RegExp(r'\s+'), ' ').trim(), box: box, board: board, star: star, gantt: gantt);
 }
 
-/// Reads a due date ("tomorrow 5pm"), a "#category" tag, a category keyword or, failing
-/// those, a category learned from the tasks already filed, out of [text].
-ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify = true}) {
+/// Reads a due date ("tomorrow 5pm"), a "#category", "#tags", a category keyword or, failing
+/// those, a category learned from the tasks already filed, out of [text]. "#words" in
+/// [keepTags] (lower case) stay in the name.
+ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify = true, Set<String> keepTags = const {}}) {
   final quick = takeQuickWords(text, data);
   text = quick.text.isEmpty ? text : quick.text;
   final plan = takePlanTime(text);
@@ -135,17 +141,30 @@ ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify =
   String? categoryId;
   var source = CategorySource.none;
 
-  final tag = RegExp(r'(?:^|\s)#([\w-]+)').firstMatch(title);
-  if (tag != null) {
-    final name = tag.group(1)!.toLowerCase();
-    final cat = data.categories.where((c) => c.name.toLowerCase().replaceAll(' ', '-') == name).firstOrNull ??
-        data.categories.where((c) => c.name.toLowerCase().startsWith(name)).firstOrNull;
-    if (cat != null) {
-      categoryId = cat.id;
-      source = CategorySource.tag;
-      title = title.replaceRange(tag.start, tag.end, ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  // "#word": a category whose name it is, else a tag already in use, else a category it starts,
+  // else a new tag (item 107). Only one category; later category words become tags too.
+  final tags = <String>[];
+  final known = {for (final x in tagsInUse(data)) x.tag.toLowerCase(): x.tag};
+  title = title.replaceAllMapped(RegExp(r'(^|\s)#([\w-]+)(?=\s|$)'), (m) {
+    final word = m.group(2)!;
+    final name = word.toLowerCase();
+    if (RegExp(r'^\d+$').hasMatch(name) || keepTags.contains(name)) return m.group(0)!;
+    if (categoryId == null) {
+      final exact = data.categories
+          .where((c) => c.name.toLowerCase().replaceAll(' ', '-') == name || c.name.toLowerCase().replaceAll(' ', '') == name)
+          .firstOrNull;
+      final cat = exact ??
+          (known.containsKey(name) ? null : data.categories.where((c) => c.name.toLowerCase().startsWith(name)).firstOrNull);
+      if (cat != null) {
+        categoryId = cat.id;
+        source = CategorySource.tag;
+        return m.group(1)!;
+      }
     }
-  }
+    final tag = known[name] ?? word;
+    if (!tags.any((x) => x.toLowerCase() == name)) tags.add(tag);
+    return m.group(1)!;
+  }).replaceAll(RegExp(r'\s+'), ' ').trim();
 
   if (categoryId == null && data.autoCategory != AutoCategory.off) {
     final lower = ' ${title.toLowerCase()} ';
@@ -172,7 +191,8 @@ ParsedInput parseInput(String text, AppData data, DateTime now, {bool classify =
       star: quick.star,
       gantt: quick.gantt,
       planAt: planAt,
-      planMinutes: planAt == null ? null : plan.minutes);
+      planMinutes: planAt == null ? null : plan.minutes,
+      tags: tags);
 }
 
 /// Splits pasted or shared text into one task per line, dropping bullets and numbering.

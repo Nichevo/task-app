@@ -42,6 +42,8 @@ import 'side_panel.dart';
 import 'starred_page.dart';
 import 'stats_page.dart';
 import 'task_page.dart';
+import '../widgets/tag_widgets.dart';
+import '../tags.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.store});
@@ -361,6 +363,7 @@ class HomePageState extends State<HomePage> {
             (_showSnoozed || !t.isSnoozed(now)) &&
             modeNow.showOf(data, t) == show &&
             passesFilter(t, _filter, now) &&
+            passesTagFilter(t, store.liveTagFilter) &&
             !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
   }
@@ -619,11 +622,15 @@ class HomePageState extends State<HomePage> {
     final rows = _rows(now);
     final searching = _query.isNotEmpty;
     final snoozedCount = searching ? 0 : data.active.where((t) => !t.habit && t.isSnoozed(now)).length;
-    final hiddenCount = searching || _filter == QuickFilter.all
+    final tagFilter = store.liveTagFilter;
+    final hiddenCount = searching || (_filter == QuickFilter.all && tagFilter.isEmpty)
         ? 0
         : data.active
             .where((t) =>
-                !t.habit && !t.isSnoozed(now) && !passesFilter(t, _filter, now) && !(data.kanbanHideFromList && t.kanban))
+                !t.habit &&
+                !t.isSnoozed(now) &&
+                !(passesFilter(t, _filter, now) && passesTagFilter(t, tagFilter)) &&
+                !(data.kanbanHideFromList && t.kanban))
             .length;
     final showSearchIcon = store.topIconShown(TopIcon.search);
     // Item 102: in a mode, its tools decide the icons; in Everything, Settings does. Icons that
@@ -838,7 +845,8 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        if (data.showQuickFilters && !_searching) _filterChips(),
+        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || tagsInUse(data).isNotEmpty) && !_searching)
+          _filterChips(),
         if (data.habits.isNotEmpty && !_searching && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
         if (breaking.isNotEmpty) _stillNeedsYou(breaking, now),
         if (estimate != null)
@@ -930,6 +938,9 @@ class HomePageState extends State<HomePage> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           children: [
+            // Item 107.
+            TagFilterChip(store: store),
+            if (data.showQuickFilters)
             for (final f in QuickFilter.values)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
@@ -1115,9 +1126,16 @@ class HomePageState extends State<HomePage> {
           ),
         if (hiddenCount > 0)
           TextButton.icon(
-            onPressed: () => store.setQuickFilter(QuickFilter.all),
+            onPressed: () {
+              store.setTagFilter(const []);
+              store.setQuickFilter(QuickFilter.all);
+            },
             icon: const Icon(Icons.filter_alt_off_outlined),
-            label: Text('$hiddenCount more not in "${_filter.label}". Show all'),
+            label: Text(store.liveTagFilter.isEmpty
+                ? '$hiddenCount more not in "${_filter.label}". Show all'
+                : _filter == QuickFilter.all
+                    ? '$hiddenCount more without the picked tags. Show all'
+                    : '$hiddenCount more hidden by the filters. Show all'),
           ),
         if (snoozedCount > 0)
           TextButton.icon(
@@ -1202,7 +1220,11 @@ class _AddBarState extends State<_AddBar> {
     return id == null || id.isEmpty || data.category(id) == null ? null : id;
   }
 
-  ParsedInput get _parsed => parseInput(_input.text, data, DateTime.now(), classify: _forcedCategory == null);
+  /// Item 107: "#words" whose tag chip was ✕'d, so they stay in the name.
+  final Set<String> _keepTags = {};
+
+  ParsedInput get _parsed =>
+      parseInput(_input.text, data, DateTime.now(), classify: _forcedCategory == null, keepTags: _keepTags);
 
   void _add() {
     final text = _input.text.trim();
@@ -1217,8 +1239,10 @@ class _AddBarState extends State<_AddBar> {
         board: p.board,
         gantt: p.gantt,
         star: p.star,
-        plan: _ignoreDate ? null : p.plan);
+        plan: _ignoreDate ? null : p.plan,
+        tags: p.tags);
     _source = null;
+    _keepTags.clear();
     _input.clear();
     _ignoreDate = _ignoreCategory = false;
     _forcedCategory = null;
@@ -1258,7 +1282,13 @@ class _AddBarState extends State<_AddBar> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 4, 4, 8),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (due != null || showCategoryChip || p?.box != null || p?.board == true || p?.star == true || plan != null)
+          if (due != null ||
+              showCategoryChip ||
+              p?.box != null ||
+              p?.board == true ||
+              p?.star == true ||
+              plan != null ||
+              (p?.tags.isNotEmpty ?? false))
             Align(
               alignment: Alignment.centerLeft,
               child: Wrap(spacing: 6, children: [
@@ -1291,6 +1321,15 @@ class _AddBarState extends State<_AddBar> {
                         '${describeLength(plan.minutes ?? data.dayPlan.length)}'),
                     tooltip: 'Picked from what you typed. Tap ✕ to keep the words instead.',
                     onDeleted: () => setState(() => _ignoreDate = true),
+                  ),
+                // Item 107: "#words" that became tags.
+                for (final x in p?.tags ?? const <String>[])
+                  InputChip(
+                    avatar: const Icon(Icons.tag, size: 18),
+                    label: Text(x),
+                    tooltip: 'A tag from the #word you typed. Tap ✕ to keep the word instead.',
+                    onDeleted: () => setState(() => _keepTags.add(x.toLowerCase())),
+                    visualDensity: VisualDensity.compact,
                   ),
                 if (showCategoryChip)
                   InputChip(

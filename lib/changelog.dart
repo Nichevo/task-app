@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.8', 'November 2026', [
+    'Tags: give a task any number of tags, like meeting, brainstorming or coding. Add them on the task\'s page (Tags, then Add a tag), or type them in the add box: "Sprint review #meeting #coding". A #word that is a category\'s name still picks the category; any other #word becomes a tag.',
+    'Filter by tag: the new "All tags" chip at the start of the filter row above the list, the Kanban board and the Matrix. Pick one or more tags (a task shows when it has any of them), or "No tag". The choice is remembered on this device; ✕ on the chip shows everything again.',
+    'Tags show on the cards (the first one beside the name, all of them when the card is opened), search finds them ("#coding"), and they go with a task when it repeats or when a step is made into a task.',
+    'Settings, Tags: every tag with how many tasks have it. Tap one to rename it (renaming onto a tag that exists joins the two) or delete it from every task. The CSV export and import have a Tags column.',
+  ]),
   Release('1.12.7', 'November 2026', [
     'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',
     'The link list is smarter: it shows the other steps of the same task first, then tasks and their steps in the same category, then everything else. Search finds steps by name too.',
