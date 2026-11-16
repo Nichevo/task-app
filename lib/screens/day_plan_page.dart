@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../day_plan.dart';
@@ -123,6 +124,11 @@ class _DayPlanPageState extends State<DayPlanPage> {
   PlanBlock? _moving;
   PlanBlock? _resizing;
   double _dy = 0;
+  // The snap steps the drag has come to, for a tick each time it passes another (1.12.6).
+  int _dragStep = 0;
+  // "Moving · 09:30 – 10:15" or "Length 1 h · ends 10:30" by the block being dragged, drawn on
+  // top of the day it is on.
+  Widget? _dragLabel;
 
   // The phone's calendar events for the week shown (1.11.1), and whether reading them failed
   // (no access yet).
@@ -650,6 +656,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
         child: LayoutBuilder(builder: (context, box) {
             final x0 = _gutter, x1 = box.maxWidth - 10;
             final children = <Widget>[];
+            _dragLabel = null;
             // Hour lines.
             for (var m = (from + 59) ~/ 60 * 60; m <= to; m += 60) {
               final top = (m - from) * ppm + _top;
@@ -792,75 +799,175 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 ),
               ));
             }
+            if (_dragLabel case final label?) children.add(label);
             return SizedBox(key: key, height: height, child: Stack(clipBehavior: Clip.none, children: children));
           }),
       ),
     );
   }
 
-  /// Places [b] between [left] and [right], moved or stretched while it is being dragged.
+  /// Places [b] between [left] and [right], moved or stretched while it is being dragged. The
+  /// block being dragged also gets a label (added on top of the day in [_dragLabel]) saying
+  /// whether it is moving or stretching, and to what time (1.12.6).
   Widget _positioned(PlanBlock b, double left, double right, double Function(DateTime) y, double Function(int) h,
       Widget Function(double w, double h) child) {
     var top = y(b.start);
     var hh = h(b.slot.minutes);
-    final moving = identical(_moving, b) || (b.frame != null && identical(_moving, b.frame));
+    final moving = _isDragged(_moving, b) || (b.frame != null && _isDragged(_moving, b.frame!));
+    final stretching = _isDragged(_resizing, b);
     if (moving) top += _dy;
-    if (identical(_resizing, b)) hh = max(h(s.snap), hh + _dy);
+    if (stretching) hh = max(h(s.snap), hh + _dy);
     final w = max(right - left, 20.0);
-    _rects[b] = Rect.fromLTWH(left, top + 1, w, max(hh - 2, 14));
-    final widget = SizedBox(width: w, height: max(hh - 2, 14), child: child(w, max(hh - 2, 14)));
+    final bh = max(hh - 2, 14.0);
+    _rects[b] = Rect.fromLTWH(left, top + 1, w, bh);
+    if (_isDragged(_moving, b) || stretching) {
+      final rect = Rect.fromLTWH(left, top + 1, w, bh);
+      _dragLabel = stretching ? _stretchLabel(b, rect) : _moveLabel(b, rect);
+    }
+    final widget = SizedBox(width: w, height: bh, child: child(w, bh));
+    final lifted = moving || stretching;
+    final own = _isDragged(_moving, b) || stretching;
+    // The same widgets whether dragged or not, so the drag under the finger carries on when the
+    // block lifts (swapping them would drop the gesture).
     return Positioned(
       left: left,
       top: top + 1,
-      child: moving || identical(_resizing, b)
-          ? Material(elevation: 6, borderRadius: BorderRadius.circular(12), color: Colors.transparent, child: widget)
-          : widget,
+      child: Material(
+        elevation: lifted ? 6 : 0,
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.transparent,
+        child: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: !own
+              ? const BoxDecoration()
+              : BoxDecoration(
+                  // Moving: an outline all round. Stretching: only the bottom edge, thick.
+                  border: stretching
+                      ? const Border(bottom: BorderSide(color: Color(0xFF1A1C1C), width: 4))
+                      : Border.all(color: const Color(0xFF1A1C1C), width: 2),
+                  borderRadius: stretching ? null : BorderRadius.circular(12),
+                ),
+          child: widget,
+        ),
+      ),
     );
   }
 
-  /// Taps, press-and-hold to move and the bottom edge to stretch.
+  /// Whether [b] is the block being dragged. The day is laid out afresh on every frame, so the
+  /// same block is a new object each time: match it by its planned time instead (1.12.6; the
+  /// block didn't follow the finger before).
+  static bool _isDragged(PlanBlock? dragged, PlanBlock b) => dragged != null && identical(dragged.slot, b.slot);
+
+  /// The minutes the current drag comes to, in whole snap steps.
+  int get _dragMinutes => (_dy / _ppm(context) / s.snap).round() * s.snap;
+
+  Widget _moveLabel(PlanBlock b, Rect r) {
+    final start = b.start.add(Duration(minutes: _dragMinutes));
+    final hm = DateFormat('HH:mm');
+    return _label(r, above: true, icon: Icons.open_with,
+        text: 'Moving · ${hm.format(start)} – ${hm.format(start.add(Duration(minutes: b.slot.minutes)))}');
+  }
+
+  Widget _stretchLabel(PlanBlock b, Rect r) {
+    final to = max(s.snap, b.slot.minutes + _dragMinutes);
+    return _label(r, above: false, icon: Icons.height,
+        text: 'Length ${describeLength(to)} · ends ${DateFormat('HH:mm').format(b.start.add(Duration(minutes: to)))}');
+  }
+
+  Widget _label(Rect r, {required bool above, required IconData icon, required String text}) => Positioned(
+        left: r.left + 8,
+        top: above ? r.top - 30 : r.bottom + 6,
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: const Color(0xEE1A1C1C), borderRadius: BorderRadius.circular(12)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(icon, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(text, style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ),
+      );
+
+  /// Whether [b] (drawn [hh] tall) has a stretch handle.
+  static bool canStretch(PlanBlock b, double hh) => !b.done && hh >= 22;
+
+  void _startMove(PlanBlock b) {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _moving = b;
+      _resizing = null;
+      _dy = 0;
+      _dragStep = 0;
+    });
+  }
+
+  void _startStretch(PlanBlock b) {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _resizing = b;
+      _moving = null;
+      _dy = 0;
+      _dragStep = 0;
+    });
+  }
+
+  /// Follows the finger, with a tick each time the time passes another snap step.
+  void _dragTo(double dy) {
+    final step = (dy / _ppm(context) / s.snap).round();
+    if (step != _dragStep) {
+      _dragStep = step;
+      HapticFeedback.selectionClick();
+    }
+    setState(() => _dy = dy);
+  }
+
+  void _endDrag(PlanBlock b) {
+    final minutes = _dragMinutes;
+    final stretching = _resizing != null;
+    setState(() {
+      _moving = null;
+      _resizing = null;
+    });
+    if (minutes == 0) return;
+    stretching ? _stretch(b, minutes) : _shift(b, minutes);
+  }
+
+  void _cancelDrag() => setState(() {
+        _moving = null;
+        _resizing = null;
+      });
+
+  /// Taps, press-and-hold to move, and the handle along the bottom edge to stretch. The handle
+  /// stretches whether it is dragged straight away or held first, so holding near the bottom
+  /// never moves the block by mistake (1.12.6).
   Widget _gestures(PlanBlock b, double hh, Widget child) {
-    final ppm = _ppm(context);
+    final stretchable = canStretch(b, hh);
+    final zone = stretchHandleHeight(hh);
+    final active = _isDragged(_resizing, b);
     return GestureDetector(
       onTap: () => _blockMenu(b),
-      onLongPressStart: (_) => setState(() {
-        _moving = b;
-        _dy = 0;
-      }),
-      onLongPressMoveUpdate: (d) => setState(() => _dy = d.offsetFromOrigin.dy),
-      onLongPressEnd: (_) {
-        final minutes = (_dy / ppm / s.snap).round() * s.snap;
-        setState(() => _moving = null);
-        if (minutes != 0) _shift(b, minutes);
-      },
-      onLongPressCancel: () => setState(() => _moving = null),
+      onLongPressStart: (d) => stretchable && d.localPosition.dy >= hh - zone ? _startStretch(b) : _startMove(b),
+      onLongPressMoveUpdate: (d) => _dragTo(d.offsetFromOrigin.dy),
+      onLongPressEnd: (_) => _endDrag(b),
+      onLongPressCancel: _cancelDrag,
       child: Stack(children: [
         Positioned.fill(child: child),
-        if (!b.done && hh >= 30)
+        if (stretchable)
           Positioned(
             left: 0,
-            right: 0,
+            // A short block has its tick box at the right: leave it tappable.
+            right: hh < 52 ? 36 : 0,
             bottom: 0,
-            height: 14,
+            height: zone,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onVerticalDragStart: (_) => setState(() {
-                _resizing = b;
-                _dy = 0;
-              }),
-              onVerticalDragUpdate: (d) => setState(() => _dy += d.delta.dy),
-              onVerticalDragEnd: (_) {
-                final minutes = (_dy / ppm / s.snap).round() * s.snap;
-                setState(() => _resizing = null);
-                if (minutes != 0) _stretch(b, minutes);
-              },
-              child: Center(
-                child: Container(
-                  width: 34,
-                  height: 4,
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.28), borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
+              onVerticalDragStart: (_) => _startStretch(b),
+              onVerticalDragUpdate: (d) => _dragTo(_dy + d.delta.dy),
+              onVerticalDragEnd: (_) => _endDrag(b),
+              onVerticalDragCancel: _cancelDrag,
+              child: _StretchHandle(active: active),
             ),
           ),
       ]),
@@ -1654,6 +1761,40 @@ class _DayPlanPageState extends State<DayPlanPage> {
           ));
     }
   }
+}
+
+/// How tall the stretch handle along a Day plan block's bottom edge is: a thumb's worth on a long
+/// block, but at most about a third of a short one so the rest can still be held to move it
+/// (1.12.6).
+double stretchHandleHeight(double blockHeight) => min(28.0, max(16.0, blockHeight * 0.34));
+
+/// The grip along a planned block's bottom edge: drag it (or hold it, then drag) to change how
+/// long the block is. Darker while stretching (1.12.6).
+class _StretchHandle extends StatelessWidget {
+  const _StretchHandle({required this.active});
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: active ? 0.16 : 0.07),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+        ),
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            for (var i = 0; i < 2; i++)
+              Container(
+                width: active ? 56 : 44,
+                height: 3,
+                margin: const EdgeInsets.symmetric(vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: active ? 0.75 : 0.42),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ]),
+        ),
+      );
 }
 
 class _Tag extends StatelessWidget {
