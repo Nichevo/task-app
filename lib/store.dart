@@ -1635,6 +1635,7 @@ class AppStore extends ChangeNotifier {
 
   /// Keeps a board step's stage in step with its tick box.
   void _stepTicked(Task t, TaskStep s) {
+    if (s.done) _tickLinkedSteps(s);
     if (!t.boardSteps.contains(s) || data.stages.isEmpty) return;
     final last = data.stages.last;
     if (s.done && s.stageId != last.id) {
@@ -1642,6 +1643,18 @@ class AppStore extends ChangeNotifier {
     } else if (!s.done && s.stageId == last.id) {
       final back = s.moves.isEmpty ? null : data.stage(s.moves.last.fromId);
       _moveStep(t, s, back == null || back.id == last.id ? data.stages.first : back, MoveHow.reopened, locate: false);
+    }
+  }
+
+  /// Item 106: ticks the open steps linked to [s] (in any open task), and the steps linked to
+  /// those in turn. Unticking [s] leaves them ticked, as a linked task does.
+  void _tickLinkedSteps(TaskStep s) {
+    for (final x in data.active) {
+      for (final st in x.steps.where((st) => st.linkStepId == s.id && !st.done).toList()) {
+        st.done = true;
+        x.touch();
+        _stepTicked(x, st);
+      }
     }
   }
 
@@ -2521,6 +2534,7 @@ class AppStore extends ChangeNotifier {
   /// Linked to one that is already ticked off, the step is ticked now.
   void linkStep(Task t, TaskStep s, Task other) {
     s.taskId = other.id;
+    s.linkStepId = null;
     if (other.closedAt != null && !s.done) {
       s.done = true;
       _stepTicked(t, s);
@@ -2528,8 +2542,23 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  /// Item 106: links [s] to another step [other] (of this task or another), so ticking [other]
+  /// ticks [s]. Linked to one that is already ticked, [s] is ticked now.
+  void linkStepToStep(Task t, TaskStep s, TaskStep other) {
+    if (other.id == s.id) return;
+    s.linkStepId = other.id;
+    s.taskId = null;
+    if (other.done && !s.done) {
+      s.done = true;
+      _stepTicked(t, s);
+    }
+    changed(task: t);
+  }
+
+  /// Takes away [s]'s link to a task or to another step.
   void unlinkStep(Task t, TaskStep s) {
     s.taskId = null;
+    s.linkStepId = null;
     changed(task: t);
   }
 

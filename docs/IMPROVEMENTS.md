@@ -1450,3 +1450,18 @@ modes in the statistics; the top bar has no room for more icons.
   selection tick per snap step, and a label on top of the day with the new times
   (`_dragLabel`).
 - Tests: test/day_plan_drag_test.dart.
+
+### 106: link a step to another step, smarter link picker (version 1.12.7) ☑
+
+- The owner couldn't link a step to another step (only to a whole task). `TaskStep.linkStepId`
+  (JSON `linkStep`) links a step to any other step, in the same task or another. Ticking that
+  step ticks this one (`AppStore._tickLinkedSteps`, run from `_stepTicked`, so every way of
+  ticking counts, and chains of links follow). Unticking leaves it ticked, like a linked task.
+  A step has a task link or a step link, not both (`linkStepToStep`, `linkStep`, `unlinkStep`).
+- The link picker (`pickLinkTarget`, order from `linkChoices` in lib/widgets/step_links.dart)
+  lists other steps of the same task first, then tasks in the same category with their open
+  steps, then everything else; search matches task and step names. A step of the same task
+  asks "ticks this step" or "this step comes after it".
+- Labels: "Step: Pay builder (House)"; "Open task" opens the task holding the linked step.
+- Not done: "comes after" across tasks (Gantt push) still only works within one task.
+- Tests: test/step_to_step_test.dart.

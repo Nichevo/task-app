@@ -391,7 +391,7 @@ class _DetailsState extends State<_Details> {
                     fontWeight: next ? FontWeight.w600 : null,
                     color: s.done ? const Color(0x88000000) : ink)),
           ),
-          if (s.taskId != null) const Icon(Icons.link, size: 16, color: Color(0x88000000)),
+          if (s.taskId != null || s.linkStepId != null) const Icon(Icons.link, size: 16, color: Color(0x88000000)),
           if (d != null && !s.done)
             Padding(
               padding: const EdgeInsets.only(left: 8),

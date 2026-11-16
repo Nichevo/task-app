@@ -105,16 +105,20 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   Future<void> _stepMenu(TaskStep s) async {
-    final linked = s.taskId == null ? null : anyTask(data, s.taskId!);
+    final linked = stepLinkedTask(s, data);
     final choice = await showDialog<String>(
       context: context,
       builder: (c) => SimpleDialog(
         title: Text(s.title),
         children: [
-          if (linked != null) ...[
-            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
+          if (stepIsLinked(s)) ...[
+            if (linked != null)
+              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
             if (!archived)
-              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'unlink'), child: const Text('Unlink from that task')),
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, 'unlink'),
+                child: Text(s.linkStepId != null ? 'Unlink from that step' : 'Unlink from that task'),
+              ),
           ] else if (!archived) ...[
             if (s.carried != null)
               SimpleDialogOption(onPressed: () => Navigator.pop(c, 'carried'), child: const Text('Show what it carries')),
@@ -141,8 +145,9 @@ class _TaskPageState extends State<TaskPage> {
                 onPressed: () => Navigator.pop(c, 'after'),
                 child: Text(s.afterIds.isEmpty ? 'Comes after another step…' : 'Change what it comes after'),
               ),
-            if (s.carried == null && s.taskId == null)
-              SimpleDialogOption(onPressed: () => Navigator.pop(c, 'link'), child: const Text('Link to an existing task…')),
+            if (s.carried == null)
+              SimpleDialogOption(
+                  onPressed: () => Navigator.pop(c, 'link'), child: const Text('Link to an existing task or step…')),
             if (s.carried == null)
               SimpleDialogOption(
                 onPressed: () => Navigator.pop(c, 'task'),
@@ -724,7 +729,7 @@ class _TaskPageState extends State<TaskPage> {
                     style: TextStyle(
                         decoration: s.done ? TextDecoration.lineThrough : null,
                         color: s.done ? Theme.of(context).disabledColor : null)),
-                subtitle: s.taskId == null &&
+                subtitle: !stepIsLinked(s) &&
                         s.afterIds.isEmpty &&
                         !task.boardSteps.contains(s) &&
                         s.dueAt == null &&
@@ -736,7 +741,7 @@ class _TaskPageState extends State<TaskPage> {
                         if (s.dueAt != null)
                           'Due ${dateTimeFmt.format(s.dueAt!)}${s.remindBefore != null && s.remindBefore! > 0 ? ' (${remindOptions[s.remindBefore] ?? '${s.remindBefore} min before'})' : ''}',
                         ?stepAfterLabel(task, s),
-                        ?stepLinkLabel(s, data),
+                        ?stepLinkLabel(s, data, within: task),
                         if (task.boardSteps.contains(s)) 'Board: ${data.stage(s.stageId)?.name ?? '?'}',
                         if (s.note.isNotEmpty) s.note,
                       ].join(' · ')),
@@ -744,7 +749,7 @@ class _TaskPageState extends State<TaskPage> {
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   if (s.dueAt != null && !s.done)
                     Icon(Icons.event, size: 18, color: s.dueAt!.isBefore(DateTime.now()) ? Colors.red : null),
-                  if (s.taskId != null) const Icon(Icons.link, size: 18),
+                  if (stepIsLinked(s)) const Icon(Icons.link, size: 18),
                   ReorderableDragStartListener(index: i, child: const Icon(Icons.drag_handle)),
                 ]),
               ),

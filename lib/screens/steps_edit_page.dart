@@ -73,16 +73,19 @@ class _StepsEditPageState extends State<StepsEditPage> {
   }
 
   Future<void> _linkMenu(TaskStep s) async {
-    final linked = s.taskId == null ? null : anyTask(data, s.taskId!);
+    final linked = stepLinkedTask(s, data);
     final choice = await showDialog<String>(
       context: context,
       builder: (c) => SimpleDialog(title: Text(s.title), children: [
-        if (linked != null) ...[
-          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
-          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to a different task…')),
+        if (stepIsLinked(s)) ...[
+          if (linked != null)
+            SimpleDialogOption(onPressed: () => Navigator.pop(c, 'open'), child: Text('Open task "${linked.title}"')),
+          SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to a different task or step…')),
           SimpleDialogOption(onPressed: () => Navigator.pop(c, 'unlink'), child: const Text('Unlink')),
         ] else ...[
-          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to an existing task…')),
+          SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'other'), child: const Text('Link to an existing task or step…')),
           if (s.carried == null)
             SimpleDialogOption(onPressed: () => Navigator.pop(c, 'new'), child: const Text('Make into a new linked task')),
         ],
@@ -96,7 +99,9 @@ class _StepsEditPageState extends State<StepsEditPage> {
         _undo.add(snapshotSteps(task));
         if (!await linkStepToTask(context, store, task, s)) _undo.removeLast();
       case 'unlink':
-        _do(() => s.taskId = null);
+        _do(() => s
+          ..taskId = null
+          ..linkStepId = null);
       case 'new':
         final t = store.stepToTask(task, s);
         _snack('Added "${t.title}" as a task, linked to this step');
@@ -106,7 +111,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
 
   /// "After ..." and the linked task, for under a step's name.
   String? _linksText(TaskStep s) {
-    final parts = [?stepAfterLabel(task, s), ?stepLinkLabel(s, data)];
+    final parts = [?stepAfterLabel(task, s), ?stepLinkLabel(s, data, within: task)];
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
@@ -124,11 +129,11 @@ class _StepsEditPageState extends State<StepsEditPage> {
           onPressed: () => _setAfter(s),
         ),
       IconButton(
-        tooltip: s.taskId == null ? 'Link to a task…' : stepLinkLabel(s, data),
+        tooltip: stepIsLinked(s) ? stepLinkLabel(s, data, within: task) : 'Link to a task or step…',
         visualDensity: VisualDensity.compact,
         iconSize: 18,
-        color: s.taskId == null ? scheme.onSurfaceVariant : scheme.primary,
-        icon: Icon(s.taskId == null ? Icons.add_link : Icons.link),
+        color: stepIsLinked(s) ? scheme.primary : scheme.onSurfaceVariant,
+        icon: Icon(stepIsLinked(s) ? Icons.link : Icons.add_link),
         onPressed: () => _linkMenu(s),
       ),
     ];
@@ -1025,7 +1030,8 @@ class _StepsEditPageState extends State<StepsEditPage> {
                 if (task.steps.length > 1)
                   chip(Icons.subdirectory_arrow_right, stepAfterLabel(task, s) ?? 'After…', s.afterIds.isEmpty,
                       () => _setAfter(s)),
-                chip(s.taskId == null ? Icons.add_link : Icons.link, stepLinkLabel(s, data) ?? 'Link task', s.taskId == null,
+                chip(stepIsLinked(s) ? Icons.link : Icons.add_link, stepLinkLabel(s, data, within: task) ?? 'Link',
+                    !stepIsLinked(s),
                     () => _linkMenu(s)),
               ]),
             ]),
