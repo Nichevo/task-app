@@ -1465,3 +1465,30 @@ modes in the statistics; the top bar has no room for more icons.
 - Labels: "Step: Pay builder (House)"; "Open task" opens the task holding the linked step.
 - Not done: "comes after" across tasks (Gantt push) still only works within one task.
 - Tests: test/step_to_step_test.dart.
+
+### 107: editing from the Day plan (version 1.12.8) ☑
+
+The owner asked to click from the Day plan into a task to edit it, to click on the day to add a
+task or step and link it easily to its owner, and for the Day plan to open with only the focus
+mode's categories selected (tags are a separate item).
+
+- A tap on a block opens the task page (`_openTask`); the old tap menu (`_blockMenu`) moved to a
+  ⋮ on each block (`_more`: beside the tick on short blocks, under it from 72 px, under the tick
+  in a frame or band from 90 px) and to a right click. The stretch grip stops short of both.
+- A tap on an empty time (`_addAt`, a GestureDetector round each day column; blocks and events
+  win their own taps) opens `showAddAtSheet` in lib/widgets/day_plan_add.dart at the time step
+  tapped: New task (category defaults to the mode's category for new tasks), Step of a task, or
+  One I have (search, then the Plan a time sheet). Time and length can be changed on the sheet.
+- Owners (`ownerChoices`): tasks planned around that time on that day (closest first), then
+  others the Day plan shows (starred, then soonest due), then the rest; habits left out. The top
+  five are chips; "Other task…" opens `pickOwner` with search.
+- Block ⋮ "Make it a step of…" uses `makeStep`, which now keeps the task's planned times as the
+  new step's (and its own steps' times when they join the parent). Split out (carried task) moves
+  the step's times back to the task.
+- Focus mode chips: `dayPlanHidden` = the mode's Quiet and Hide categories
+  (`modeHiddenCategories`) while a mode is on, or the chips as changed since the Day plan opened
+  (`modeChipTweaks`, not saved; cleared in `initState`). Everything still uses the saved
+  `hiddenCategories`. A leading chip names the mode and resets it. `planHides`: in a mode a task
+  whose chip is off still shows when it breaks through, but not for "Planned today".
+- Tests: test/day_plan_edit_test.dart.
+

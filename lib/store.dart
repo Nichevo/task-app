@@ -2458,6 +2458,18 @@ class AppStore extends ChangeNotifier {
       }
     }
     parent.steps.add(step);
+    // 1.12.8: its planned times on the Day plan stay, now as the step's (and those of its own
+    // steps when they joined the parent).
+    final kept = <TimeSlot>[];
+    for (final sl in t.slots) {
+      if (sl.stepId != null && !added.any((x) => x.id == sl.stepId)) continue;
+      kept.add(TimeSlot.create(sl.start, sl.minutes, stepId: sl.stepId ?? step.id, gapAfter: sl.gapAfter, shared: sl.shared)
+        ..doneAt = sl.doneAt);
+    }
+    if (kept.isNotEmpty) {
+      parent.slots.addAll(kept);
+      parent.dayPlan = true;
+    }
     // Whatever pointed at the task now points at its new parent.
     final waiting = <Task, String?>{};
     for (final w in data.active.where((w) => w.afterTaskId == t.id)) {
@@ -2480,6 +2492,7 @@ class AppStore extends ChangeNotifier {
       step,
       () {
         parent.steps.remove(step);
+        parent.slots.removeWhere(kept.contains);
         waiting.forEach((w, id) {
           w.afterTaskId = id;
           w.touch();
@@ -2577,9 +2590,24 @@ class AppStore extends ChangeNotifier {
     if (s.carried != null) {
       final restored = _restoreCarried(t, s);
       if (restored != null) {
+        // 1.12.8: the step's planned times go back to the task, as they are now.
+        final mine = t.slots.where((x) => x.stepId == s.id).toList();
+        if (mine.isNotEmpty) {
+          t.slots.removeWhere(mine.contains);
+          restored.slots
+            ..removeWhere((x) => x.stepId == null)
+            ..addAll([
+              for (final x in mine)
+                TimeSlot.create(x.start, x.minutes, gapAfter: x.gapAfter, shared: x.shared)..doneAt = x.doneAt,
+            ]);
+          restored.dayPlan = true;
+          changed(task: t);
+          changed(task: restored);
+        }
         return (
           restored,
           () {
+            t.slots.addAll(mine);
             data.active.remove(restored);
             data.archived.remove(restored);
             data.deleted[restored.id] = DateTime.now().toUtc();

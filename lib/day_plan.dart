@@ -2,6 +2,7 @@ import 'package:intl/intl.dart';
 
 import 'gantt.dart';
 import 'models.dart';
+import 'modes.dart';
 import 'native.dart' show CalendarEvent;
 import 'places.dart';
 
@@ -240,10 +241,64 @@ int _union(List<Span> spans) {
 
 bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
+/// 1.12.8: changes made to the category chips while a focus mode is on, by mode id. Not saved:
+/// opening the Day plan starts again from the mode's own categories.
+final modeChipTweaks = <String, Set<String>>{};
+
+/// The categories a focus mode doesn't show (Quiet or Hide; '' = no category), which the Day
+/// plan leaves out while that mode is on (1.12.8). When that would be every category, none.
+Set<String> modeHiddenCategories(AppData data, FocusMode m) {
+  final out = {
+    for (final c in data.categories)
+      if (m.showFor(data, c.id) != CatShow.show) c.id,
+    if (m.showFor(data, null) != CatShow.show) '',
+  };
+  return out.length > data.categories.length ? <String>{} : out;
+}
+
+/// The focus mode the Day plan's categories follow now; null in Everything (or while peeking).
+FocusMode? get dayPlanMode => modeNow.filtering ? modeNow.mode : null;
+
+/// The categories hidden on the Day plan now: in a focus mode, the ones it doesn't show (or the
+/// chips as changed since the Day plan was opened); otherwise the saved choice.
+Set<String> dayPlanHidden(AppData data) {
+  final m = dayPlanMode;
+  if (m == null) return data.dayPlan.hiddenCategories;
+  return modeChipTweaks[m.id] ?? modeHiddenCategories(data, m);
+}
+
+/// Whether the chips differ from what the focus mode on now shows.
+bool modeChipsChanged(AppData data) {
+  final m = dayPlanMode;
+  final t = m == null ? null : modeChipTweaks[m.id];
+  if (t == null) return false;
+  final d = modeHiddenCategories(data, m!);
+  return t.length != d.length || !t.containsAll(d);
+}
+
+/// Shows or hides category [id] ('' = no category) on the Day plan: in a focus mode only until
+/// the Day plan is next opened, otherwise saved.
+void toggleDayPlanCategory(AppData data, String id) {
+  final m = dayPlanMode;
+  final hidden = m == null ? data.dayPlan.hiddenCategories : modeChipTweaks.putIfAbsent(m.id, () => {...dayPlanHidden(data)});
+  hidden.contains(id) ? hidden.remove(id) : hidden.add(id);
+}
+
 /// Whether category [id] (null = none) is hidden on the Day plan.
 bool categoryHidden(AppData data, String? id) {
   final known = id != null && data.category(id) != null;
-  return data.dayPlan.hiddenCategories.contains(known ? id : '');
+  return dayPlanHidden(data).contains(known ? id : '');
+}
+
+/// Whether [t] is left out of the Day plan: its category chip is off or the focus mode hides it.
+/// In a focus mode, a task that still needs you (overdue, due today, starred...) shows anyway,
+/// but not only for being planned today: that is what the Day plan is sorting out.
+bool planHides(AppData data, Task t, {DateTime? now}) {
+  if (dayPlanMode == null) return categoryHidden(data, t.categoryId) || !data.inMode(t);
+  // The chips start as the mode's categories; one turned on by hand shows, even a hidden one.
+  if (!categoryHidden(data, t.categoryId)) return false;
+  final why = modeNow.breakThrough(data, t, now ?? DateTime.now());
+  return why == null || why == 'Planned today';
 }
 
 /// The planned times on [day] of open tasks, and of tasks ticked off since, as blocks.
@@ -274,7 +329,7 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
   final (timed, allDay) = eventsOn(data, day, events);
   var blocks = blocksOn(data, day);
   for (final b in blocks) {
-    b.hidden = categoryHidden(data, b.task.categoryId) || !data.inMode(b.task);
+    b.hidden = planHides(data, b.task);
   }
   if (!s.hiddenStrip) blocks = blocks.where((b) => !b.hidden).toList();
   if (!s.showTicked) blocks = blocks.where((b) => !b.done).toList();
@@ -618,7 +673,7 @@ List<TrayItem> trayFor(AppData data, DateTime day, {DateTime? at}) {
   final dueFirst = <TrayItem>[];
   final others = <TrayItem>[];
   for (final t in data.active) {
-    if (t.habit || categoryHidden(data, t.categoryId) || !data.inMode(t)) continue;
+    if (t.habit || planHides(data, t, now: now)) continue;
     final own = t.ownSlots.toList();
     if (own.any((x) => _sameDay(x.start, day))) {
       // Planned that day; only its due steps without a time can still be waiting.

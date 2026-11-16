@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.8', 'November 2026', [
+    'Day plan: tap a block to open its task and change it (for a step, the task it belongs to). The Day plan\'s own choices (Start focus, Change the time, Leave room, Remove this time...) are now under the ⋮ on the block, or a right click on a computer.',
+    'Tap an empty time on the Day plan to add something there: a new task, a new step of a task, or one you already have. For a step, the tasks planned around that time are offered first, one tap each, with "Other task…" to search the rest. Change the time and the length on the same sheet.',
+    'New on a block\'s ⋮: "Make it a step of…" turns a planned task into a step of another task and keeps its time on the Day plan. Splitting it out again later gives the time back to the task.',
+    'With a focus mode on (Work, say), the Day plan now opens with only that mode\'s categories selected. A chip at the front names the mode (tap it to switch mode); change the other chips as you like, and tap the mode chip to go back to the mode\'s categories. Changes made in a mode last until you next open the Day plan, and the categories you chose for Everything are left as they were. Anything that still needs you (overdue, due today, starred) shows anyway.',
+  ]),
   Release('1.12.7', 'November 2026', [
     'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',
     'The link list is smarter: it shows the other steps of the same task first, then tasks and their steps in the same category, then everything else. Search finds steps by name too.',
