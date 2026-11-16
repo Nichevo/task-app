@@ -9,12 +9,26 @@ class Release {
 }
 
 const releases = [
-  Release('1.12.9', 'November 2026', [
+  Release('1.12.11', 'November 2026', [
     'Focus timer widget: Start, Pause, Resume, +5, Skip break and Stop now work right on the widget, without opening the app. You still get the "Time for a break" and "Break\'s over" reminders, the countdown in the notification shade (Android) and Do not disturb if you use it. The app catches up with what you pressed the next time it opens.',
     'Each widget that lists tasks can now have its own focus mode: follow the mode that is on (as before), always show everything, or always show one mode (say Work), whatever mode you are in. Android asks when you place the widget (press and hold it, then the pencil, to change it); on the iPad it is "Focus mode" in Edit Widget. The Focus timer widget has the choice too, for the top task it offers.',
     'Focus mode widget: make it two rows tall (Android) or pick the wider size (iPad) and it shows a button for each mode. Tap one to switch straight away, until the schedule next changes, without opening the app.',
     'A focus mode can have its own round lengths, for example 50 minutes with 10 minute breaks at Work and 25/5 at Home. Set them in the focus timer\'s settings (the gear on the Focus screen) under "Round lengths for". A new length starts with the next round or break.',
     'Settings, Focus modes, "Widgets follow the mode" switched off now only stops widgets that follow the mode; the Focus mode widget still shows the mode you are in.',
+  ]),
+  Release('1.12.10', 'November 2026', [
+    'How long a task takes can now be given in hours as well as days: on the task page, tap Takes and pick Hours (or type "6h"). On the Gantt chart it fills the working days those hours need (a working day is the Day plan\'s working hours, 9 h unless you changed them), and the task page shows "6 h" or "12 h (2 work days)". Steps too: "Change its start, how long or progress" in a step\'s menu.',
+    'A task or step given in hours (a working day or less) gets that length when you plan it on the Day plan, unless it has its own "How long" estimate.',
+    'Day plan: tap a block to open its task and change it (for a step, the task it belongs to). The Day plan\'s own choices (Start focus, Change the time, Leave room, Remove this time...) are now under the ⋮ on the block, or a right click on a computer.',
+    'Tap an empty time on the Day plan to add something there: a new task, a new step of a task, or one you already have. For a step, the tasks planned around that time are offered first, one tap each, with "Other task…" to search the rest. Change the time and the length on the same sheet.',
+    'New on a block\'s ⋮: "Make it a step of…" turns a planned task into a step of another task and keeps its time on the Day plan. Splitting it out again later gives the time back to the task.',
+    'With a focus mode on (Work, say), the Day plan now opens with only that mode\'s categories selected. A chip at the front names the mode (tap it to switch mode); change the other chips as you like, and tap the mode chip to go back to the mode\'s categories. Changes made in a mode last until you next open the Day plan, and the categories you chose for Everything are left as they were. Anything that still needs you (overdue, due today, starred) shows anyway.',
+  ]),
+  Release('1.12.8', 'November 2026', [
+    'Tags: give a task any number of tags, like meeting, brainstorming or coding. Add them on the task\'s page (Tags, then Add a tag), or type them in the add box: "Sprint review #meeting #coding". A #word that is a category\'s name still picks the category; any other #word becomes a tag.',
+    'Filter by tag: the new "All tags" chip at the start of the filter row above the list, the Kanban board and the Matrix. Pick one or more tags (a task shows when it has any of them), or "No tag". The choice is remembered on this device; ✕ on the chip shows everything again.',
+    'Tags show on the cards (the first one beside the name, all of them when the card is opened), search finds them ("#coding"), and they go with a task when it repeats or when a step is made into a task.',
+    'Settings, Tags: every tag with how many tasks have it. Tap one to rename it (renaming onto a tag that exists joins the two) or delete it from every task. The CSV export and import have a Tags column.',
   ]),
   Release('1.12.7', 'November 2026', [
     'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',

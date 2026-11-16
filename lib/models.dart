@@ -62,6 +62,7 @@ class Task {
     this.gantt = false,
     this.startAt,
     this.takesDays,
+    this.takesMinutes,
     this.countWeekends,
     List<String>? alsoAfter,
     this.lagDays,
@@ -81,9 +82,11 @@ class Task {
     List<String>? habitPauses,
     this.dayPlan = false,
     List<TimeSlot>? slots,
+    List<String>? tags,
     DateTime? updatedAt,
     Map<String, dynamic>? extra,
   })  : steps = steps ?? [],
+        tags = tags ?? [],
         slots = slots ?? [],
         alsoAfter = alsoAfter ?? [],
         worked = worked ?? {},
@@ -103,10 +106,10 @@ class Task {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
     'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
-    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'weekends',
+    'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'takesMin', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
-    'where', 'driveBefore', 'driveAfter',
+    'where', 'driveBefore', 'driveAfter', 'tags',
   };
 
   final String id;
@@ -118,6 +121,10 @@ class Task {
 
   /// The [TaskCategory] it belongs to; null for none.
   String? categoryId;
+
+  /// Item 107: free-form tags ("meeting", "coding"), without the "#", each once whatever the
+  /// case. A task has one category but any number of tags. See tags.dart.
+  final List<String> tags;
 
   /// Starred tasks are kept at the top of their list or category.
   bool starred;
@@ -220,6 +227,11 @@ class Task {
   /// from [dueAt].
   int? takesDays;
   bool? countWeekends;
+
+  /// 1.12.10: when the length was given in hours, those hours (in minutes); [takesDays] is then
+  /// the working days they fill. Only counts while [takesDays] still matches (see takesHours in
+  /// gantt.dart).
+  int? takesMinutes;
 
   /// Item 72: more tasks this one waits for, besides [afterTaskId] (which older app versions read).
   final List<String> alsoAfter;
@@ -355,6 +367,7 @@ class Task {
       ..stepsOnBoard = stepsOnBoard
       ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
+    next.tags.addAll(tags);
     next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
     // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
     // from the task's due date; without one to measure from they are left off.
@@ -363,6 +376,7 @@ class Task {
     next
       ..gantt = gantt
       ..takesDays = takesDays
+      ..takesMinutes = takesMinutes
       ..countWeekends = countWeekends
       ..milestone = milestone
       ..startAt = startAt == null || shift == null ? null : startAt!.add(shift);
@@ -436,6 +450,7 @@ class Task {
         if (gantt) 'gantt': true,
         if (startAt != null) 'start': startAt!.toIso8601String(),
         if (takesDays != null) 'takes': takesDays,
+        if (takesMinutes != null) 'takesMin': takesMinutes,
         if (countWeekends != null) 'weekends': countWeekends,
         if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
         if (lagDays != null) 'lag': lagDays,
@@ -455,6 +470,7 @@ class Task {
         if (habitPauses.isNotEmpty) 'hPauses': habitPauses,
         if (dayPlan) 'dayPlan': true,
         if (slots.isNotEmpty) 'slots': [for (final s in slots) s.toJson()],
+        if (tags.isNotEmpty) 'tags': tags,
       };
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -495,6 +511,7 @@ class Task {
         gantt: j['gantt'] as bool? ?? false,
         startAt: _date(j['start']),
         takesDays: (j['takes'] as num?)?.toInt(),
+        takesMinutes: (j['takesMin'] as num?)?.toInt(),
         countWeekends: j['weekends'] as bool?,
         alsoAfter: [for (final id in j['alsoAfter'] as List? ?? []) ?id as String?],
         lagDays: (j['lag'] as num?)?.toInt(),
@@ -519,6 +536,10 @@ class Task {
         slots: [
           for (final s in j['slots'] as List? ?? [])
             if (s is Map<String, dynamic>) ?TimeSlot.tryParse(s),
+        ],
+        tags: [
+          for (final x in j['tags'] as List? ?? [])
+            if (x is String && x.trim().isNotEmpty) x.trim(),
         ],
         extra: unknownFields(j, _known),
       )
@@ -904,6 +925,7 @@ class TaskStep {
       this.eventId,
       this.startAt,
       this.takesDays,
+    this.takesMinutes,
       this.progress,
       List<String>? afterIds,
       List<StageMove>? moves,
@@ -920,7 +942,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'progress', 'after', 'linkStep',
+    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep',
   };
 
   final String id;
@@ -977,6 +999,9 @@ class TaskStep {
   DateTime? startAt;
   int? takesDays;
 
+  /// 1.12.10: as [Task.takesMinutes]: the length in hours when it was given that way.
+  int? takesMinutes;
+
   /// Item 72: how far along it is, 0 to 100, set by hand; ticked counts as 100.
   int? progress;
 
@@ -1020,6 +1045,7 @@ class TaskStep {
         if (eventId != null) 'event': eventId,
         if (startAt != null) 'start': startAt!.toIso8601String(),
         if (takesDays != null) 'takes': takesDays,
+        if (takesMinutes != null) 'takesMin': takesMinutes,
         if (progress != null) 'progress': progress,
         if (afterIds.isNotEmpty) 'after': afterIds,
       };
@@ -1040,6 +1066,7 @@ class TaskStep {
         moves: [for (final m in j['moves'] as List? ?? []) StageMove.fromJson(m as Map<String, dynamic>)],
         startAt: DateTime.tryParse(j['start'] as String? ?? ''),
         takesDays: (j['takes'] as num?)?.toInt(),
+        takesMinutes: (j['takesMin'] as num?)?.toInt(),
         progress: (j['progress'] as num?)?.toInt(),
         afterIds: [for (final id in j['after'] as List? ?? []) id as String],
         extra: unknownFields(j, _known),

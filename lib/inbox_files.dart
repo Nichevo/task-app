@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'input_parse.dart';
 import 'models.dart';
+import 'tags.dart';
 
 /// Item 48A: reads one file from the Dropbox `inbox/` folder (format in docs/PUSH_TASKS.md)
 /// and adds its tasks to [data]. A file holds one task object or a list of them; only `title`
@@ -52,6 +53,10 @@ List<Task> addInboxFile(AppData data, String text, DateTime now) {
       ..starred = item['starred'] == true || parsed.star
       ..matrixBox = parsed.box?.id
       ..sourceRef = ref == null || ref.isEmpty ? null : ref;
+    // Item 107: "#tags" in the line, and a "tags" list in the file.
+    for (final x in [...parsed.tags, if (item['tags'] case final List l) for (final y in l) y.toString()]) {
+      if (tagSpelling(data, x) case final tag? when !hasTag(t, tag)) t.tags.add(tag);
+    }
     for (final st in item['steps'] as List? ?? const []) {
       final name = st.toString().trim();
       if (name.isNotEmpty) t.steps.add(TaskStep.create(name));

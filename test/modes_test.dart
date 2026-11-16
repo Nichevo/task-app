@@ -106,7 +106,8 @@ void main() {
     final (s, m, work, home, car) = setUpWork();
     final now = DateTime.now();
     final report = s.addTask('Report', categoryId: work.id);
-    final tax = s.addTask('Pay the council tax', categoryId: home.id, due: now.add(const Duration(hours: 1)));
+    // Due in a minute, so still today whenever the test runs (an hour on crossed midnight after 11 pm).
+    final tax = s.addTask('Pay the council tax', categoryId: home.id, due: now.add(const Duration(minutes: 1)));
     final mot = s.addTask('Book the MOT', categoryId: home.id, due: now.subtract(const Duration(days: 2)));
     final gutters = s.addTask('Clear the gutters', categoryId: home.id);
     final starred = s.addTask('Ring Mum', categoryId: home.id)..starred = true;

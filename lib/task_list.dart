@@ -74,13 +74,14 @@ List<String> searchTerms(String query) {
   return out;
 }
 
-/// Everything about a task that search looks in: title, notes, steps, category, waiting on,
-/// place, and its emails (subject, sender, snippet).
+/// Everything about a task that search looks in: title, notes, steps, category, tags, waiting
+/// on, place, and its emails (subject, sender, snippet).
 String searchText(Task t, [AppData? data]) => [
       t.title,
       t.notes,
       for (final s in t.steps) s.title,
       if (data?.category(t.categoryId) case final c?) c.name,
+      for (final x in t.tags) '#$x',
       t.waitingOn ?? '',
       t.place ?? '',
       for (final e in t.emails) ...[e.subject, e.from, e.snippet],

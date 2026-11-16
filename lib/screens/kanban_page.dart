@@ -13,6 +13,8 @@ import '../widgets/card_shading.dart';
 import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
+import '../widgets/tag_widgets.dart';
+import '../tags.dart';
 
 /// Colours offered for a stage heading.
 const stageColours = [0xFF90CAF9, 0xFFA5D6A7, 0xFFFFE082, 0xFFFFAB91, 0xFFEF9A9A, 0xFFCE93D8, 0xFFB0BEC5];
@@ -230,6 +232,7 @@ class _KanbanPageState extends State<KanbanPage> {
     final shown = data.boardTasks.where((t) => q.isNotEmpty
         ? matchesSearch(t, q, store.data) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
         : passesFilter(t, _filter, now) &&
+            passesTagFilter(t, store.liveTagFilter) &&
             (_category == null ||
                 (_category!.isEmpty ? data.category(t.categoryId) == null : t.categoryId == _category)));
     return sortTasks(shown.toList(), data, now);
@@ -504,6 +507,8 @@ class _KanbanPageState extends State<KanbanPage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         children: [
+          // Item 107.
+          TagFilterChip(store: store),
           if (cats.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(right: 6),
