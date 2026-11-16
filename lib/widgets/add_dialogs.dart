@@ -123,7 +123,8 @@ Future<Task?> showAddTaskDialog(BuildContext context, AppStore store,
                 source: source,
                 box: p.box,
                 board: p.board,
-                star: p.star));
+                star: p.star,
+                tags: p.tags));
           },
           child: const Text('Add'),
         ),

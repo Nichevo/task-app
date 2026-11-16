@@ -8,7 +8,7 @@ import 'package:task_blocks/screens/task_page.dart';
 import 'package:task_blocks/store.dart';
 import 'package:task_blocks/widgets/day_plan_add.dart';
 
-/// Item 107 (1.12.8): editing from the Day plan. A tap on a block opens its task, a tap on an
+/// Item 109 (1.12.10): editing from the Day plan. A tap on a block opens its task, a tap on an
 /// empty time adds a task or a step there, and a focus mode starts the Day plan on its own
 /// categories.
 void main() {

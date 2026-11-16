@@ -1466,7 +1466,30 @@ modes in the statistics; the top bar has no room for more icons.
 - Not done: "comes after" across tasks (Gantt push) still only works within one task.
 - Tests: test/step_to_step_test.dart.
 
-### 107: editing from the Day plan (version 1.12.8) ☑
+### 107: tags on tasks, filter by tag (version 1.12.8) ☑
+
+- The owner asked for tags like meeting, brainstorming or coding on tasks, and to filter by them.
+  `Task.tags` (JSON `tags`, a list of strings without the "#") holds any number; they are
+  compared without case and a new tag takes the spelling already in use (lib/tags.dart:
+  `cleanTag`, `tagKey`, `tagSpelling`, `tagsInUse`, `passesTagFilter`).
+- Adding: the Tags row on the task page (`TaskTagsTile`, sheet to type a new tag or tick ones in
+  use) and "#words" in the add box: `parseInput` picks a category whose name matches exactly,
+  else a tag already in use, else a category the word starts, else makes a new tag. Several
+  #words give several tags; numbers ("#1") stay in the name. A tag chip appears above the add
+  box; ✕ keeps the word in the name. Paste, inbox (also a `tags` list in JSON files), board +,
+  email and CSV import (Tags column) all take tags.
+- Filter: `AppStore.tagFilter` (device-only, saved in device settings and their backup), shared
+  by the main list, Kanban board and Matrix through `TagFilterChip` at the start of each filter
+  row. Any picked tag matches (OR); "No tag" picks untagged tasks. Tags no task has any more are
+  ignored (`liveTagFilter`). Search ignores the filter, like the date chips.
+- Shown on cards (first tag + count beside the name; every tag as a chip when opened), in search
+  text, copied by repeats and step-to-task. Settings > Tags (`TagsPage`) renames (merging into an
+  existing tag) and deletes across open and archived tasks.
+- Same Flutter screens on iPad; no widget changes. Not done: tags on steps, tags in focus modes,
+  tag filter on the Day plan, Gantt and Calendar.
+- Tests: test/tags_test.dart.
+
+### 109: editing from the Day plan (version 1.12.10) ☑
 
 The owner asked to click from the Day plan into a task to edit it, to click on the day to add a
 task or step and link it easily to its owner, and for the Day plan to open with only the focus

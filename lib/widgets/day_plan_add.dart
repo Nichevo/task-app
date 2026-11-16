@@ -6,7 +6,7 @@ import '../models.dart';
 import '../modes.dart';
 import '../store.dart';
 
-/// Item 107 (1.12.8): adding straight onto the Day plan. A tap on an empty time offers a new
+/// Item 109 (1.12.10): adding straight onto the Day plan. A tap on an empty time offers a new
 /// task, a new step of a task (with the likely owners one tap away) or one already in the app,
 /// planned at that time.
 

@@ -9,11 +9,17 @@ class Release {
 }
 
 const releases = [
-  Release('1.12.8', 'November 2026', [
+  Release('1.12.10', 'November 2026', [
     'Day plan: tap a block to open its task and change it (for a step, the task it belongs to). The Day plan\'s own choices (Start focus, Change the time, Leave room, Remove this time...) are now under the ⋮ on the block, or a right click on a computer.',
     'Tap an empty time on the Day plan to add something there: a new task, a new step of a task, or one you already have. For a step, the tasks planned around that time are offered first, one tap each, with "Other task…" to search the rest. Change the time and the length on the same sheet.',
     'New on a block\'s ⋮: "Make it a step of…" turns a planned task into a step of another task and keeps its time on the Day plan. Splitting it out again later gives the time back to the task.',
     'With a focus mode on (Work, say), the Day plan now opens with only that mode\'s categories selected. A chip at the front names the mode (tap it to switch mode); change the other chips as you like, and tap the mode chip to go back to the mode\'s categories. Changes made in a mode last until you next open the Day plan, and the categories you chose for Everything are left as they were. Anything that still needs you (overdue, due today, starred) shows anyway.',
+  ]),
+  Release('1.12.8', 'November 2026', [
+    'Tags: give a task any number of tags, like meeting, brainstorming or coding. Add them on the task\'s page (Tags, then Add a tag), or type them in the add box: "Sprint review #meeting #coding". A #word that is a category\'s name still picks the category; any other #word becomes a tag.',
+    'Filter by tag: the new "All tags" chip at the start of the filter row above the list, the Kanban board and the Matrix. Pick one or more tags (a task shows when it has any of them), or "No tag". The choice is remembered on this device; ✕ on the chip shows everything again.',
+    'Tags show on the cards (the first one beside the name, all of them when the card is opened), search finds them ("#coding"), and they go with a task when it repeats or when a step is made into a task.',
+    'Settings, Tags: every tag with how many tasks have it. Tap one to rename it (renaming onto a tag that exists joins the two) or delete it from every task. The CSV export and import have a Tags column.',
   ]),
   Release('1.12.7', 'November 2026', [
     'A step can now be linked to another step, not only to a whole task. Tap a step and pick "Link to an existing task or step…": ticking the step you linked to ticks this one too. It works for steps in other tasks as well.',

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'csv_export.dart';
 import 'models.dart';
 import 'store.dart';
+import 'tags.dart';
 
 /// Splits CSV text into rows of cells, handling quotes, commas and line breaks in cells.
 List<List<String>> parseCsv(String text) {
@@ -89,6 +90,7 @@ int importCsvText(AppData data, String text) {
   final iBox = col('matrix box'), iWaiting = col('waiting on');
   final iGantt = col('gantt'), iStart = col('start'), iTakes = col('takes (days)'), iWeekends = col('count weekends');
   final iMilestone = col('milestone'), iProgress = col('progress (%)'), iAfter = col('comes after');
+  final iTags = col('tags');
   bool yes(String v) => const {'yes', 'true', '1', 'y'}.contains(v.toLowerCase());
   final afterTitles = <Task, List<String>>{};
   if (iTask < 0) throw const FormatException('The file needs a "Task" column.');
@@ -128,6 +130,10 @@ int importCsvText(AppData data, String text) {
       ..countWeekends = cell(r, iWeekends).isEmpty ? null : yes(cell(r, iWeekends))
       ..milestone = yes(cell(r, iMilestone))
       ..progress = int.tryParse(cell(r, iProgress));
+    // Item 107: "meeting; coding".
+    for (final part in cell(r, iTags).split(RegExp(r'[;,]'))) {
+      if (tagSpelling(data, part) case final tag? when !hasTag(t, tag)) t.tags.add(tag);
+    }
     for (final part in cell(r, iSteps).split(';')) {
       final m = RegExp(r'^\s*(?:\[([ xX])\])?\s*(.+?)\s*$').firstMatch(part);
       if (m == null || m.group(2)!.isEmpty) continue;

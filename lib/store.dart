@@ -22,6 +22,7 @@ import 'modes.dart';
 import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
+import 'tags.dart';
 import 'task_list.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
@@ -94,6 +95,10 @@ class AppStore extends ChangeNotifier {
 
   /// The quick filter chip chosen above the list (device-only).
   QuickFilter quickFilter = QuickFilter.all;
+
+  /// Item 107: tags picked in the tag filter (list, board and matrix); empty = every task,
+  /// [untaggedFilter] = tasks with no tag. Device-only.
+  final Set<String> tagFilter = {};
 
   /// Item 60: the Matrix page's last filter on this device (category null = all, '' = none).
   QuickFilter matrixFilter = QuickFilter.all;
@@ -184,6 +189,7 @@ class AppStore extends ChangeNotifier {
       hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
+      tagFilter.addAll([for (final x in s['tagFilter'] as List? ?? []) ?x as String?]);
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
       emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? 0;
       _readPanel(s);
@@ -379,6 +385,7 @@ class AppStore extends ChangeNotifier {
       if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
+      if (tagFilter.isNotEmpty) 'tagFilter': tagFilter.toList(),
       if (deviceBackupChecked) 'deviceBackupChecked': true,
       if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       ..._panelJson(),
@@ -630,6 +637,7 @@ class AppStore extends ChangeNotifier {
         'hiddenTopIcons': hiddenTopIcons.toList(),
         'matrixFilter': matrixFilter.name,
         if (matrixCategory != null) 'matrixCategory': matrixCategory,
+        'tagFilter': tagFilter.toList(),
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
         if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
         if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
@@ -701,6 +709,11 @@ class AppStore extends ChangeNotifier {
     }
     matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? matrixFilter;
     matrixCategory = s['matrixCategory'] as String? ?? matrixCategory;
+    if (s['tagFilter'] is List) {
+      tagFilter
+        ..clear()
+        ..addAll([for (final x in s['tagFilter'] as List) ?x as String?]);
+    }
     emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? emailCheckMinutes;
     _readPanel(s);
     _startEmailTimer();
@@ -792,7 +805,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan, tags: p.tags);
     }
     data.updatedAt = data.orderUpdatedAt = DateTime.now().toUtc();
     notifyListeners();
@@ -863,14 +876,15 @@ class AppStore extends ChangeNotifier {
       bool star = false,
       bool gantt = false,
       KanbanStage? stage,
-      ({DateTime at, int? minutes})? plan}) {
+      ({DateTime at, int? minutes})? plan,
+      List<String> tags = const []}) {
     final t = Task.create(title.trim(), source: source)
       ..dueAt = due
       ..categoryId = categoryId
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
-    _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage, plan: plan);
+    _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage, plan: plan, tags: tags);
     changed(order: true);
     _locate([t]);
     return t;
@@ -881,8 +895,17 @@ class AppStore extends ChangeNotifier {
   /// [stage] puts it straight into that stage (the + on a board column).
   /// [plan] ("@14:00 45m", item 101) gives it a planned time on the Day plan.
   void _applyNew(Task t,
-      {MatrixBox? box, bool board = false, bool star = false, bool gantt = false, KanbanStage? stage, ({DateTime at, int? minutes})? plan}) {
+      {MatrixBox? box,
+      bool board = false,
+      bool star = false,
+      bool gantt = false,
+      KanbanStage? stage,
+      ({DateTime at, int? minutes})? plan,
+      List<String> tags = const []}) {
     if (box != null) t.matrixBox = box.id;
+    for (final x in tags) {
+      if (tagSpelling(data, x) case final tag? when !hasTag(t, tag)) t.tags.add(tag);
+    }
     if (plan != null) {
       final m = plan.minutes ?? data.dayPlan.length;
       if (plan.minutes != null) t.estimate ??= m;
@@ -913,6 +936,59 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  /// Item 107: adds a tag to [t] (in the spelling already in use); false if it was empty or
+  /// already there.
+  bool addTag(Task t, String raw) {
+    final tag = tagSpelling(data, raw);
+    if (tag == null || hasTag(t, tag)) return false;
+    t.tags.add(tag);
+    changed(task: t);
+    return true;
+  }
+
+  void removeTag(Task t, String tag) {
+    final k = tagKey(tag);
+    t.tags.removeWhere((x) => tagKey(x) == k);
+    changed(task: t);
+  }
+
+  /// Renames [from] to [to] on every task, open and ticked off. Renaming onto a tag that
+  /// already exists merges the two.
+  void renameTag(String from, String to) {
+    final clean = cleanTag(to);
+    if (clean.isEmpty) return;
+    final k = tagKey(from), k2 = clean.toLowerCase();
+    // Merging into an existing tag keeps that tag's spelling.
+    final target = k == k2 ? clean : (tagSpelling(data, clean) ?? clean);
+    for (final t in data.allTasks) {
+      if (!t.tags.any((x) => tagKey(x) == k)) continue;
+      final at = t.tags.indexWhere((x) => tagKey(x) == k);
+      t.tags.removeWhere((x) => tagKey(x) == k || tagKey(x) == k2);
+      t.tags.insert(at.clamp(0, t.tags.length), target);
+      changed(task: t);
+    }
+    if (tagFilter.any((f) => f != untaggedFilter && tagKey(f) == k)) {
+      tagFilter
+        ..removeWhere((f) => f != untaggedFilter && tagKey(f) == k)
+        ..add(target);
+      saveDeviceSettings();
+    }
+  }
+
+  /// Takes [tag] off every task, open and ticked off.
+  void deleteTag(String tag) {
+    final k = tagKey(tag);
+    for (final t in data.allTasks) {
+      if (!t.tags.any((x) => tagKey(x) == k)) continue;
+      t.tags.removeWhere((x) => tagKey(x) == k);
+      changed(task: t);
+    }
+    if (tagFilter.any((f) => f != untaggedFilter && tagKey(f) == k)) {
+      tagFilter.removeWhere((f) => f != untaggedFilter && tagKey(f) == k);
+      saveDeviceSettings();
+    }
+  }
+
   /// Item 67: the open tasks in [c] not on the board yet, for "Put them on the board now?".
   List<Task> offBoardIn(TaskCategory c) => [for (final t in data.active) if (t.categoryId == c.id && !t.kanban) t];
 
@@ -933,7 +1009,7 @@ class AppStore extends ChangeNotifier {
         ..dueAt = p.due
         ..categoryId = p.categoryId;
       data.active.add(t);
-      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan);
+      _applyNew(t, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan, tags: p.tags);
       added.add(t);
     }
     changed(order: true);
@@ -1671,7 +1747,7 @@ class AppStore extends ChangeNotifier {
   Task addToStage(String title, KanbanStage stage) {
     final p = parseInput(title, data, DateTime.now());
     return addTask(p.title,
-        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, gantt: p.gantt, stage: stage, plan: p.plan);
+        due: p.due, categoryId: p.categoryId, source: TaskSource.kanban, box: p.box, star: p.star, gantt: p.gantt, stage: stage, plan: p.plan, tags: p.tags);
   }
 
   KanbanStage addStage(String name) {
@@ -2245,6 +2321,22 @@ class AppStore extends ChangeNotifier {
     saveDeviceSettings();
   }
 
+  /// Item 107: picks the tags the list, board and matrix show (empty = all), on this device.
+  void setTagFilter(Iterable<String> tags) {
+    tagFilter
+      ..clear()
+      ..addAll(tags);
+    notifyListeners();
+    saveDeviceSettings();
+  }
+
+  /// The tag filter without tags no task has any more (deleted, renamed on another device).
+  Set<String> get liveTagFilter {
+    if (tagFilter.isEmpty) return tagFilter;
+    final keys = {for (final x in tagsInUse(data)) tagKey(x.tag)};
+    return {for (final f in tagFilter) if (f == untaggedFilter || keys.contains(tagKey(f))) f};
+  }
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -2636,6 +2728,7 @@ class AppStore extends ChangeNotifier {
     final n = Task.create(s.title, source: TaskSource.step)
       ..categoryId = t.categoryId
       ..starred = t.starred
+      ..tags.addAll(t.tags)
       ..place = t.place
       ..placeLeave = t.placeLeave
       ..where = t.where
@@ -2836,7 +2929,7 @@ class AppStore extends ChangeNotifier {
         final subject = m.subject.replaceFirst(_taskPrefix, '').trim();
         final p = parseInput(subject.isEmpty ? '(no subject)' : subject, data, DateTime.now());
         final t = addTask(p.title,
-            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan)
+            due: p.due, categoryId: p.categoryId, source: TaskSource.email, box: p.box, board: p.board, star: p.star, gantt: p.gantt, plan: p.plan, tags: p.tags)
           ..sourceRef = id;
         t.emails.add(emailOf(m));
         changed(task: t);
@@ -2885,9 +2978,10 @@ class AppStore extends ChangeNotifier {
       MatrixBox? box,
       bool board = false,
       bool star = false,
-      bool gantt = false}) {
+      bool gantt = false,
+      List<String> tags = const []}) {
     final t = addTask(title,
-        due: due, categoryId: categoryId, notes: notes, source: source, box: box, board: board, star: star, gantt: gantt);
+        due: due, categoryId: categoryId, notes: notes, source: source, box: box, board: board, star: star, gantt: gantt, tags: tags);
     t.emails.add(emailOf(m));
     changed(task: t);
     unawaited(_afterStarUse(m));
