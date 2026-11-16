@@ -1489,7 +1489,7 @@ modes in the statistics; the top bar has no room for more icons.
   tag filter on the Day plan, Gantt and Calendar.
 - Tests: test/tags_test.dart.
 
-### 109: editing from the Day plan (version 1.12.10) ☑
+### 109: editing from the Day plan, lengths in hours (version 1.12.10) ☑
 
 The owner asked to click from the Day plan into a task to edit it, to click on the day to add a
 task or step and link it easily to its owner, and for the Day plan to open with only the focus
@@ -1514,4 +1514,12 @@ mode's categories selected (tags are a separate item).
   `hiddenCategories`. A leading chip names the mode and resets it. `planHides`: in a mode a task
   whose chip is off still shows when it breaks through, but not for "Planned today".
 - Tests: test/day_plan_edit_test.dart.
+- Added the same day (owner): a task's Gantt length ("Takes") in hours as well as days.
+  `Task.takesMinutes` / `TaskStep.takesMinutes` (JSON `takesMin`) keep the hours; `takesDays` is
+  then `daysForMinutes` (hours / the Day plan's working day, rounded up), so the chart is
+  unchanged. `takesHours` only trusts the hours while the days still match (a drag on the chart or
+  the day buttons clear them). `askTakes` (lib/widgets/takes_dialog.dart: Days / Hours, or "6h")
+  on the task page and the step plan dialog; labels by `describeTakes`. A Day plan time defaults
+  to the hours when they fit in a working day (`planLength`; an estimate still comes first).
+  Tests: test/takes_hours_test.dart.
 

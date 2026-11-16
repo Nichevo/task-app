@@ -239,13 +239,16 @@ class _StepsEditPageState extends State<StepsEditPage> {
     _do(() {
       for (final s in steps) {
         s.takesDays = n < 1 ? null : n;
+        s.takesMinutes = null;
       }
     });
   }
 
   Future<void> _stepDays(TaskStep s, int by) async {
     final n = (s.takesDays ?? 0) + by;
-    _do(() => s.takesDays = n < 1 ? null : n);
+    _do(() => s
+      ..takesDays = n < 1 ? null : n
+      ..takesMinutes = null);
   }
 
   Future<void> _moveDates(List<TaskStep> steps) async {
@@ -1023,7 +1026,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
               Wrap(spacing: 6, runSpacing: 6, children: [
                 chip(Icons.play_arrow_outlined, s.startAt == null ? 'Start' : _day.format(s.startAt!), s.startAt == null,
                       () => _setStart([s])),
-                chip(Icons.timelapse, s.takesDays == null ? 'Days' : '${s.takesDays} day${s.takesDays == 1 ? '' : 's'}',
+                chip(Icons.timelapse, s.takesDays == null ? 'Days' : describeTakes(s.takesDays!, s.takesMinutes, data, weekends: true),
                       s.takesDays == null, () => _setDays([s])),
                 chip(Icons.event, s.dueAt == null ? 'Due' : _dayTime.format(s.dueAt!), s.dueAt == null, () => _setDue([s])),
                 if (s.dueAt != null) chip(Icons.notifications_outlined, _remindText(s), false, () => _setReminder([s])),

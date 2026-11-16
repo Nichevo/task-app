@@ -284,6 +284,14 @@ void toggleDayPlanCategory(AppData data, String id) {
   hidden.contains(id) ? hidden.remove(id) : hidden.add(id);
 }
 
+/// How long a new planned time for [t] (or its [step]) is: its estimate, else its length when
+/// given in hours (1.12.10) and no more than a working day, else Settings' length.
+int planLength(AppData data, Task t, [TaskStep? step]) {
+  final h = step == null ? takesHours(t.takesDays, t.takesMinutes, data) : takesHours(step.takesDays, step.takesMinutes, data);
+  final fromHours = h != null && h <= workdayMinutes(data) ? h : null;
+  return (step == null ? t.estimate : null) ?? fromHours ?? data.dayPlan.length;
+}
+
 /// Whether category [id] (null = none) is hidden on the Day plan.
 bool categoryHidden(AppData data, String? id) {
   final known = id != null && data.category(id) != null;
@@ -658,7 +666,7 @@ class TrayItem {
   String get title => step?.title ?? task.title;
 
   /// Length to plan it for: its estimate, else the default.
-  int minutes(AppData data) => missed?.minutes ?? (step == null ? task.estimate ?? data.dayPlan.length : data.dayPlan.length);
+  int minutes(AppData data) => missed?.minutes ?? planLength(data, task, step);
 }
 
 /// The "To plan" tray for [day]: tasks on the Day plan with no time coming up, plus (as Settings

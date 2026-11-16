@@ -68,7 +68,7 @@ class _PlanSheetState extends State<_PlanSheet> {
       _shared = sl.shared;
       return;
     }
-    _minutes = widget.step == null ? widget.task.estimate ?? s.length : s.length;
+    _minutes = planLength(widget.store.data, widget.task, widget.step);
     final now = DateTime.now();
     final day = widget.day ?? widget.start ?? now;
     if (widget.start != null) {

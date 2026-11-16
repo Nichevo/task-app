@@ -1617,6 +1617,7 @@ class AppStore extends ChangeNotifier {
     t.startAt ??= bar.start;
     if (t.takesDays != null) {
       t.takesDays = workDays(bar.start, day, weekends: weekendsFor(t, data));
+      t.takesMinutes = null;
     } else {
       final old = t.dueAt;
       t.dueAt = DateTime(day.year, day.month, day.day, old?.hour ?? 17, old?.minute ?? 0);
@@ -2613,9 +2614,11 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
-  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? progress}) {
+  /// [minutes] (1.12.10): the length in hours, when it was given that way.
+  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? minutes, int? progress}) {
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
+    s.takesMinutes = s.takesDays == null ? null : minutes;
     s.progress = progress == null || progress <= 0 ? null : progress.clamp(0, 100);
     keepStepOrder(t);
     changed(task: t);
@@ -2739,6 +2742,7 @@ class AppStore extends ChangeNotifier {
       ..eventId = s.eventId
       ..startAt = s.startAt
       ..takesDays = s.takesDays
+      ..takesMinutes = s.takesMinutes
       ..splitFrom = t.id
       ..dueAt = s.dueAt ?? t.dueAt
       ..remindBefore = s.dueAt != null ? s.remindBefore : t.remindBefore;

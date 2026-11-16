@@ -15,6 +15,7 @@ import '../widgets/task_block.dart';
 import '../widgets/repeat_dialog.dart';
 import '../widgets/step_links.dart';
 import '../widgets/task_burn_down.dart';
+import '../widgets/takes_dialog.dart';
 import '../widgets/task_where.dart';
 import '../widgets/worked_week.dart';
 import 'calendar_page.dart';
@@ -134,8 +135,8 @@ class _TaskPageState extends State<TaskPage> {
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'plan'),
               child: Text(s.startAt == null && s.takesDays == null && s.progress == null
-                  ? 'Start, days of work and progress'
-                  : 'Change its start, days of work or progress'),
+                  ? 'Start, how long and progress'
+                  : 'Change its start, how long or progress'),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'dayplan'),
@@ -1325,19 +1326,27 @@ class _TaskPageState extends State<TaskPage> {
             title: const Text('Takes'),
             subtitle: Text(task.takesDays == null
                 ? 'Not set: the bar ends on the due date'
-                : '${task.takesDays} ${weekends ? '' : 'work '}day${task.takesDays == 1 ? '' : 's'}'),
+                : describeTakes(task.takesDays!, task.takesMinutes, data, weekends: weekends)),
             onTap: archived
                 ? null
                 : () async {
-                    final n = await _askDays('How many days does it take?', task.takesDays);
-                    if (n != null && n > 0) changedGantt(() => task.takesDays = n);
+                    // 1.12.10: in days or hours.
+                    final n = await askTakes(context, data,
+                        title: 'How long does it take?', days: task.takesDays, minutes: task.takesMinutes, canClear: false);
+                    if (n != null && n.days > 0) {
+                      changedGantt(() => task
+                        ..takesDays = n.days
+                        ..takesMinutes = n.minutes);
+                    }
                   },
             trailing: task.takesDays == null || archived
                 ? null
                 : IconButton(
                     tooltip: 'Clear length',
                     icon: const Icon(Icons.clear),
-                    onPressed: () => changedGantt(() => task.takesDays = null),
+                    onPressed: () => changedGantt(() => task
+                      ..takesDays = null
+                      ..takesMinutes = null),
                   ),
           ),
           if (task.takesDays != null)
