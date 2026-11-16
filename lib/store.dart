@@ -1617,6 +1617,7 @@ class AppStore extends ChangeNotifier {
     t.startAt ??= bar.start;
     if (t.takesDays != null) {
       t.takesDays = workDays(bar.start, day, weekends: weekendsFor(t, data));
+      t.takesMinutes = null;
     } else {
       final old = t.dueAt;
       t.dueAt = DateTime(day.year, day.month, day.day, old?.hour ?? 17, old?.minute ?? 0);
@@ -2550,6 +2551,18 @@ class AppStore extends ChangeNotifier {
       }
     }
     parent.steps.add(step);
+    // 1.12.8: its planned times on the Day plan stay, now as the step's (and those of its own
+    // steps when they joined the parent).
+    final kept = <TimeSlot>[];
+    for (final sl in t.slots) {
+      if (sl.stepId != null && !added.any((x) => x.id == sl.stepId)) continue;
+      kept.add(TimeSlot.create(sl.start, sl.minutes, stepId: sl.stepId ?? step.id, gapAfter: sl.gapAfter, shared: sl.shared)
+        ..doneAt = sl.doneAt);
+    }
+    if (kept.isNotEmpty) {
+      parent.slots.addAll(kept);
+      parent.dayPlan = true;
+    }
     // Whatever pointed at the task now points at its new parent.
     final waiting = <Task, String?>{};
     for (final w in data.active.where((w) => w.afterTaskId == t.id)) {
@@ -2572,6 +2585,7 @@ class AppStore extends ChangeNotifier {
       step,
       () {
         parent.steps.remove(step);
+        parent.slots.removeWhere(kept.contains);
         waiting.forEach((w, id) {
           w.afterTaskId = id;
           w.touch();
@@ -2600,9 +2614,11 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
-  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? progress}) {
+  /// [minutes] (1.12.10): the length in hours, when it was given that way.
+  void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? minutes, int? progress}) {
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
+    s.takesMinutes = s.takesDays == null ? null : minutes;
     s.progress = progress == null || progress <= 0 ? null : progress.clamp(0, 100);
     keepStepOrder(t);
     changed(task: t);
@@ -2669,9 +2685,24 @@ class AppStore extends ChangeNotifier {
     if (s.carried != null) {
       final restored = _restoreCarried(t, s);
       if (restored != null) {
+        // 1.12.8: the step's planned times go back to the task, as they are now.
+        final mine = t.slots.where((x) => x.stepId == s.id).toList();
+        if (mine.isNotEmpty) {
+          t.slots.removeWhere(mine.contains);
+          restored.slots
+            ..removeWhere((x) => x.stepId == null)
+            ..addAll([
+              for (final x in mine)
+                TimeSlot.create(x.start, x.minutes, gapAfter: x.gapAfter, shared: x.shared)..doneAt = x.doneAt,
+            ]);
+          restored.dayPlan = true;
+          changed(task: t);
+          changed(task: restored);
+        }
         return (
           restored,
           () {
+            t.slots.addAll(mine);
             data.active.remove(restored);
             data.archived.remove(restored);
             data.deleted[restored.id] = DateTime.now().toUtc();
@@ -2711,6 +2742,7 @@ class AppStore extends ChangeNotifier {
       ..eventId = s.eventId
       ..startAt = s.startAt
       ..takesDays = s.takesDays
+      ..takesMinutes = s.takesMinutes
       ..splitFrom = t.id
       ..dueAt = s.dueAt ?? t.dueAt
       ..remindBefore = s.dueAt != null ? s.remindBefore : t.remindBefore;

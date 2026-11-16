@@ -9,6 +9,8 @@ import '../models.dart';
 import '../native.dart';
 import 'focus_page.dart';
 import '../store.dart';
+import '../widgets/day_plan_add.dart';
+import '../widgets/mode_chip.dart' show modeIcon, showModeSheet;
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_colors.dart';
 import '../widgets/task_where.dart' show editDrive;
@@ -153,6 +155,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
   @override
   void initState() {
     super.initState();
+    // 1.12.8: opening the Day plan in a focus mode starts from the mode's own categories.
+    modeChipTweaks.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
     _loadEvents();
   }
@@ -448,18 +452,37 @@ class _DayPlanPageState extends State<DayPlanPage> {
     );
   }
 
-  /// Item 101: categories to show, more than one at a time; remembered.
+  /// Item 101: categories to show, more than one at a time; remembered. 1.12.8: while a focus
+  /// mode is on, only the categories it shows start selected (a chip at the front names the mode
+  /// and puts its categories back after a change); changes then last until the Day plan is next
+  /// opened.
   Widget _categoryChips(BuildContext context) {
     if (data.categories.isEmpty) return const SizedBox(height: 6);
-    final hidden = s.hiddenCategories;
+    final hidden = dayPlanHidden(data);
+    final mode = dayPlanMode;
     void toggle(String id) {
-      hidden.contains(id) ? hidden.remove(id) : hidden.add(id);
-      store.dayPlanChanged();
+      toggleDayPlanCategory(data, id);
+      mode == null ? store.dayPlanChanged() : setState(() {});
     }
 
+    final changed = modeChipsChanged(data);
     return SizedBox(
       height: 44,
       child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.fromLTRB(12, 4, 12, 4), children: [
+        if (mode != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Tooltip(
+              message: changed ? 'Show only the categories ${mode.name} shows' : 'Showing the categories ${mode.name} shows. Tap to change mode',
+              child: ActionChip(
+                visualDensity: VisualDensity.compact,
+                avatar: Icon(changed ? Icons.restart_alt : modeIcon(mode.icon), size: 18, color: Color(mode.colour)),
+                label: Text(changed ? mode.name : '${mode.name} mode'),
+                side: BorderSide(color: Color(mode.colour)),
+                onPressed: changed ? () => setState(() => modeChipTweaks.remove(mode.id)) : () => showModeSheet(context, store),
+              ),
+            ),
+          ),
         for (final c in data.categories)
           Padding(
             padding: const EdgeInsets.only(right: 6),
@@ -793,14 +816,20 @@ class _DayPlanPageState extends State<DayPlanPage> {
                 right: 10,
                 top: y(day.add(Duration(minutes: s.workStart))) + 40,
                 child: Text(
-                  'Nothing planned. Drag a task from the "To plan" tray onto a time, or use + to plan one.',
+                  'Nothing planned. Tap a time to add a task or step there, or drag one from the "To plan" tray.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: theme.hintColor),
                 ),
               ));
             }
             if (_dragLabel case final label?) children.add(label);
-            return SizedBox(key: key, height: height, child: Stack(clipBehavior: Clip.none, children: children));
+            // 1.12.8: a tap on an empty time adds something there (blocks and events take their
+            // own taps first).
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (d) => _addAt(day, d.localPosition.dy, from),
+              child: SizedBox(key: key, height: height, child: Stack(clipBehavior: Clip.none, children: children)),
+            );
           }),
       ),
     );
@@ -941,13 +970,15 @@ class _DayPlanPageState extends State<DayPlanPage> {
 
   /// Taps, press-and-hold to move, and the handle along the bottom edge to stretch. The handle
   /// stretches whether it is dragged straight away or held first, so holding near the bottom
-  /// never moves the block by mistake (1.12.6).
+  /// never moves the block by mistake (1.12.6). 1.12.8: a tap opens the task to edit it; the ⋮
+  /// on the block (or a right click) has the Day plan's own choices.
   Widget _gestures(PlanBlock b, double hh, Widget child) {
     final stretchable = canStretch(b, hh);
     final zone = stretchHandleHeight(hh);
     final active = _isDragged(_resizing, b);
     return GestureDetector(
-      onTap: () => _blockMenu(b),
+      onTap: () => _openTask(b),
+      onSecondaryTap: () => _blockMenu(b),
       onLongPressStart: (d) => stretchable && d.localPosition.dy >= hh - zone ? _startStretch(b) : _startMove(b),
       onLongPressMoveUpdate: (d) => _dragTo(d.offsetFromOrigin.dy),
       onLongPressEnd: (_) => _endDrag(b),
@@ -957,8 +988,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
         if (stretchable)
           Positioned(
             left: 0,
-            // A short block has its tick box at the right: leave it tappable.
-            right: hh < 52 ? 36 : 0,
+            // Leave the tick box and ⋮ at the right tappable (side by side on a short block).
+            right: hh < 72 ? 62 : 36,
             bottom: 0,
             height: zone,
             child: GestureDetector(
@@ -987,6 +1018,21 @@ class _DayPlanPageState extends State<DayPlanPage> {
           side: const BorderSide(color: Colors.black54, width: 2),
           activeColor: Colors.black54,
           onChanged: (_) => _toggle(b),
+        ),
+      );
+
+  /// 1.12.8: the Day plan's choices for [b] (focus, time, leave room, remove...), now that a tap
+  /// opens the task.
+  Widget _more(PlanBlock b, {double width = 28}) => SizedBox(
+        width: width,
+        height: 32,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          tooltip: 'More',
+          iconSize: 20,
+          color: Colors.black54,
+          icon: const Icon(Icons.more_vert),
+          onPressed: () => _blockMenu(b),
         ),
       );
 
@@ -1040,6 +1086,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     ),
                   ),
                   if (b.tooEarly) const _Tag('Too early', bad: true) else if (b.clash) const _Tag('Clash'),
+                  _more(b, width: 26),
                   _tick(b),
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1094,7 +1141,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
                       ],
                     ]),
                   ),
-                  _tick(b),
+                  // Under the tick when there's room, so the name keeps its width.
+                  if (hh >= 72) Column(children: [_tick(b), _more(b, width: 32)]) else ...[_more(b), _tick(b)],
                 ]),
         ),
       ),
@@ -1129,6 +1177,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               ),
               child: Column(children: [
                 _tick(b),
+                if (hh >= 90) _more(b),
                 Expanded(
                   child: RotatedBox(
                     quarterTurns: 3,
@@ -1182,6 +1231,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
               color: c,
               child: Column(children: [
                 _tick(b),
+                if (hh >= 90) _more(b),
                 Expanded(
                   child: RotatedBox(
                     quarterTurns: 3,
@@ -1452,6 +1502,32 @@ class _DayPlanPageState extends State<DayPlanPage> {
     await showPlanTimeSheet(context, store, t, day: _day);
   }
 
+  /// 1.12.8: a tap at [dy] on [day]'s column: add a new task or step there, or plan one already
+  /// in the app, starting at the time step tapped.
+  Future<void> _addAt(DateTime day, double dy, int from) async {
+    if (_moving != null || _resizing != null) return;
+    final minutes = ((dy - _top) / _ppm(context) + from).floor();
+    final snapped = (minutes ~/ s.snap * s.snap).clamp(0, 24 * 60 - s.snap);
+    final start = day.add(Duration(minutes: snapped));
+    final added = await showAddAtSheet(context, store, start, onExisting: (at) async {
+      final t = await pickOwner(context, data, title: 'Plan at ${DateFormat('HH:mm').format(at)}', at: at);
+      if (t == null || !mounted) return;
+      await showPlanTimeSheet(context, store, t, start: at, day: dayStart(at));
+    });
+    if (added == null || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(added.step == null
+            ? 'Added "${added.title}" at ${DateFormat('HH:mm').format(added.start)}'
+            : 'Added step "${added.title}" to "${added.task.title}" at ${DateFormat('HH:mm').format(added.start)}'),
+        action: SnackBarAction(
+          label: 'Open',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: added.task))),
+        ),
+      ));
+  }
+
   Future<void> _planTray(TrayItem i) async {
     final missed = i.missed;
     if (missed == null) {
@@ -1687,13 +1763,33 @@ class _DayPlanPageState extends State<DayPlanPage> {
     }
   }
 
+  /// 1.12.8: a tap on a block opens its task to edit (for a step, the task it belongs to).
+  Future<void> _openTask(PlanBlock b) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: b.task)));
+
+  /// 1.12.8: makes a planned task a step of another one, keeping its time on the Day plan.
+  Future<void> _makeStep(PlanBlock b) async {
+    final parent = await pickOwner(context, data, title: 'Make "${b.task.title}" a step of', at: b.start, exclude: b.task);
+    if (parent == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final (_, undo) = store.makeStep(b.task, parent);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('"${b.task.title}" is now a step of "${parent.title}", still at ${DateFormat('HH:mm').format(b.start)}'),
+        action: SnackBarAction(label: 'Undo', onPressed: undo),
+      ));
+  }
+
   Future<void> _blockMenu(PlanBlock b) async {
     final theme = Theme.of(context);
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (c) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
             title: Text(b.title, style: theme.textTheme.titleMedium),
             subtitle: Text([
@@ -1709,8 +1805,15 @@ class _DayPlanPageState extends State<DayPlanPage> {
               subtitle: const Text('The focus timer on this, full screen'),
               onTap: () => Navigator.pop(c, 'focus'),
             ),
-          ListTile(leading: const Icon(Icons.open_in_new), title: const Text('Open the task'), onTap: () => Navigator.pop(c, 'open')),
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Open the task'), onTap: () => Navigator.pop(c, 'open')),
           ListTile(leading: const Icon(Icons.schedule), title: const Text('Change the time…'), onTap: () => Navigator.pop(c, 'time')),
+          if (b.step == null && !b.done && b.task.closedAt == null)
+            ListTile(
+              leading: const Icon(Icons.subdirectory_arrow_right),
+              title: const Text('Make it a step of…'),
+              subtitle: const Text('Of another task, keeping this time'),
+              onTap: () => Navigator.pop(c, 'makeStep'),
+            ),
           if (b.step == null && !b.done && b.task.steps.any((x) => !x.done && b.task.slotsOf(x).every((sl) => sl.doneAt != null)))
             ListTile(
               leading: const Icon(Icons.low_priority),
@@ -1734,7 +1837,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
             title: const Text('Remove this time'),
             onTap: () => Navigator.pop(c, 'remove'),
           ),
-        ]),
+          ]),
+        ),
       ),
     );
     if (!mounted || choice == null) return;
@@ -1742,7 +1846,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
       case 'focus':
         startFocusOn(context, store, b.task, stepId: b.step?.id);
       case 'open':
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => TaskPage(store: store, task: b.task)));
+        await _openTask(b);
+      case 'makeStep':
+        await _makeStep(b);
       case 'time':
         await showPlanTimeSheet(context, store, b.task, slot: b.slot);
       case 'shared':

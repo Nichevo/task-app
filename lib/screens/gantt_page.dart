@@ -7,6 +7,7 @@ import '../gantt.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets/burn_down_chart.dart';
+import '../widgets/takes_dialog.dart';
 import 'task_page.dart';
 
 /// Item 72: the Gantt chart. Only tasks put on it show, as bars from start to expected end with
@@ -863,7 +864,7 @@ class _GanttPageState extends State<GanttPage> {
           child: Tooltip(
             message: [
               t.title,
-              if (t.takesDays != null) 'Takes ${t.takesDays} day${t.takesDays == 1 ? '' : 's'}',
+              if (t.takesDays != null) 'Takes ${describeTakes(t.takesDays!, t.takesMinutes, widget.store.data, weekends: true)}',
               if (t.estimate != null) 'About ${t.estimate} min of work',
               if (bar.guessedStart) 'No start date: counted back from the due date',
             ].join('\n'),
@@ -1245,6 +1246,7 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
   final fmt = DateFormat('EEE d MMM');
   DateTime? start = s.startAt;
   int? takes = s.takesDays;
+  int? minutes = takesHours(s.takesDays, s.takesMinutes, store.data);
   var progress = s.done ? 100 : s.progress ?? 0;
   final ok = await showDialog<bool>(
     context: context,
@@ -1276,17 +1278,40 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.timelapse),
-              title: Text(takes == null ? 'Takes: not set' : 'Takes $takes day${takes == 1 ? '' : 's'} of work'),
+              title: Text(takes == null
+                  ? 'Takes: not set'
+                  : minutes != null
+                      ? 'Takes ${describeTakes(takes!, minutes, store.data)}'
+                      : 'Takes $takes day${takes == 1 ? '' : 's'} of work'),
+              subtitle: const Text('Tap to give it in hours'),
+              // 1.12.10: in days or hours.
+              onTap: () async {
+                final n = await askTakes(c, store.data, title: 'How long does "${s.title}" take?', days: takes, minutes: minutes);
+                if (n != null) {
+                  set(() {
+                    takes = n.days < 1 ? null : n.days;
+                    minutes = n.minutes;
+                  });
+                }
+              },
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                 IconButton(
                   tooltip: 'Fewer days',
                   icon: const Icon(Icons.remove),
-                  onPressed: takes == null ? null : () => set(() => takes = takes! <= 1 ? null : takes! - 1),
+                  onPressed: takes == null
+                      ? null
+                      : () => set(() {
+                            takes = takes! <= 1 ? null : takes! - 1;
+                            minutes = null;
+                          }),
                 ),
                 IconButton(
                   tooltip: 'More days',
                   icon: const Icon(Icons.add),
-                  onPressed: () => set(() => takes = (takes ?? 0) + 1),
+                  onPressed: () => set(() {
+                    takes = (takes ?? 0) + 1;
+                    minutes = null;
+                  }),
                 ),
               ]),
             ),
@@ -1318,5 +1343,5 @@ Future<void> editStepPlan(BuildContext context, AppStore store, Task t, TaskStep
       },
     ),
   );
-  if (ok == true) store.setStepPlan(t, s, start: start, takes: takes, progress: s.done ? s.progress : progress);
+  if (ok == true) store.setStepPlan(t, s, start: start, takes: takes, minutes: minutes, progress: s.done ? s.progress : progress);
 }

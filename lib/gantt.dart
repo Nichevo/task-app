@@ -60,6 +60,26 @@ int workDays(DateTime start, DateTime end, {required bool weekends}) {
 
 bool weekendsFor(Task t, AppData data) => t.countWeekends ?? data.ganttWeekends;
 
+/// 1.12.10: a working day's minutes, from the Day plan's working hours (9 h by default).
+int workdayMinutes(AppData data) => max(60, data.dayPlan.workEnd - data.dayPlan.workStart);
+
+/// 1.12.10: the working days [minutes] of work fill (at least one).
+int daysForMinutes(int minutes, AppData data) => max(1, (minutes / workdayMinutes(data)).ceil());
+
+/// 1.12.10: the length in minutes when it was given in hours and still matches [days] (it
+/// doesn't once the days are changed some other way, a drag on the chart, say).
+int? takesHours(int? days, int? minutes, AppData data) =>
+    days != null && minutes != null && minutes > 0 && days == daysForMinutes(minutes, data) ? minutes : null;
+
+/// 1.12.10: "6 h", "12 h (2 work days)" or "3 work days" (no "work" when weekends count).
+String describeTakes(int days, int? minutes, AppData data, {bool weekends = false}) {
+  final d = '$days ${weekends ? '' : 'work '}day${days == 1 ? '' : 's'}';
+  final m = takesHours(days, minutes, data);
+  if (m == null) return d;
+  final h = m % 60 == 0 ? '${m ~/ 60} h' : m < 60 ? '$m min' : '${m ~/ 60} h ${m % 60} min';
+  return days == 1 ? h : '$h ($d)';
+}
+
 /// Where a task's bar sits: [start] to [end] as whole days. [guessedStart] when there is no start
 /// date and the bar counts back from the due date. [due] is the due day (the flag).
 class GanttBar {

@@ -1488,3 +1488,38 @@ modes in the statistics; the top bar has no room for more icons.
 - Same Flutter screens on iPad; no widget changes. Not done: tags on steps, tags in focus modes,
   tag filter on the Day plan, Gantt and Calendar.
 - Tests: test/tags_test.dart.
+
+### 109: editing from the Day plan, lengths in hours (version 1.12.10) ☑
+
+The owner asked to click from the Day plan into a task to edit it, to click on the day to add a
+task or step and link it easily to its owner, and for the Day plan to open with only the focus
+mode's categories selected (tags are a separate item).
+
+- A tap on a block opens the task page (`_openTask`); the old tap menu (`_blockMenu`) moved to a
+  ⋮ on each block (`_more`: beside the tick on short blocks, under it from 72 px, under the tick
+  in a frame or band from 90 px) and to a right click. The stretch grip stops short of both.
+- A tap on an empty time (`_addAt`, a GestureDetector round each day column; blocks and events
+  win their own taps) opens `showAddAtSheet` in lib/widgets/day_plan_add.dart at the time step
+  tapped: New task (category defaults to the mode's category for new tasks), Step of a task, or
+  One I have (search, then the Plan a time sheet). Time and length can be changed on the sheet.
+- Owners (`ownerChoices`): tasks planned around that time on that day (closest first), then
+  others the Day plan shows (starred, then soonest due), then the rest; habits left out. The top
+  five are chips; "Other task…" opens `pickOwner` with search.
+- Block ⋮ "Make it a step of…" uses `makeStep`, which now keeps the task's planned times as the
+  new step's (and its own steps' times when they join the parent). Split out (carried task) moves
+  the step's times back to the task.
+- Focus mode chips: `dayPlanHidden` = the mode's Quiet and Hide categories
+  (`modeHiddenCategories`) while a mode is on, or the chips as changed since the Day plan opened
+  (`modeChipTweaks`, not saved; cleared in `initState`). Everything still uses the saved
+  `hiddenCategories`. A leading chip names the mode and resets it. `planHides`: in a mode a task
+  whose chip is off still shows when it breaks through, but not for "Planned today".
+- Tests: test/day_plan_edit_test.dart.
+- Added the same day (owner): a task's Gantt length ("Takes") in hours as well as days.
+  `Task.takesMinutes` / `TaskStep.takesMinutes` (JSON `takesMin`) keep the hours; `takesDays` is
+  then `daysForMinutes` (hours / the Day plan's working day, rounded up), so the chart is
+  unchanged. `takesHours` only trusts the hours while the days still match (a drag on the chart or
+  the day buttons clear them). `askTakes` (lib/widgets/takes_dialog.dart: Days / Hours, or "6h")
+  on the task page and the step plan dialog; labels by `describeTakes`. A Day plan time defaults
+  to the hours when they fit in a working day (`planLength`; an estimate still comes first).
+  Tests: test/takes_hours_test.dart.
+

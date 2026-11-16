@@ -9,6 +9,14 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.10', 'November 2026', [
+    'How long a task takes can now be given in hours as well as days: on the task page, tap Takes and pick Hours (or type "6h"). On the Gantt chart it fills the working days those hours need (a working day is the Day plan\'s working hours, 9 h unless you changed them), and the task page shows "6 h" or "12 h (2 work days)". Steps too: "Change its start, how long or progress" in a step\'s menu.',
+    'A task or step given in hours (a working day or less) gets that length when you plan it on the Day plan, unless it has its own "How long" estimate.',
+    'Day plan: tap a block to open its task and change it (for a step, the task it belongs to). The Day plan\'s own choices (Start focus, Change the time, Leave room, Remove this time...) are now under the ⋮ on the block, or a right click on a computer.',
+    'Tap an empty time on the Day plan to add something there: a new task, a new step of a task, or one you already have. For a step, the tasks planned around that time are offered first, one tap each, with "Other task…" to search the rest. Change the time and the length on the same sheet.',
+    'New on a block\'s ⋮: "Make it a step of…" turns a planned task into a step of another task and keeps its time on the Day plan. Splitting it out again later gives the time back to the task.',
+    'With a focus mode on (Work, say), the Day plan now opens with only that mode\'s categories selected. A chip at the front names the mode (tap it to switch mode); change the other chips as you like, and tap the mode chip to go back to the mode\'s categories. Changes made in a mode last until you next open the Day plan, and the categories you chose for Everything are left as they were. Anything that still needs you (overdue, due today, starred) shows anyway.',
+  ]),
   Release('1.12.8', 'November 2026', [
     'Tags: give a task any number of tags, like meeting, brainstorming or coding. Add them on the task\'s page (Tags, then Add a tag), or type them in the add box: "Sprint review #meeting #coding". A #word that is a category\'s name still picks the category; any other #word becomes a tag.',
     'Filter by tag: the new "All tags" chip at the start of the filter row above the list, the Kanban board and the Matrix. Pick one or more tags (a task shows when it has any of them), or "No tag". The choice is remembered on this device; ✕ on the chip shows everything again.',
