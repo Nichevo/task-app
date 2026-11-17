@@ -1617,3 +1617,9 @@ view with the phone and read it on the device.
   failed inside the library (a null field read), so every import said "Could not read the
   photo". The photo is still turned upright off the main thread, but is now read from the saved
   file on the main thread with listeners, as the "photo of a list" import does.
+- Fix 2 (1.12.15): the main-thread change did not help (same null field error). Since the error
+  came back through ML Kit's failure listener, `process` itself failed on our re-saved 3200 px
+  copy. Now the picked photo itself (2000 px, as "photo of a list") is given to ML Kit with
+  `fromFilePath`; the upright copy is only for the colours. Word boxes fall back to splitting
+  the line if elements fail, errors say which stage failed, and ML Kit's text classes are kept
+  from the shrinker (android/app/proguard-rules.pro).

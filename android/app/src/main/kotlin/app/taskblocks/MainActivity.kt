@@ -173,35 +173,59 @@ class MainActivity : FlutterActivity() {
         val w = bmp.width
         val h = bmp.height
         bmp.recycle()
-        // Read on the main thread from the upright file, the same way as "photo of a list"
-        // (ML Kit called from a plain background thread failed inside the library).
+        // Read the picked photo itself, exactly as "photo of a list" does (which works); ML Kit
+        // turns it upright, so its boxes match the upright copy saved above for the colours.
         runOnUiThread {
           try {
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                .process(InputImage.fromFilePath(this, Uri.fromFile(out)))
+                .process(InputImage.fromFilePath(this, Uri.fromFile(File(path))))
                 .addOnSuccessListener { text ->
-                  val words = ArrayList<Map<String, Any>>()
-                  for (block in text.textBlocks) for (line in block.lines) {
-                    val els = line.elements
-                    if (els.isEmpty()) {
-                      val r = line.boundingBox ?: continue
-                      words.add(mapOf("t" to line.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+                  try {
+                    val words = ArrayList<Map<String, Any>>()
+                    for (block in text.textBlocks) for (line in block.lines) {
+                      val lr = line.boundingBox ?: continue
+                      // Each word's own box when ML Kit gives it, otherwise the line split up by
+                      // the length of its words.
+                      val before = words.size
+                      try {
+                        for (el in line.elements) {
+                          val r = el.boundingBox ?: continue
+                          words.add(mapOf("t" to el.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+                        }
+                      } catch (e: Throwable) {
+                        while (words.size > before) words.removeAt(words.size - 1)
+                      }
+                      if (words.size == before) words.addAll(splitLine(line.text, lr))
                     }
-                    for (el in els) {
-                      val r = el.boundingBox ?: continue
-                      words.add(mapOf("t" to el.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
-                    }
+                    result.success(mapOf("path" to out.absolutePath, "width" to w, "height" to h, "words" to words))
+                  } catch (e: Throwable) {
+                    result.error("readScreen", "words: ${e.message}", null)
                   }
-                  result.success(mapOf("path" to out.absolutePath, "width" to w, "height" to h, "words" to words))
                 }
-                .addOnFailureListener { e -> result.error("readScreen", e.message, null) }
-          } catch (e: Exception) {
-            result.error("readScreen", e.message, null)
+                .addOnFailureListener { e -> result.error("readScreen", "reading: ${e.message}", null) }
+          } catch (e: Throwable) {
+            result.error("readScreen", "starting: ${e.message}", null)
           }
         }
-      } catch (e: Exception) {
-        runOnUiThread { result.error("readScreen", e.message, null) }
+      } catch (e: Throwable) {
+        runOnUiThread { result.error("readScreen", "photo: ${e.message}", null) }
       }
     }.start()
+  }
+
+  /** A line's words with boxes shared out along the line by how many letters each has. */
+  private fun splitLine(text: String, r: android.graphics.Rect): List<Map<String, Any>> {
+    val parts = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val chars = parts.sumOf { it.length } + (parts.size - 1).coerceAtLeast(0)
+    if (chars == 0) return emptyList()
+    val per = (r.right - r.left).toDouble() / chars
+    var x = r.left.toDouble()
+    val out = ArrayList<Map<String, Any>>()
+    for (p in parts) {
+      val w = p.length * per
+      out.add(mapOf("t" to p, "l" to x.toInt(), "top" to r.top, "r" to (x + w).toInt(), "b" to r.bottom))
+      x += w + per
+    }
+    return out
   }
 }

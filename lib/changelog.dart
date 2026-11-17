@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.15', 'November 2026', [
+    'Work meetings from a photo: another fix for "Could not read the photo" on Android. The photo is now read exactly as "Photo of a list" reads one.',
+  ]),
   Release('1.12.14', 'November 2026', [
     'Work meetings from a photo: fixed "Could not read the photo" on Android when importing work meetings.',
   ]),
