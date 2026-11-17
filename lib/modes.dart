@@ -245,7 +245,15 @@ class ModeSlot {
 
 /// A stretch of time spent in a mode, for the statistics. [end] null = still going.
 class ModeLog {
-  ModeLog({required this.id, required this.mode, required this.start, this.end, this.how = 'schedule', this.peeks = 0});
+  ModeLog({
+    required this.id,
+    required this.mode,
+    required this.start,
+    this.end,
+    this.how = 'schedule',
+    this.peeks = 0,
+    this.device,
+  });
 
   final String id;
   final String mode;
@@ -256,8 +264,17 @@ class ModeLog {
   final String how;
   int peeks;
 
-  factory ModeLog.open(String mode, DateTime start, String how) =>
-      ModeLog(id: 'l${start.microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', mode: mode, start: start, how: how);
+  /// Review fix: the device that logged it (each device has its own mode); null in logs from
+  /// before 1.12.12.
+  final String? device;
+
+  factory ModeLog.open(String mode, DateTime start, String how, {String? device}) => ModeLog(
+    id: 'l${start.microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}',
+    mode: mode,
+    start: start,
+    how: how,
+    device: device,
+  );
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -266,6 +283,7 @@ class ModeLog {
         if (end != null) 'end': end!.toUtc().toIso8601String(),
         if (how != 'schedule') 'how': how,
         if (peeks > 0) 'peeks': peeks,
+    if (device != null) 'dev': device,
       };
 
   static ModeLog? tryParse(Object? v) {
@@ -280,6 +298,7 @@ class ModeLog {
       end: DateTime.tryParse(v['end'] as String? ?? '')?.toLocal(),
       how: v['how'] as String? ?? 'schedule',
       peeks: (v['peeks'] as num?)?.toInt() ?? 0,
+      device: v['dev'] as String?,
     );
   }
 }
@@ -485,10 +504,20 @@ class ModeNow {
 /// The app's one [ModeNow].
 final modeNow = ModeNow();
 
+/// Review fix: this device's key in the mode log (set by the store when it loads; null = count
+/// every device's log, as in tests).
+String? modeDevice;
+
+/// Whether [l] is this device's (or from before logs said which device).
+bool modeLogMine(ModeLog l, [String? device]) {
+  final d = device ?? modeDevice;
+  return d == null || l.device == null || l.device == d;
+}
+
 /// The mode at noon on each day the [logs] cover (the last device's log wins where they overlap).
 Map<String, FocusMode> noonModesFrom(AppData data, DateTime now) {
   final out = <String, FocusMode>{};
-  final logs = [...data.modeLog]..sort((a, b) => a.start.compareTo(b.start));
+  final logs = [...data.modeLog.where(modeLogMine)]..sort((a, b) => a.start.compareTo(b.start));
   for (final l in logs) {
     final end = l.end ?? now;
     final m = data.mode(l.mode);
@@ -723,7 +752,8 @@ class ModeStats {
 /// Mode facts since [since] (null = as far back as the log goes, a year at most).
 ModeStats modeStats(AppData data, DateTime now, {DateTime? since}) {
   final from = since ?? now.subtract(const Duration(days: 366));
-  final logs = data.modeLog.where((l) => (l.end ?? now).isAfter(from)).toList();
+  // Review fix: this device's stretches only, so two devices' time isn't counted twice.
+  final logs = data.modeLog.where((l) => modeLogMine(l) && (l.end ?? now).isAfter(from)).toList();
   final done = <String, int>{};
   var outside = 0;
   for (final r in data.done.values) {

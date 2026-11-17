@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../day_plan.dart';
 import '../models.dart';
+import '../native.dart';
 import '../store.dart';
 import '../task_list.dart' show parseEstimate;
 import '../screens/settings_page.dart' show askText;
@@ -52,6 +53,12 @@ class _PlanSheetState extends State<_PlanSheet> {
   int? _gap;
   bool _shared = false;
 
+  /// Review fix: the phone's calendar events, so the first free time isn't in a meeting.
+  List<CalendarEvent> _events = const [];
+
+  /// The time first suggested; replaced when the events arrive, unless it was changed by then.
+  DateTime? _suggested;
+
   static const _lengths = [15, 30, 45, 60, 90, 120, 180, 240];
 
   TaskStep? get _step =>
@@ -76,8 +83,29 @@ class _PlanSheetState extends State<_PlanSheet> {
     } else {
       final today = DateUtils.isSameDay(day, now);
       final from = today ? snapUp(now, s.snap) : null;
-      _start = layoutDay(data, day).firstFree(_minutes, from: from) ??
-          (from ?? DateTime(day.year, day.month, day.day).add(Duration(minutes: s.workStart)));
+      _start = _suggested = _firstFree(day, from);
+      _loadEvents(day, from);
+    }
+  }
+
+  DateTime _firstFree(DateTime day, DateTime? from) =>
+      layoutDay(data, day, events: _events).firstFree(_minutes, from: from) ??
+      (from ?? DateTime(day.year, day.month, day.day).add(Duration(minutes: s.workStart)));
+
+  Future<void> _loadEvents(DateTime day, DateTime? from) async {
+    if (!s.showEvents || !Native.supported) return;
+    try {
+      final d0 = DateTime(day.year, day.month, day.day);
+      final today = DateUtils.dateOnly(DateTime.now());
+      final a = d0.isBefore(today) ? d0 : today;
+      final list = await Native.events(a, (d0.isAfter(today) ? d0 : today).add(const Duration(days: 7)), data.eventCalendars);
+      if (!mounted) return;
+      setState(() {
+        _events = list;
+        if (_start == _suggested) _start = _suggested = _firstFree(day, from);
+      });
+    } catch (e) {
+      debugPrint('Plan a time events: $e');
     }
   }
 
@@ -112,7 +140,7 @@ class _PlanSheetState extends State<_PlanSheet> {
     final gapDefault = s.gapMinutes;
     final step = _step;
     // Free time on that day without this one, for the "first free gap" button.
-    final layout = layoutDay(data, _day);
+    final layout = layoutDay(data, _day, events: _events);
     final firstFree = layout.firstFree(_minutes, from: DateUtils.isSameDay(_day, now) ? snapUp(now, s.snap) : null);
 
     Widget label(String t) => Padding(

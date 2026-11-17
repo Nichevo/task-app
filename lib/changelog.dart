@@ -9,6 +9,14 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.12', 'November 2026', [
+    'Focus timer widget: a button you pressed on the widget now counts from when you pressed it, even if the round would have ended before you opened the app. Before, a pause on the widget could be lost and the whole round counted as focus time.',
+    'The tag filter is much quicker with lots of tasks (it no longer looks through every ticked-off task once for each task in the list).',
+    'Focus modes on two devices: each device now keeps its own stretch in the mode history, so syncing no longer cuts them up, and the Statistics page counts this device\'s time in each mode (not both devices\' time added together).',
+    'Dragging a step to Done on the Kanban board (or moving it there from a widget or "Edit all steps") now ticks the steps linked to it, as ticking its box does.',
+    '"Plan a time" opened from a task page now looks at your calendar too, so the first free time it suggests is not in a meeting.',
+    'Modes that switch by calendar event read the calendar less often (every 30 minutes, and when the app comes back) instead of every 5 minutes.',
+  ]),
   Release('1.12.11', 'November 2026', [
     'Focus timer widget: Start, Pause, Resume, +5, Skip break and Stop now work right on the widget, without opening the app. You still get the "Time for a break" and "Break\'s over" reminders, the countdown in the notification shade (Android) and Do not disturb if you use it. The app catches up with what you pressed the next time it opens.',
     'Each widget that lists tasks can now have its own focus mode: follow the mode that is on (as before), always show everything, or always show one mode (say Work), whatever mode you are in. Android asks when you place the widget (press and hold it, then the pencil, to change it); on the iPad it is "Focus mode" in Edit Widget. The Focus timer widget has the choice too, for the top task it offers.',
