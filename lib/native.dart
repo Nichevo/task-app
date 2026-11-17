@@ -44,6 +44,14 @@ class CalendarEvent {
   final String? location;
 }
 
+/// Item 110: a photo of a screen as read by [Native.readScreen].
+class ScreenPhoto {
+  const ScreenPhoto({required this.path, required this.width, required this.height, required this.words});
+  final String path;
+  final int width, height;
+  final List<({String text, double l, double t, double r, double b})> words;
+}
+
 /// The small amount of native plumbing: shared text, the phone's calendars and on-device text
 /// recognition. Android has it in MainActivity.kt, the iPad in ios/Runner/AppDelegate.swift.
 class Native {
@@ -141,6 +149,23 @@ class Native {
           end: e['end'] is num ? DateTime.fromMillisecondsSinceEpoch((e['end'] as num).toInt()) : null,
         ),
     ];
+  }
+
+  /// Item 110: the words in a photo of a screen and where each one is, read on the phone, with
+  /// the photo turned upright and saved again ([ScreenPhoto.path]) so its colours line up.
+  static Future<ScreenPhoto> readScreen(String imagePath) async {
+    final m = await _channel.invokeMapMethod<String, dynamic>('readScreen', {'path': imagePath});
+    if (m == null) throw Exception('The photo could not be read');
+    double n(Object? v) => (v as num).toDouble();
+    return ScreenPhoto(
+      path: m['path'] as String,
+      width: (m['width'] as num).toInt(),
+      height: (m['height'] as num).toInt(),
+      words: [
+        for (final w in m['words'] as List? ?? const [])
+          if (w is Map) (text: '${w['t']}', l: n(w['l']), t: n(w['top']), r: n(w['r']), b: n(w['b'])),
+      ],
+    );
   }
 
   /// Lines of text found in a photo, read on the phone.

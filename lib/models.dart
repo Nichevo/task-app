@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'changelog.dart';
 import 'focus_timer.dart';
 import 'modes.dart';
+import 'native.dart' show CalendarEvent;
+import 'work_meetings.dart';
 
 /// Item 72: what happens to the tasks after one that moves later on the Gantt chart.
 enum GanttPush { ask, always, never }
@@ -622,6 +624,11 @@ class TimeSlot {
   static const _known = {'id', 'start', 'min', 'step', 'gap', 'shared', 'done'};
 
   DateTime get end => start.add(Duration(minutes: minutes));
+
+  /// Item 110: the work meeting ([WorkMeeting.id]) this time is linked to; it moves with the
+  /// meeting when a new photo shows it moved. Kept in [extra] so older versions keep it too.
+  String? get meetingId => extra['meeting'] as String?;
+  set meetingId(String? id) => id == null ? extra.remove('meeting') : extra['meeting'] = id;
 
   Map<String, dynamic> toJson() => {
         ...extra,
@@ -1734,7 +1741,11 @@ class AppData {
     this.modeAsk = false,
     this.modeWidgets = true,
     FocusSettings? focusSettings,
-  })  : focusSettings = focusSettings ?? FocusSettings(),
+    List<WorkMeeting>? workMeetings,
+    DateTime? workUpdatedAt,
+  })  : workMeetings = workMeetings ?? [],
+        workUpdatedAt = workUpdatedAt ?? _epoch,
+        focusSettings = focusSettings ?? FocusSettings(),
         active = active ?? [],
         modes = modes ?? [],
         modeSchedule = modeSchedule ?? [],
@@ -1998,6 +2009,29 @@ class AppData {
   /// Item 102: the focus timer's lengths and Do not disturb choice.
   final FocusSettings focusSettings;
 
+  /// Item 110: work meetings read from photos of the Outlook calendar, oldest first, and when
+  /// they last changed (the newer list wins when two devices sync).
+  List<WorkMeeting> workMeetings;
+  DateTime workUpdatedAt;
+
+  /// Item 110: the work meetings as calendar events, for the Day plan and the widgets.
+  List<CalendarEvent> workEvents(DateTime from, DateTime to) => [
+        for (final m in workMeetings)
+          if (m.start.isBefore(to) && (m.allDay ? DateTime(m.start.year, m.start.month, m.start.day + 1) : m.end).isAfter(from)) m.toEvent(),
+      ];
+
+  WorkMeeting? workMeeting(String id) => workMeetings.where((m) => m.id == id).firstOrNull;
+
+  /// Item 110: the task and planned time linked to work meeting [id], if any.
+  (Task, TimeSlot)? linkedToMeeting(String id) {
+    for (final t in active) {
+      for (final s in t.slots) {
+        if (s.meetingId == id) return (t, s);
+      }
+    }
+    return null;
+  }
+
   FocusMode? mode(String? id) => modes.where((m) => m.id == id).firstOrNull;
 
   /// Another device has saved this data with a newer version of the app.
@@ -2012,7 +2046,7 @@ class AppData {
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
     'updatedAt', 'orderUpdatedAt', 'settingsUpdatedAt', 'deleted', 'active', 'archived',
     'hiddenEmails', 'starredDays', 'starredAfter', 'starredLine', 'emailTasks', 'allowedSenders',
-    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk', 'modeWidgets', 'focusTimer',
+    'matrixNames', 'urgentDays', 'quickWords', 'unreadable', 'modes', 'modeSchedule', 'modeChoice', 'modeLog', 'modeAsk', 'modeWidgets', 'focusTimer', 'work',
   };
 
   /// [lists] false leaves out the tasks and their records (L8: the reminders only need the rest).
@@ -2081,6 +2115,8 @@ class AppData {
         if (!modeWidgets) 'modeWidgets': false,
         if (!focusSettings.isDefault) 'focusTimer': focusSettings.toJson(),
         if (lists && modeLog.isNotEmpty) 'modeLog': [for (final l in modeLog) l.toJson()],
+        if (lists && (workMeetings.isNotEmpty || workUpdatedAt != _epoch))
+          'work': {'at': workUpdatedAt.toUtc().toIso8601String(), 'list': [for (final m in workMeetings) m.toJson()]},
       };
 
   TaskCategory? category(String? id) => categories.where((c) => c.id == id).firstOrNull;
@@ -2198,6 +2234,8 @@ class AppData {
         modeChoice: ModeChoice.tryParse(j['modeChoice']),
         modeLog: [for (final l in j['modeLog'] as List? ?? []) ?ModeLog.tryParse(l)],
         modeAsk: j['modeAsk'] as bool? ?? false,
+        workMeetings: [for (final m in (j['work'] is Map ? j['work']['list'] as List? : null) ?? []) ?WorkMeeting.tryParse(m)],
+        workUpdatedAt: j['work'] is Map ? DateTime.tryParse(j['work']['at'] as String? ?? '') : null,
         modeWidgets: j['modeWidgets'] as bool? ?? true,
         focusSettings: FocusSettings.parse(j['focusTimer']),
         extra: unknownFields(j, _known),
@@ -2398,6 +2436,9 @@ AppData mergeData(AppData a, AppData b) {
     modeAsk: settingsFrom.modeAsk,
     modeWidgets: settingsFrom.modeWidgets,
     focusSettings: settingsFrom.focusSettings,
+    // Work meetings: the list changed last wins as a whole (photos are taken on one device).
+    workMeetings: b.workUpdatedAt.isAfter(a.workUpdatedAt) ? b.workMeetings : a.workMeetings,
+    workUpdatedAt: b.workUpdatedAt.isAfter(a.workUpdatedAt) ? b.workUpdatedAt : a.workUpdatedAt,
     unreadable: {for (final u in [...a.unreadable, ...b.unreadable]) jsonEncode(u): u}.values.toList(),
     // Fields only a newer version understands: keep them from both, the newer copy winning.
     extra: b.updatedAt.isAfter(a.updatedAt) ? {...a.extra, ...b.extra} : {...b.extra, ...a.extra},

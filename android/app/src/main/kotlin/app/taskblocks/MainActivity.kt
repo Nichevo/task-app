@@ -4,9 +4,14 @@ import android.Manifest
 import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -14,6 +19,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * The app's one activity. Besides running Flutter it handles the few things that need Android
@@ -63,6 +69,7 @@ class MainActivity : FlutterActivity() {
               })
         }
         "recognizeText" -> recognizeText(call.argument<String>("path")!!, result)
+        "readScreen" -> readScreen(call.argument<String>("path")!!, result)
         "setPlaces" ->
             result.success(
                 PlaceStore.save(
@@ -142,5 +149,39 @@ class MainActivity : FlutterActivity() {
     } catch (e: Exception) {
       result.error("ocr", e.message, null)
     }
+  }
+
+  /**
+   * Item 110: a photo of a calendar on a screen, read word by word with where each word is, for
+   * working out meeting times from their places. The photo is turned upright and saved again,
+   * so the app can look at its colours with the same coordinates.
+   */
+  private fun readScreen(path: String, result: MethodChannel.Result) {
+    Thread {
+      try {
+        val turn = when (ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+          ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+          ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+          ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+          else -> 0f
+        }
+        var bmp = BitmapFactory.decodeFile(path) ?: throw Exception("Could not open the photo")
+        if (turn != 0f) {
+          bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(turn) }, true)
+        }
+        val out = File(cacheDir, "work_screen.jpg")
+        FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        val text = Tasks.await(TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(InputImage.fromBitmap(bmp, 0)))
+        val words = ArrayList<Map<String, Any>>()
+        for (block in text.textBlocks) for (line in block.lines) for (el in line.elements) {
+          val r = el.boundingBox ?: continue
+          words.add(mapOf("t" to el.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+        }
+        val reply = mapOf("path" to out.absolutePath, "width" to bmp.width, "height" to bmp.height, "words" to words)
+        runOnUiThread { result.success(reply) }
+      } catch (e: Exception) {
+        runOnUiThread { result.error("readScreen", e.message, null) }
+      }
+    }.start()
   }
 }

@@ -581,7 +581,15 @@ object WidgetData {
               planned = true,
           ))
     }
-    val events = todayEvents(c).filter { it.due != null && it.due >= from }
+    val events = todayEvents(c).filter { it.due != null && it.due >= from }.toMutableList()
+    // Item 110: work meetings read from a photo of Outlook, drawn like calendar events.
+    val work = snap.root.optJSONArray("work") ?: JSONArray()
+    for (i in 0 until work.length()) {
+      val o = work.getJSONObject(i)
+      val at = o.optLong("at")
+      if (at < from || at >= from + DAY) continue
+      events.add(WidgetTask(o.optString("id"), o.optString("title"), null, from, at, locked = true, star = false, event = true, end = o.optLong("end", at)))
+    }
     out.addAll(events)
     out.addAll(freeRows(snap, events, from))
     out.sortBy { it.due }

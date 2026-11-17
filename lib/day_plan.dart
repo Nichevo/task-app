@@ -467,10 +467,15 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
 /// [day]'s events from [events]: the timed ones as blocks, and the all-day ones. None when
 /// Settings turn events off.
 (List<EventBlock>, List<CalendarEvent>) eventsOn(AppData data, DateTime day, List<CalendarEvent> events) {
-  if (!data.dayPlan.showEvents) return (const [], const []);
   final d0 = DateTime(day.year, day.month, day.day), d1 = d0.add(const Duration(days: 1));
   final timed = <EventBlock>[], allDay = <CalendarEvent>[];
-  for (final e in events) {
+  // Item 110: work meetings from photos show whatever the phone calendar setting, except one
+  // linked to a task: the task's planned time stands for it.
+  final work = [
+    for (final e in data.workEvents(d0, d1))
+      if (e.allDay || data.linkedToMeeting(e.id) == null) e,
+  ];
+  for (final e in [if (data.dayPlan.showEvents) ...events, ...work]) {
     if (e.allDay) {
       // All-day events end at midnight after their last day.
       final end = e.end.isAfter(e.start) ? e.end : e.start.add(const Duration(days: 1));

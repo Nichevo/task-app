@@ -14,8 +14,10 @@ import '../widgets/mode_chip.dart' show modeIcon, showModeSheet;
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/task_colors.dart';
 import '../widgets/task_where.dart' show editDrive;
+import '../work_meetings.dart' show workCalendarId;
 import 'starred_page.dart' show pickTask;
 import 'task_page.dart';
+import 'work_import_page.dart';
 
 /// Item 101: the Day plan. One day as a timeline: tasks and steps with a planned time drawn as
 /// blocks as tall as the time they take, the gaps kept after them, free time in working hours,
@@ -272,6 +274,12 @@ class _DayPlanPageState extends State<DayPlanPage> {
             actions: [
               IconButton(tooltip: 'Today', icon: const Icon(Icons.today), onPressed: () => _goTo(DateTime.now())),
               IconButton(tooltip: 'Plan a task', icon: const Icon(Icons.add), onPressed: _planAny),
+              if (Native.supported)
+                IconButton(
+                  tooltip: 'Import work meetings',
+                  icon: const Icon(Icons.work_outline),
+                  onPressed: () => importWorkMeetings(context, store),
+                ),
               if (canTwo)
                 IconButton(
                   tooltip: two ? 'One day' : 'Two days side by side',
@@ -505,9 +513,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
 
   /// The day's all-day events, and a way to let the app read the calendar.
   Widget _allDayRow(BuildContext context, DayLayout l) {
-    if (!s.showEvents) return const SizedBox();
+    if (!s.showEvents && l.allDay.isEmpty) return const SizedBox();
     final theme = Theme.of(context);
-    if (_eventsBlocked) {
+    if (_eventsBlocked && s.showEvents) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
         child: Row(children: [
@@ -528,7 +536,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
             padding: const EdgeInsets.only(right: 6),
             child: ActionChip(
               visualDensity: VisualDensity.compact,
-              avatar: const Icon(Icons.event, size: 16),
+              avatar: e.calendarId == workCalendarId
+                  ? const Icon(Icons.work_outline, size: 16, color: workBlue)
+                  : const Icon(Icons.event, size: 16),
               label: Text(e.title),
               onPressed: () => _eventInfo(e),
             ),
@@ -541,14 +551,18 @@ class _DayPlanPageState extends State<DayPlanPage> {
   Widget _eventBlock(BuildContext context, EventBlock e, double hh) {
     final theme = Theme.of(context);
     final hm = DateFormat('HH:mm');
-    final fg = theme.colorScheme.onSurfaceVariant;
+    // Item 110: a work meeting from a photo is blue.
+    final work = e.event.calendarId == workCalendarId;
+    final fg = work ? Color.lerp(workBlue, theme.colorScheme.onSurface, 0.35)! : theme.colorScheme.onSurfaceVariant;
     return GestureDetector(
       onTap: () => _eventInfo(e.event),
       child: Container(
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest,
+          color: work
+              ? Color.alphaBlend(workBlue.withValues(alpha: 0.2), theme.colorScheme.surface)
+              : theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(10),
-          border: Border(left: BorderSide(color: fg.withValues(alpha: 0.6), width: 4)),
+          border: Border(left: BorderSide(color: work ? workBlue : fg.withValues(alpha: 0.6), width: work ? 6 : 4)),
         ),
         foregroundDecoration: e.clash
             ? BoxDecoration(border: Border.all(color: const Color(0xFFD32F2F), width: 2.5), borderRadius: BorderRadius.circular(10))
@@ -556,9 +570,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
         padding: EdgeInsets.fromLTRB(8, hh < 40 ? 0 : 5, 6, 0),
         alignment: hh < 40 ? Alignment.centerLeft : Alignment.topLeft,
         child: CustomPaint(
-          painter: _Hatch(fg.withValues(alpha: 0.06)),
+          painter: _Hatch(work ? Colors.transparent : fg.withValues(alpha: 0.06)),
           child: Row(crossAxisAlignment: hh < 40 ? CrossAxisAlignment.center : CrossAxisAlignment.start, children: [
-            Icon(Icons.event, size: 15, color: fg),
+            Icon(work ? Icons.work_outline : Icons.event, size: 15, color: fg),
             const SizedBox(width: 5),
             Expanded(
               child: Text.rich(
@@ -582,6 +596,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
   }
 
   Future<void> _eventInfo(CalendarEvent e) async {
+    if (e.calendarId == workCalendarId) return workMeetingSheet(context, store, e.id);
     final hm = DateFormat('HH:mm');
     final fmt = DateFormat('EEE d MMM');
     final hide = await showModalBottomSheet<bool>(
@@ -1041,7 +1056,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     final step = b.step;
     final compact = hh < 52;
     const ink = Color(0xDD000000);
+    final meeting = b.slot.meetingId != null;
     final meta = [
+      if (meeting) 'Work meeting',
       _times(b),
       if (step == null && b.task.steps.isNotEmpty && b.inside.isEmpty) '${b.task.stepsDone} of ${b.task.steps.length} steps',
       if (b.task.dueAt != null && b.task.dueAt!.isBefore(DateTime.now()) && b.task.closedAt == null) 'overdue',
@@ -1061,7 +1078,11 @@ class _DayPlanPageState extends State<DayPlanPage> {
             color: c,
             borderRadius: BorderRadius.circular(12),
             border: Border(
-              left: step != null ? BorderSide(color: Color.lerp(c, Colors.black, 0.35)!, width: 5) : BorderSide.none,
+              left: meeting
+                  ? const BorderSide(color: workBlue, width: 6)
+                  : step != null
+                      ? BorderSide(color: Color.lerp(c, Colors.black, 0.35)!, width: 5)
+                      : BorderSide.none,
             ),
           ),
           foregroundDecoration: b.clash

@@ -1555,3 +1555,34 @@ timer widget (item 102, part 4) already existed, but every button opened the app
   when it comes back to the front. Held reminders (other tasks wait till the break) follow the
   app's last view of the timer until it opens.
 - Tests: test/focus_widgets_test.dart.
+
+### 110: work meetings from a photo of Outlook (version 1.12.12)
+
+The owner's work calendar is Outlook on a locked-down work PC (no app, no publishing, no Outlook
+website on personal devices). Chosen after a brainstorm: photograph the calendar in Work week
+view with the phone and read it on the device.
+
+- Reading: `Native.readScreen` (Android `MainActivity.readScreen`, ML Kit words with boxes; iPad
+  `NativeChannel.readScreen`, Vision words via `boundingBox(for:)`) turns the photo upright,
+  saves it again and returns each word with its box. `readWorkWeek` (lib/work_meetings.dart)
+  finds the heading row (most weekday names, tolerant of a crooked photo, which it levels), the
+  day numbers and any month/year above (future weeks), the hour labels down the left (12 or 24
+  hour, a misread label dropped by a least squares fit), the columns (headings at the left of
+  their column or centred), then groups the words in each column into meetings. Start comes
+  from the title's place; end from the meeting's coloured box in the photo's pixels (walked
+  down from just left of the title), else the next meeting or half an hour, marked "check".
+  A time written in the box wins. "Canceled:" meetings are skipped; text in the strip under the
+  headings becomes an all-day note.
+- Saving: `AppData.workMeetings` + `workUpdatedAt` (JSON `work`), merged whole, newest wins. A
+  new photo replaces the meetings on its days within the hours it shows (`coveredBy`), so a
+  second photo of the evening leaves the morning. Check screen (`WorkImportPage`): new, moved,
+  gone, week arrows, edit, untick.
+- Showing: work meetings join the Day plan's events (`eventsOn`) in blue whatever "Show
+  calendar events" says, count as busy (free time, clashes, widget free rows), feed modes that
+  switch by calendar event, and go to the Today's plan widget (`work` in the widget data).
+- Linking: a planned time's `meetingId` (TimeSlot extra `meeting`). "Link to a task…" or "Make a
+  task from it" on a meeting's sheet; the linked task's block replaces the meeting's on the Day
+  plan; a moved meeting moves it, a gone one takes its planned time away.
+- Settings, Day plan: import again or remove all.
+- Not done: tentative (striped) meetings are not told apart.
+- Tests: test/work_meetings_test.dart (a drawn fake Outlook week).

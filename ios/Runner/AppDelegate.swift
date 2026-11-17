@@ -67,6 +67,8 @@ final class NativeChannel {
       result(events(args))
     case "recognizeText":
       recognizeText(args["path"] as? String, result)
+    case "readScreen":
+      readScreen(args["path"] as? String, result)
     case "takeShared":
       result(SharedInbox.take())
     case "setPlaces":
@@ -139,6 +141,61 @@ final class NativeChannel {
       } catch {
         DispatchQueue.main.async {
           result(FlutterError(code: "recognizeText", message: error.localizedDescription, details: nil))
+        }
+      }
+    }
+  }
+
+  /// Item 110: a photo of a calendar on a screen, read word by word with where each word is
+  /// (pixels from the top left of the upright photo, which is saved again for its colours).
+  private func readScreen(_ path: String?, _ result: @escaping FlutterResult) {
+    guard let path, let image = UIImage(contentsOfFile: path) else {
+      return result(FlutterError(code: "readScreen", message: "Could not open the photo", details: nil))
+    }
+    DispatchQueue.global(qos: .userInitiated).async {
+      let format = UIGraphicsImageRendererFormat()
+      format.scale = 1
+      let upright = UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+      }
+      guard let cg = upright.cgImage, let jpeg = upright.jpegData(compressionQuality: 0.92) else {
+        return DispatchQueue.main.async {
+          result(FlutterError(code: "readScreen", message: "Could not open the photo", details: nil))
+        }
+      }
+      let out = FileManager.default.temporaryDirectory.appendingPathComponent("work_screen.jpg")
+      let request = VNRecognizeTextRequest()
+      request.recognitionLevel = .accurate
+      request.usesLanguageCorrection = false
+      do {
+        try jpeg.write(to: out)
+        try VNImageRequestHandler(cgImage: cg, orientation: .up).perform([request])
+        let w = CGFloat(cg.width), h = CGFloat(cg.height)
+        var words: [[String: Any]] = []
+        for obs in request.results ?? [] {
+          guard let cand = obs.topCandidates(1).first else { continue }
+          let s = cand.string
+          var i = s.startIndex
+          // Each run of letters and digits between spaces is a word, with its own box.
+          while i < s.endIndex {
+            while i < s.endIndex, s[i].isWhitespace { i = s.index(after: i) }
+            var j = i
+            while j < s.endIndex, !s[j].isWhitespace { j = s.index(after: j) }
+            if i < j, let box = try? cand.boundingBox(for: i..<j)?.boundingBox {
+              words.append([
+                "t": String(s[i..<j]),
+                "l": Double(box.minX * w), "top": Double((1 - box.maxY) * h),
+                "r": Double(box.maxX * w), "b": Double((1 - box.minY) * h),
+              ])
+            }
+            i = j
+          }
+        }
+        let reply: [String: Any] = ["path": out.path, "width": cg.width, "height": cg.height, "words": words]
+        DispatchQueue.main.async { result(reply) }
+      } catch {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "readScreen", message: error.localizedDescription, details: nil))
         }
       }
     }
