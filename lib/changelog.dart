@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.17', 'November 2026', [
+    'Fixed: the Android app could close straight away when opened after updating to 1.12.15 or 1.12.16.',
+  ]),
   Release('1.12.16', 'November 2026', [
     'Steps can have tags too. Tap a step on the task page and pick "Add a tag", or type #words when you add a step ("Fix the header #coding"). In "Edit all steps", tap "+ tag" on a step, or tick several steps and press Tags to tag them all at once.',
     'The tag filter now looks at steps: a task shows when it, or one of its open steps, has a picked tag. On the Kanban board, steps on the board show only when they (or their task) have the tag.',
