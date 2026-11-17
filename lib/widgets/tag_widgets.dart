@@ -173,7 +173,7 @@ class TagFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final picked = store.liveTagFilter;
-    if (picked.isEmpty && tagsInUse(store.data).isEmpty) return const SizedBox.shrink();
+    if (picked.isEmpty && store.tagKeysInUse.isEmpty) return const SizedBox.shrink();
     final names = [for (final f in picked) f == untaggedFilter ? 'No tag' : '#$f'];
     final label = names.isEmpty
         ? 'All tags'

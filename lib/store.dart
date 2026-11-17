@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show max;
+import 'dart:math' show Random, max;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding, AppLifecycleState;
@@ -178,6 +178,7 @@ class AppStore extends ChangeNotifier {
         filterSaved = true;
       }
       seenVersion = s['seenVersion'] as String?;
+      if (s['deviceKey'] case final String k when k.isNotEmpty) deviceKey = k;
       deviceModeChoice = ModeChoice.tryParse(s['modeChoice']);
       focusNow = FocusTimer.tryParse(s['focusTimer']);
       places.addAll([for (final p in s['places'] as List? ?? []) ?Place.tryParse(p)]);
@@ -203,6 +204,9 @@ class AppStore extends ChangeNotifier {
     }
     // The old "only show the next 30 days" setting becomes the Next 30 days chip.
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
+    // Review fix: this install's key in the mode log, kept from the first start on.
+    modeDevice = deviceKey;
+    if (s?['deviceKey'] is! String) unawaited(saveDeviceSettings());
     refreshMode(applyStart: false);
     // Item 102: a focus timer left running moves on to where it would be now.
     if (focusNow != null && !tickFocus()) _focusChanged();
@@ -307,9 +311,7 @@ class AppStore extends ChangeNotifier {
       applyModePick(id, at);
     }
     final ops = await widgets?.takeFocusOps() ?? const [];
-    for (final o in ops) {
-      applyFocusOp(o.op, o.at, taskId: o.task, stepId: o.step);
-    }
+    applyFocusOps(ops);
     if (picks.isNotEmpty || ops.isNotEmpty) {
       await widgets?.clearWidgetCopies(focus: ops.isNotEmpty, mode: picks.isNotEmpty);
       // Do not disturb may have been switched by the widget: set it again from what is so now.
@@ -392,6 +394,7 @@ class AppStore extends ChangeNotifier {
       'recordLocation': recordLocation,
       'quickFilter': quickFilter.name,
       if (seenVersion != null) 'seenVersion': seenVersion,
+    'deviceKey': deviceKey,
       if (deviceModeChoice != null) 'modeChoice': deviceModeChoice!.toJson(),
       if (focusNow != null) 'focusTimer': focusNow!.toJson(),
       if (places.isNotEmpty) 'places': [for (final p in places) p.toJson()],
@@ -1723,7 +1726,11 @@ class AppStore extends ChangeNotifier {
     if (s.placed && s.stageId == to.id) return false;
     _moveStep(t, s, to, how, note: note);
     final last = to.id == data.stages.lastOrNull?.id;
-    if (last != s.done) s.done = last;
+    if (last != s.done) {
+      s.done = last;
+      // Review fix: finishing it on the board ticks the steps linked to it too (item 106).
+      if (last) _tickLinkedSteps(s);
+    }
     changed(task: t);
     return last && t.steps.every((x) => x.done);
   }
@@ -1828,6 +1835,8 @@ class AppStore extends ChangeNotifier {
 
   /// Starts a focus round on [t] (and [stepId]), replacing any timer running.
   void startFocus(Task t, {String? stepId, DateTime? at}) {
+    // Pressed after the timer moved on: no going back past it for an older widget press.
+    _autoTicks.clear();
     final now = at ?? DateTime.now();
     final old = focusNow;
     if (old != null) _creditFocus(old, now);
@@ -1849,6 +1858,10 @@ class AppStore extends ChangeNotifier {
       return true;
     }
     var changed = false;
+    // Review fix: remember where it was, so a widget button pressed before now can still be
+    // applied at its own time (see [_rewindFocus]).
+    final before = f.end != null && !now.isBefore(f.end!) ? (f.end!, f.toJson()) : null;
+    if (before != null) _focusCredits = [];
     while (f.end != null && !now.isBefore(f.end!)) {
       final end = f.end!;
       changed = true;
@@ -1868,11 +1881,46 @@ class AppStore extends ChangeNotifier {
         f.heldBreak = true;
       }
     }
+    if (before != null) {
+      _autoTicks.add((at: before.$1, timer: before.$2, credits: _focusCredits!));
+      _focusCredits = null;
+      if (_autoTicks.length > 20) _autoTicks.removeAt(0);
+    }
     if (changed) _focusChanged();
     return changed;
   }
 
+  /// Review fix: the timer moving on by itself (a round or break ending), newest last: when it
+  /// happened, the timer just before, and the minutes that saved on tasks.
+  final _autoTicks = <({DateTime at, Map<String, dynamic> timer, List<(String, String, int, bool)> credits})>[];
+
+  /// Minutes saved while [tickFocus] runs: (task id, day key, minutes, whether that made the day
+  /// a worked day).
+  List<(String, String, int, bool)>? _focusCredits;
+
+  /// Review fix: puts the timer back to before it moved on by itself after [at] (taking those
+  /// minutes off the task again), so a widget button pressed at [at] applies to the timer as
+  /// it was then. Returns whether anything went back.
+  bool _rewindFocus(DateTime at) {
+    var any = false;
+    while (_autoTicks.isNotEmpty && _autoTicks.last.at.isAfter(at)) {
+      final x = _autoTicks.removeLast();
+      for (final (id, day, mins, newDay) in x.credits) {
+        final t = anyTask(data, id);
+        if (t == null) continue;
+        final left = (t.focus[day] ?? 0) - mins;
+        left > 0 ? t.focus[day] = left : t.focus.remove(day);
+        if (newDay) t.worked.remove(day);
+        changed(task: t);
+      }
+      focusNow = FocusTimer.tryParse(x.timer);
+      any = true;
+    }
+    return any;
+  }
+
   void pauseFocus({DateTime? at}) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null || f.end == null) return;
     final now = at ?? DateTime.now();
@@ -1885,6 +1933,7 @@ class AppStore extends ChangeNotifier {
 
   /// Carries on after a pause, or starts the round waiting after a break.
   void resumeFocus({DateTime? at}) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null || f.end != null) return;
     final now = at ?? DateTime.now();
@@ -1897,6 +1946,7 @@ class AppStore extends ChangeNotifier {
 
   /// Five more minutes on this round or break.
   void addFocusTime([Duration more = const Duration(minutes: 5)]) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null) return;
     f.length += more;
@@ -1910,6 +1960,7 @@ class AppStore extends ChangeNotifier {
 
   /// Ends a break early and starts the next round.
   void skipBreak({DateTime? at}) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null) return;
     final now = at ?? DateTime.now();
@@ -1927,6 +1978,7 @@ class AppStore extends ChangeNotifier {
   }
 
   void stopFocus({DateTime? at}) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null) return;
     _creditFocus(f, at ?? DateTime.now());
@@ -1936,6 +1988,7 @@ class AppStore extends ChangeNotifier {
 
   /// Moves the session to another step of the same task (null = the task as a whole).
   void setFocusStep(String? stepId) {
+    _autoTicks.clear();
     final f = focusNow;
     if (f == null) return;
     f.stepId = stepId;
@@ -1970,6 +2023,14 @@ class AppStore extends ChangeNotifier {
     });
     f.carry = secs;
     if (any) {
+      final newDay = !t.worked.contains(dayKey(until));
+      // Kept while the timer moves on by itself, so it can be taken back (see [_rewindFocus]).
+      final log = _focusCredits;
+      if (log != null) {
+        parts.forEach((k, s) {
+          if (s ~/ 60 > 0) log.add((t.id, k, s ~/ 60, newDay && k == dayKey(until)));
+        });
+      }
       t.worked.add(dayKey(until));
       changed(task: t);
     }
@@ -1981,6 +2042,17 @@ class AppStore extends ChangeNotifier {
   void applyModePick(String id, DateTime at) {
     if (id != everythingId && data.mode(id) == null) return;
     chooseMode(automaticMode == id ? null : id, until: nextScheduleChange(data.modeSchedule, at));
+  }
+
+  /// Item 108: buttons pressed on the Focus timer widget, in order. Review fix: the app may
+  /// already have moved the timer on past the first press (it was opened, or a round ended while
+  /// it sat in the background), so that is undone first and the presses apply at their own times.
+  void applyFocusOps(List<({String op, DateTime at, String? task, String? step})> ops) {
+    if (ops.isEmpty) return;
+    _rewindFocus(ops.first.at);
+    for (final o in ops) {
+      applyFocusOp(o.op, o.at, taskId: o.task, stepId: o.step);
+    }
   }
 
   /// Item 108: one button pressed on the Focus timer widget at [at], with the timer first moved
@@ -2035,6 +2107,10 @@ class AppStore extends ChangeNotifier {
 
   // --- Item 102: focus modes ---
 
+  /// Review fix: this install's key in the mode log (device-only, made up on first start).
+  String deviceKey =
+      'd${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}${Random().nextInt(1 << 30).toRadixString(36)}';
+
   /// A mode picked by hand on this device (device-only; [AppData.modeChoice] is for every device).
   ModeChoice? deviceModeChoice;
 
@@ -2065,6 +2141,9 @@ class AppStore extends ChangeNotifier {
   /// What the mode would be without a hand choice: a place or event's, else the schedule's.
   String automaticMode = everythingId;
 
+  DateTime? _eventsFetched;
+  List<CalendarEvent> _eventsCache = const [];
+
   bool get _modesByPlace => data.modes.any((m) => m.places.isNotEmpty);
   bool get _modesByEvent => data.modes.any((m) => m.events.isNotEmpty);
 
@@ -2093,17 +2172,24 @@ class AppStore extends ChangeNotifier {
       }
       if (_modesByEvent && Native.supported) {
         try {
-          final evs = await Native.events(
-              now.subtract(const Duration(days: 30)), now.add(const Duration(minutes: 1)), data.eventCalendars);
+          // Review fix: the calendar is read at most every 30 minutes (or when the app comes
+          // back), for the half hour ahead; the 5-minute looks pick from that.
+          final fetched = _eventsFetched;
+          if (force || fetched == null || now.difference(fetched) >= const Duration(minutes: 30)) {
+            _eventsCache = await Native.events(
+                now.subtract(const Duration(days: 30)), now.add(const Duration(minutes: 31)), data.eventCalendars);
+            _eventsFetched = now;
+          }
           eventsNow = [
-            for (final e in evs)
-              (
-                e.id,
-                e.title,
-                e.start,
-                // An all-day event (or one from older native code) without a real end lasts the day.
-                e.end.isAfter(e.start) ? e.end : DateTime(e.start.year, e.start.month, e.start.day + 1),
-              ),
+            for (final e in _eventsCache)
+              if (!e.start.isAfter(now.add(const Duration(minutes: 1))))
+                (
+                  e.id,
+                  e.title,
+                  e.start,
+                  // An all-day event (or one from older native code) without a real end lasts the day.
+                  e.end.isAfter(e.start) ? e.end : DateTime(e.start.year, e.start.month, e.start.day + 1),
+                ),
           ];
         } catch (e) {
           debugPrint('mode events: $e');
@@ -2220,7 +2306,8 @@ class AppStore extends ChangeNotifier {
   /// the app was closed is filled in from the schedule (or the end of a hand choice). Returns
   /// whether the log changed.
   bool _logMode(String id, String how, DateTime now) {
-    final open = data.modeLog.where((l) => l.end == null).toList();
+    // Review fix: only this device's open stretch; another device's mode is its own business.
+    final open = data.modeLog.where((l) => l.end == null && modeLogMine(l, deviceKey)).toList();
     // No modes, no statistics to keep (and nothing written on a plain start-up).
     if (data.modes.isEmpty) {
       for (final l in open) {
@@ -2260,11 +2347,11 @@ class AppStore extends ChangeNotifier {
           start = s;
           break;
         }
-        final l = ModeLog.open(mid, s, mid == everythingId ? 'none' : 'schedule')..end = e;
+        final l = ModeLog.open(mid, s, mid == everythingId ? 'none' : 'schedule', device: deviceKey)..end = e;
         data.modeLog.add(l);
       }
     }
-    data.modeLog.add(ModeLog.open(id, start, how));
+    data.modeLog.add(ModeLog.open(id, start, how, device: deviceKey));
     final cutoff = now.subtract(const Duration(days: 366));
     data.modeLog.removeWhere((l) => l.end != null && l.end!.isBefore(cutoff));
     return true;
@@ -2286,7 +2373,7 @@ class AppStore extends ChangeNotifier {
     if (modeNow.peek == on) return;
     modeNow.peek = on;
     if (on) {
-      final open = data.modeLog.where((l) => l.end == null).lastOrNull;
+      final open = data.modeLog.where((l) => l.end == null && modeLogMine(l, deviceKey)).lastOrNull;
       if (open != null) {
         open.peeks++;
         _markDirty();
@@ -2380,11 +2467,33 @@ class AppStore extends ChangeNotifier {
   }
 
   /// The tag filter without tags no task has any more (deleted, renamed on another device).
+  /// Review fix: worked out once per change rather than once per task shown (the lists call it
+  /// for every task they check).
   Set<String> get liveTagFilter {
     if (tagFilter.isEmpty) return tagFilter;
-    final keys = {for (final x in tagsInUse(data)) tagKey(x.tag)};
-    return {for (final f in tagFilter) if (f == untaggedFilter || keys.contains(tagKey(f))) f};
+    final key = '${identityHashCode(data)}/${data.updatedAt.microsecondsSinceEpoch}/${tagFilter.join('\n')}';
+    if (key == _liveTagKey && _liveTags != null) return _liveTags!;
+    final keys = tagKeysInUse;
+    _liveTagKey = key;
+    return _liveTags = {for (final f in tagFilter) if (f == untaggedFilter || keys.contains(tagKey(f))) f};
   }
+
+  String? _liveTagKey;
+  Set<String>? _liveTags;
+
+  /// The keys of every tag on an open or ticked-off task (worked out once per change).
+  Set<String> get tagKeysInUse {
+    final key = '${identityHashCode(data)}/${data.updatedAt.microsecondsSinceEpoch}';
+    if (key == _tagKeysKey && _tagKeys != null) return _tagKeys!;
+    _tagKeysKey = key;
+    return _tagKeys = {
+      for (final t in data.allTasks)
+        for (final x in t.tags) tagKey(x),
+    };
+  }
+
+  String? _tagKeysKey;
+  Set<String>? _tagKeys;
 
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
