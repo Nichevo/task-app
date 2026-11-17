@@ -15,6 +15,9 @@ const releases = [
     'The Day plan\'s "To plan" tray has the tag filter too (the same one as the list, board and matrix), and the steps you open under a task follow it.',
     'Search finds step tags, and Settings, Tags renames and deletes them on steps as well.',
   ]),
+  Release('1.12.15', 'November 2026', [
+    'Work meetings from a photo: another fix for "Could not read the photo" on Android. The photo is now read exactly as "Photo of a list" reads one.',
+  ]),
   Release('1.12.14', 'November 2026', [
     'Work meetings from a photo: fixed "Could not read the photo" on Android when importing work meetings.',
   ]),
