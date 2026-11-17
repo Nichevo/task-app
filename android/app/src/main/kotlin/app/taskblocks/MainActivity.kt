@@ -11,7 +11,6 @@ import android.media.ExifInterface
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
-import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -171,14 +170,35 @@ class MainActivity : FlutterActivity() {
         }
         val out = File(cacheDir, "work_screen.jpg")
         FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
-        val text = Tasks.await(TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(InputImage.fromBitmap(bmp, 0)))
-        val words = ArrayList<Map<String, Any>>()
-        for (block in text.textBlocks) for (line in block.lines) for (el in line.elements) {
-          val r = el.boundingBox ?: continue
-          words.add(mapOf("t" to el.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+        val w = bmp.width
+        val h = bmp.height
+        bmp.recycle()
+        // Read on the main thread from the upright file, the same way as "photo of a list"
+        // (ML Kit called from a plain background thread failed inside the library).
+        runOnUiThread {
+          try {
+            TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                .process(InputImage.fromFilePath(this, Uri.fromFile(out)))
+                .addOnSuccessListener { text ->
+                  val words = ArrayList<Map<String, Any>>()
+                  for (block in text.textBlocks) for (line in block.lines) {
+                    val els = line.elements
+                    if (els.isEmpty()) {
+                      val r = line.boundingBox ?: continue
+                      words.add(mapOf("t" to line.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+                    }
+                    for (el in els) {
+                      val r = el.boundingBox ?: continue
+                      words.add(mapOf("t" to el.text, "l" to r.left, "top" to r.top, "r" to r.right, "b" to r.bottom))
+                    }
+                  }
+                  result.success(mapOf("path" to out.absolutePath, "width" to w, "height" to h, "words" to words))
+                }
+                .addOnFailureListener { e -> result.error("readScreen", e.message, null) }
+          } catch (e: Exception) {
+            result.error("readScreen", e.message, null)
+          }
         }
-        val reply = mapOf("path" to out.absolutePath, "width" to bmp.width, "height" to bmp.height, "words" to words)
-        runOnUiThread { result.success(reply) }
       } catch (e: Exception) {
         runOnUiThread { result.error("readScreen", e.message, null) }
       }

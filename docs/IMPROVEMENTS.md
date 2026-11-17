@@ -1613,3 +1613,7 @@ view with the phone and read it on the device.
 - Settings, Day plan: import again or remove all.
 - Not done: tentative (striped) meetings are not told apart.
 - Tests: test/work_meetings_test.dart (a drawn fake Outlook week).
+- Fix (1.12.14): on Android, ML Kit called with `Tasks.await` from a plain background thread
+  failed inside the library (a null field read), so every import said "Could not read the
+  photo". The photo is still turned upright off the main thread, but is now read from the saved
+  file on the main thread with listeners, as the "photo of a list" import does.
