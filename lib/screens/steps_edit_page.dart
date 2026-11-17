@@ -7,7 +7,9 @@ import '../gantt.dart';
 import '../models.dart';
 import '../step_bulk.dart';
 import '../store.dart';
+import '../tags.dart';
 import '../widgets/step_links.dart';
+import '../widgets/tag_widgets.dart';
 import '../widgets/task_burn_down.dart';
 import 'settings_page.dart' show askText, remindOptions;
 import 'task_page.dart' show TaskPage;
@@ -331,7 +333,20 @@ class _StepsEditPageState extends State<StepsEditPage> {
 
   Future<void> _addStep() async {
     final name = await askText(context, 'New step');
-    if (name != null && name.trim().isNotEmpty) _do(() => store.addStep(task, name.trim()));
+    if (name != null && name.trim().isNotEmpty) _do(() => store.addStep(task, name.trim(), readTags: true));
+  }
+
+  /// Item 112: tags for [steps] (one step from its row, or all the ticked ones). One Undo step.
+  Future<void> _setTags(List<TaskStep> steps) async {
+    final before = snapshotSteps(task);
+    final was = [for (final s in task.steps) s.tags.join('\n')].join('\t');
+    await showStepTagsSheet(context, store, task, steps);
+    if (!mounted) return;
+    if ([for (final s in task.steps) s.tags.join('\n')].join('\t') != was) {
+      _undo.add(before);
+      if (_undo.length > 50) _undo.removeAt(0);
+    }
+    setState(() {});
   }
 
   Future<void> _more(List<TaskStep> steps) async {
@@ -662,6 +677,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
         if (_showStage) (Icons.view_kanban_outlined, 'Stage', () => _setStage(sel)),
         (Icons.notifications_outlined, 'Reminder', () => _setReminder(sel)),
         (Icons.percent, 'Progress', () => _setProgress(sel)),
+        (Icons.tag, 'Tags', () => _setTags(sel)),
         (Icons.more_horiz, 'More', () => _more(sel)),
       ];
 
@@ -863,6 +879,16 @@ class _StepsEditPageState extends State<StepsEditPage> {
                 ),
               if (_linksText(s) case final links?)
                 Text(links, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              InkWell(
+                onTap: () => _setTags([s]),
+                child: Text(
+                  s.tags.isEmpty ? '+ tag' : tagLine(s.tags),
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: s.tags.isEmpty ? scheme.onSurfaceVariant.withValues(alpha: 0.7) : scheme.primary,
+                      ),
+                ),
+              ),
             ]),
           ),
         ),
@@ -1036,6 +1062,7 @@ class _StepsEditPageState extends State<StepsEditPage> {
                 chip(stepIsLinked(s) ? Icons.link : Icons.add_link, stepLinkLabel(s, data, within: task) ?? 'Link',
                     !stepIsLinked(s),
                     () => _linkMenu(s)),
+                chip(Icons.tag, s.tags.isEmpty ? 'Tag' : tagLine(s.tags), s.tags.isEmpty, () => _setTags([s])),
               ]),
             ]),
           ),

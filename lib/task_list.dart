@@ -79,7 +79,7 @@ List<String> searchTerms(String query) {
 String searchText(Task t, [AppData? data]) => [
       t.title,
       t.notes,
-      for (final s in t.steps) s.title,
+      for (final s in t.steps) ...[s.title, for (final x in s.tags) '#$x'],
       if (data?.category(t.categoryId) case final c?) c.name,
       for (final x in t.tags) '#$x',
       t.waitingOn ?? '',

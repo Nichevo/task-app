@@ -26,6 +26,7 @@ import 'settings_page.dart' show askText, askLines, remindOptions;
 import 'focus_page.dart';
 import 'starred_page.dart' show pickTask;
 import 'steps_edit_page.dart';
+import '../tags.dart';
 import '../widgets/tag_widgets.dart';
 
 /// Edit a task's name, notes and due date. Changes save as you go.
@@ -82,7 +83,7 @@ class _TaskPageState extends State<TaskPage> {
   void _addStep() {
     final text = _newStep.text.trim();
     if (text.isEmpty) return;
-    setState(() => widget.store.addStep(task, text));
+    setState(() => widget.store.addStep(task, text, readTags: true));
     _newStep.clear();
     _newStepFocus.requestFocus();
   }
@@ -131,6 +132,10 @@ class _TaskPageState extends State<TaskPage> {
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'note'),
               child: Text(s.note.isEmpty ? 'Add a note' : 'Edit the note'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'tags'),
+              child: Text(s.tags.isEmpty ? 'Add a tag' : 'Change its tags (${tagLine(s.tags)})'),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(c, 'plan'),
@@ -202,6 +207,9 @@ class _TaskPageState extends State<TaskPage> {
         if (mounted) setState(() {});
       case 'dayplan':
         if (await showPlanTimeSheet(context, widget.store, task, step: s) && mounted) setState(() {});
+      case 'tags':
+        await showStepTagsSheet(context, widget.store, task, [s]);
+        if (mounted) setState(() {});
       case 'note':
         final note = await askText(context, 'Note for "${s.title}"', initial: s.note);
         if (note != null) setState(() => widget.store.setStepNote(task, s, note));
@@ -323,6 +331,16 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   AppData get data => widget.store.data;
+
+  /// A step's line under its name, with its tags (item 112) as chips before it.
+  Widget _stepSubtitle(TaskStep s, List<String> parts) {
+    final line = parts.isEmpty ? null : Text(parts.join(' · '));
+    if (s.tags.isEmpty) return line!;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(padding: const EdgeInsets.only(top: 2, bottom: 2), child: StepTagChips(step: s)),
+      ?line,
+    ]);
+  }
 
   void _update(VoidCallback change) {
     setState(change);
@@ -736,9 +754,10 @@ class _TaskPageState extends State<TaskPage> {
                         !task.boardSteps.contains(s) &&
                         s.dueAt == null &&
                         s.note.isEmpty &&
-                        s.carried == null
+                        s.carried == null &&
+                        s.tags.isEmpty
                     ? null
-                    : Text([
+                    : _stepSubtitle(s, [
                         if (s.carried != null) 'Was a task: ${carriedSummary(s, data, short: true).join(', ')}',
                         if (s.dueAt != null)
                           'Due ${dateTimeFmt.format(s.dueAt!)}${s.remindBefore != null && s.remindBefore! > 0 ? ' (${remindOptions[s.remindBefore] ?? '${s.remindBefore} min before'})' : ''}',
@@ -746,7 +765,7 @@ class _TaskPageState extends State<TaskPage> {
                         ?stepLinkLabel(s, data, within: task),
                         if (task.boardSteps.contains(s)) 'Board: ${data.stage(s.stageId)?.name ?? '?'}',
                         if (s.note.isNotEmpty) s.note,
-                      ].join(' · ')),
+                      ]),
                 onTap: () => _stepMenu(s),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   if (s.dueAt != null && !s.done)

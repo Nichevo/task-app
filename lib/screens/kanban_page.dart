@@ -251,6 +251,12 @@ class _KanbanPageState extends State<KanbanPage> {
   /// The same for a step on the board.
   String? _stepColumn(TaskStep st) => (data.stage(st.stageId) ?? data.stages.firstOrNull)?.id;
 
+  /// Item 112: [t]'s steps on the board that pass the tag filter (all of them while searching).
+  List<TaskStep> _shownSteps(Task t) {
+    final f = _searching ? const <String>{} : store.liveTagFilter;
+    return f.isEmpty ? t.boardSteps : [for (final st in t.boardSteps) if (stepPassesTagFilter(t, st, f)) st];
+  }
+
   bool _unfolded(Task t) => store.boardShowSteps != _flipped.contains(t.id);
 
   bool get _anySteps => data.boardTasks.any((t) => t.boardSteps.isNotEmpty);
@@ -625,7 +631,7 @@ class _KanbanPageState extends State<KanbanPage> {
     final groups = [
       for (final t in visible)
         if (_unfolded(t) && _columnOf(t) != s.id)
-          if (t.boardSteps.where((st) => _stepColumn(st) == s.id).toList() case final steps when steps.isNotEmpty)
+          if (_shownSteps(t).where((st) => _stepColumn(st) == s.id).toList() case final steps when steps.isNotEmpty)
             (t, steps),
     ];
     final children = <Widget>[
@@ -635,7 +641,7 @@ class _KanbanPageState extends State<KanbanPage> {
       for (final t in tasks) ...[
         _card(t, s, now, wide: wide),
         if (_unfolded(t))
-          for (final st in t.boardSteps)
+          for (final st in _shownSteps(t))
             // One column at a time: show all of its steps under it, with their stage.
             if (!wide || _stepColumn(st) == s.id) _stepCard(t, st, s, now, wide: wide, under: true),
       ],
@@ -662,8 +668,8 @@ class _KanbanPageState extends State<KanbanPage> {
     const label = 150.0;
     final colW = max(_minColumn, (width - label - 16) / stages.length);
     final total = label + colW * stages.length + 16;
-    final withSteps = visible.where((t) => t.boardSteps.isNotEmpty).toList();
-    final others = visible.where((t) => t.boardSteps.isEmpty).toList();
+    final withSteps = visible.where((t) => _shownSteps(t).isNotEmpty).toList();
+    final others = visible.where((t) => _shownSteps(t).isEmpty).toList();
     final scheme = Theme.of(context).colorScheme;
 
     Widget cell(KanbanStage s, List<Widget> items) => SizedBox(
@@ -711,7 +717,7 @@ class _KanbanPageState extends State<KanbanPage> {
           head: _LaneHead(task: t, color: _colour(t, now), onTap: () => _open(t)),
           items: (s) => [
             if (_columnOf(t) == s.id) _card(t, s, now, wide: true, lanes: true),
-            for (final st in t.boardSteps)
+            for (final st in _shownSteps(t))
               if (_stepColumn(st) == s.id) _stepCard(t, st, s, now, wide: true),
           ],
         ),
@@ -1024,6 +1030,12 @@ class _StepCard extends StatelessWidget {
                                 decoration: step.done ? TextDecoration.lineThrough : null,
                                 color: step.done ? ink.withValues(alpha: 0.6) : ink)),
                         Text(details, style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
+                        // Item 112: the step's own tags.
+                        if (step.tags.isNotEmpty)
+                          Text(tagLine(step.tags),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
                         ...rows,
                       ]),
                     ),

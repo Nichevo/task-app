@@ -9,9 +9,11 @@ import '../models.dart';
 import '../native.dart';
 import 'focus_page.dart';
 import '../store.dart';
+import '../tags.dart';
 import '../widgets/day_plan_add.dart';
 import '../widgets/mode_chip.dart' show modeIcon, showModeSheet;
 import '../widgets/plan_time_sheet.dart';
+import '../widgets/tag_widgets.dart' show TagFilterChip;
 import '../widgets/task_colors.dart';
 import '../widgets/task_where.dart' show editDrive;
 import '../work_meetings.dart' show workCalendarId;
@@ -66,7 +68,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
         out.add(null);
       }
       out.add(i);
-      if (i.step == null && _traySteps.contains(i.task.id)) out.addAll(trayStepsOf(data, i, _day, shown: tray));
+      if (i.step == null && _traySteps.contains(i.task.id)) out.addAll(_stepsOf(i, shown: tray));
     }
     return out;
   }
@@ -88,20 +90,40 @@ class _DayPlanPageState extends State<DayPlanPage> {
       ];
 
   /// How many open steps [i] can open to (0 for a step, or a task planned in full).
-  int _stepCount(TrayItem i) => i.step != null ? 0 : trayStepsOf(data, i, _day).length;
+  int _stepCount(TrayItem i) => i.step != null ? 0 : _stepsOf(i).length;
 
-  /// The tray narrowed to [_trayCat], and chips for the categories it holds.
-  List<TrayItem> _trayShown(List<TrayItem> tray) =>
-      _trayCat == null ? tray : tray.where((i) => (data.category(i.task.categoryId)?.id ?? '') == _trayCat).toList();
+  /// [i]'s steps to open in the tray, narrowed by the tag filter (item 112).
+  List<TrayItem> _stepsOf(TrayItem i, {Iterable<TrayItem> shown = const []}) {
+    final f = store.liveTagFilter;
+    return [
+      for (final x in trayStepsOf(data, i, _day, shown: shown))
+        if (stepPassesTagFilter(x.task, x.step!, f)) x,
+    ];
+  }
+
+  /// The tray narrowed to [_trayCat] and the tag filter (item 112: a step needs the tag itself
+  /// or on its task; a task shows when it or an open step has it).
+  List<TrayItem> _trayShown(List<TrayItem> tray) {
+    final f = store.liveTagFilter;
+    return [
+      for (final i in tray)
+        if ((_trayCat == null || (data.category(i.task.categoryId)?.id ?? '') == _trayCat) &&
+            (i.step == null ? passesTagFilter(i.task, f) : stepPassesTagFilter(i.task, i.step!, f)))
+          i,
+    ];
+  }
 
   Widget _trayCats(List<TrayItem> tray, {EdgeInsets padding = const EdgeInsets.fromLTRB(14, 0, 14, 6)}) {
     final ids = <String>{for (final i in tray) data.category(i.task.categoryId)?.id ?? ''};
-    if (ids.length < 2) return const SizedBox();
+    final tags = store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty;
+    if (ids.length < 2 && !tags) return const SizedBox();
     String name(String id) => id.isEmpty ? 'No category' : data.category(id)!.name;
     return SizedBox(
       height: 38,
       child: ListView(scrollDirection: Axis.horizontal, padding: padding, children: [
-        Padding(
+        // Item 112: the same tag filter as the list, board and matrix.
+        TagFilterChip(store: store),
+        if (ids.length >= 2) Padding(
           padding: const EdgeInsets.only(right: 6),
           child: ChoiceChip(
             visualDensity: VisualDensity.compact,
@@ -110,6 +132,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
             onSelected: (_) => setState(() => _trayCat = null),
           ),
         ),
+        if (ids.length >= 2)
         for (final id in [for (final c in data.categories) if (ids.contains(c.id)) c.id, if (ids.contains('')) ''])
           Padding(
             padding: const EdgeInsets.only(right: 6),
