@@ -79,7 +79,7 @@ Future<void> importWorkMeetings(BuildContext context, AppStore store) async {
 
 Future<void> _readAndCheck(BuildContext context, AppStore store, ImageSource source) async {
   final messenger = ScaffoldMessenger.of(context);
-  final file = await ImagePicker().pickImage(source: source, maxWidth: 3200, maxHeight: 3200, imageQuality: 95);
+  final file = await ImagePicker().pickImage(source: source, maxWidth: 2000, maxHeight: 2000, imageQuality: 90);
   if (file == null || !context.mounted) return;
   final nav = Navigator.of(context);
   showDialog<void>(
