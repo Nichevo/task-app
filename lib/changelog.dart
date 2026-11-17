@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.14', 'November 2026', [
+    'Work meetings from a photo: fixed "Could not read the photo" on Android when importing work meetings.',
+  ]),
   Release('1.12.13', 'November 2026', [
     'Work meetings from a photo: on the Day plan, tap the briefcase and take a photo of your Outlook calendar in Work week view (or pick a photo or screenshot). The app reads the days, the hours down the side and each meeting on this device, and nothing is sent anywhere. Check them on the next screen (fix a title or time, untick anything wrong), then Add.',
     'Work meetings show in blue on the Day plan and on the Today\'s plan widget. They aren\'t tasks (nothing to tick, no ageing), but they count as busy, so free time and clashes plan around them. All-day items such as "Annual leave" become an all-day note on that day. Cancelled meetings are left out.',
