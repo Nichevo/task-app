@@ -1647,3 +1647,7 @@ The owner asked for subtasks (steps) to have tags too, like the task tags from i
   and the step's tags; "Make into a step of…" gives the step the task's tags, and splitting it
   out again restores the step's tags.
 - Tests: test/step_tags_test.dart.
+- Fix 3 (1.12.17): the app would not open after 1.12.15. The likely cause is the shrinker
+  settings 1.12.15 added (`proguard-android-optimize.txt` plus android/app/proguard-rules.pro),
+  which can strip what plugins look up at start. Both removed, so the Android build settings are
+  back to those of 1.12.14, which opened fine. The 1.12.15 reading change stays.

@@ -91,6 +91,8 @@ void main() {
       File('${dir.path}/tasks.json').writeAsStringSync('{"active": [oops');
       final s = AppStore();
       await s.load();
+      // load() saves the device settings without waiting; let that finish before the folder goes.
+      await s.saveDeviceSettings();
       expect(s.data.active.map((t) => t.title), ['from the backup']);
       expect(s.loadProblem, contains('2026-11-11'));
       expect(dir.listSync().map((f) => f.uri.pathSegments.last), contains(startsWith('tasks-unreadable-')));
