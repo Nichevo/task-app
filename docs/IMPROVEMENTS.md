@@ -1651,3 +1651,8 @@ The owner asked for subtasks (steps) to have tags too, like the task tags from i
   settings 1.12.15 added (`proguard-android-optimize.txt` plus android/app/proguard-rules.pro),
   which can strip what plugins look up at start. Both removed, so the Android build settings are
   back to those of 1.12.14, which opened fine. The 1.12.15 reading change stays.
+- Fix 4 (1.12.18): still the same error on the phone with 1.12.17, so not threading or the
+  photo. The obfuscated class names in it (y92, tc2...) change from build to build, so they
+  come from our own R8 pass renaming ML Kit internals (its protobuf-style fields are read by
+  name). Release builds now have `isMinifyEnabled = false` and `isShrinkResources = false`
+  (no keep rules or optimize config, which is what stopped 1.12.15 opening).
