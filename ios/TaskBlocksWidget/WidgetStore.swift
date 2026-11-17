@@ -156,6 +156,8 @@ struct Snapshot {
   var baseLengths = [25, 5, 15, 4]
   /** Item 101: free time in working hours (the app's view, before calendar events). */
   var planFree: [(start: Date, end: Date)] = []
+  /** Item 111: work meetings read from a photo of Outlook (id, title, start, end). */
+  var work: [(id: String, title: String, start: Date, end: Date)] = []
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
@@ -435,6 +437,10 @@ struct Snapshot {
       return WPlan(
         id: str(o["id"]), step: o["step"] as? String, title: str(o["title"]), task: o["task"] as? String, at: at,
         end: date(o["end"]) ?? at, later: (o["later"] as? Bool) ?? false)
+    }
+    s.work = ((root["work"] as? [[String: Any]]) ?? []).compactMap { o in
+      guard let at = date(o["at"]) else { return nil }
+      return (str(o["id"]), str(o["title"]), at, date(o["end"]) ?? at)
     }
     s.planFree = ((root["planFree"] as? [[NSNumber]]) ?? []).compactMap { a in
       guard a.count == 2 else { return nil }

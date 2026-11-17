@@ -24,6 +24,7 @@ import 'places.dart';
 import 'reminders.dart';
 import 'tags.dart';
 import 'task_list.dart';
+import 'work_meetings.dart';
 
 /// Holds the app's data, saves it to disk on every change and syncs it with Dropbox.
 /// Item 74: the icons the top bar can show, in order. Each can be switched off in Settings.
@@ -1535,6 +1536,101 @@ class AppStore extends ChangeNotifier {
   /// Item 101: the Day plan's settings changed.
   void dayPlanChanged() => changed(settings: true);
 
+  // --- Work meetings from a photo (item 111) ---
+
+  void _workChanged() {
+    data.workUpdatedAt = DateTime.now().toUtc();
+    changed();
+  }
+
+  /// Adds what the check screen ticked: meetings the photo covers are replaced. Tasks linked to
+  /// a meeting that moved move with it; linked to one that went, they lose that planned time.
+  void importWork(ScreenRead read, List<WorkRow> rows) {
+    for (final r in rows) {
+      final was = r.was;
+      if (was == null) continue;
+      final link = data.linkedToMeeting(was.id);
+      if (link == null) continue;
+      final (t, slot) = link;
+      if (!r.keep) {
+        if (slot.doneAt == null) t.slots.remove(slot);
+        slot.meetingId = null;
+      } else if (r.change != WorkChange.gone) {
+        slot.start = r.meeting.start;
+        slot.minutes = max(5, r.meeting.end.difference(r.meeting.start).inMinutes);
+        slot.meetingId = r.meeting.id;
+      }
+      t.touch();
+    }
+    data.workMeetings = applyImport(data.workMeetings, read, rows);
+    _workChanged();
+  }
+
+  /// Plans [t] into work meeting [m]'s time, linked to it.
+  void linkMeeting(Task t, WorkMeeting m) {
+    final s = planTime(t, m.start, max(5, m.end.difference(m.start).inMinutes));
+    s.meetingId = m.id;
+    changed(task: t);
+  }
+
+  /// A new task for work meeting [m], planned into its time (in the Work category if there is one).
+  Task taskFromMeeting(WorkMeeting m) {
+    final work = data.categories.where((c) => c.name.toLowerCase() == 'work').firstOrNull;
+    final t = addTask(m.title,
+        due: m.start,
+        categoryId: work?.id,
+        notes: m.place == null ? '' : 'At ${m.place}',
+        plan: (at: m.start, minutes: max(5, m.end.difference(m.start).inMinutes)));
+    final s = t.slots.where((x) => x.start == m.start).firstOrNull;
+    s?.meetingId = m.id;
+    changed(task: t);
+    return t;
+  }
+
+  /// Takes the link off: the task's planned time goes unless it was ticked.
+  void unlinkMeeting(Task t, TimeSlot s) {
+    if (s.doneAt == null) t.slots.remove(s);
+    s.meetingId = null;
+    changed(task: t);
+  }
+
+  void removeWorkMeeting(WorkMeeting m) {
+    if (data.linkedToMeeting(m.id) case (final t, final s)) unlinkMeeting(t, s);
+    data.workMeetings.removeWhere((x) => x.id == m.id);
+    _workChanged();
+  }
+
+  /// Changes a meeting's title or times by hand; a linked task's time follows.
+  void updateWorkMeeting(WorkMeeting m, {String? title, DateTime? start, DateTime? end}) {
+    final link = data.linkedToMeeting(m.id);
+    if (title != null && title.trim().isNotEmpty) m.title = title.trim();
+    if (start != null) m.start = start;
+    if (end != null) m.end = end;
+    if (!m.end.isAfter(m.start)) m.end = m.start.add(const Duration(minutes: 15));
+    if (link != null) {
+      final (t, s) = link;
+      s.start = m.start;
+      s.minutes = m.end.difference(m.start).inMinutes;
+      s.meetingId = m.id;
+      t.touch();
+    }
+    data.workMeetings.sort((a, b) => a.start.compareTo(b.start));
+    _workChanged();
+  }
+
+  /// Forgets every imported meeting (links too).
+  void clearWork() {
+    for (final m in [...data.workMeetings]) {
+      if (data.linkedToMeeting(m.id) case (final t, final s)) {
+        if (s.doneAt == null) t.slots.remove(s);
+        s.meetingId = null;
+        t.touch();
+      }
+    }
+    data.workMeetings = [];
+    _workChanged();
+  }
+
   /// Moves planned times as [pushAfter] worked out; [back] puts them where they were (undo).
   void applyPlanMoves(List<PlanMove> moves, {bool back = false}) {
     for (final m in moves) {
@@ -2181,7 +2277,7 @@ class AppStore extends ChangeNotifier {
             _eventsFetched = now;
           }
           eventsNow = [
-            for (final e in _eventsCache)
+            for (final e in [..._eventsCache, ...data.workEvents(now.subtract(const Duration(days: 1)), now.add(const Duration(minutes: 1)))])
               if (!e.start.isAfter(now.add(const Duration(minutes: 1))))
                 (
                   e.id,

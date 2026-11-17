@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.13', 'November 2026', [
+    'Work meetings from a photo: on the Day plan, tap the briefcase and take a photo of your Outlook calendar in Work week view (or pick a photo or screenshot). The app reads the days, the hours down the side and each meeting on this device, and nothing is sent anywhere. Check them on the next screen (fix a title or time, untick anything wrong), then Add.',
+    'Work meetings show in blue on the Day plan and on the Today\'s plan widget. They aren\'t tasks (nothing to tick, no ageing), but they count as busy, so free time and clashes plan around them. All-day items such as "Annual leave" become an all-day note on that day. Cancelled meetings are left out.',
+    'Take a new photo whenever meetings change: it replaces the meetings from your last photo of the same days and hours, and the check screen shows what is new, moved or gone. Photos of future weeks are fine, and if the week is guessed wrong the arrows move it.',
+    'Link a meeting to a task: tap a meeting on the Day plan and pick "Link to a task…" or "Make a task from it". The task is planned into the meeting\'s time and shows as one block with a blue edge. If a later photo shows the meeting moved, the task moves with it.',
+    'Settings, Day plan: "Work meetings from a photo" imports again or removes them all.',
+  ]),
   Release('1.12.12', 'November 2026', [
     'Focus timer widget: a button you pressed on the widget now counts from when you pressed it, even if the round would have ended before you opened the app. Before, a pause on the widget could be lost and the whole round counted as focus time.',
     'The tag filter is much quicker with lots of tasks (it no longer looks through every ticked-off task once for each task in the list).',

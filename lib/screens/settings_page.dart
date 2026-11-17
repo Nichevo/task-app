@@ -24,6 +24,7 @@ import 'places_page.dart';
 import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
 import 'modes_page.dart';
+import 'work_import_page.dart' show importWorkMeetings;
 import '../tags.dart';
 import '../widgets/tag_widgets.dart';
 
@@ -674,6 +675,38 @@ class _SettingsPageState extends State<SettingsPage> {
         value: d.showEvents,
         onChanged: (v) => _set(() => d.showEvents = v),
       ),
+      if (Native.supported)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.work_outline),
+          title: const Text('Work meetings from a photo'),
+          subtitle: Text(widget.store.data.workMeetings.isEmpty
+              ? 'Photograph your Outlook calendar (Work week view) and its meetings show in blue'
+              : '${widget.store.data.workMeetings.length} saved. Tap to import again'),
+          trailing: widget.store.data.workMeetings.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Remove all work meetings?'),
+                        content: const Text('Tasks linked to them keep their place in the list but lose the planned time.'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Remove all')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) setState(widget.store.clearWork);
+                  },
+                  child: const Text('Remove all'),
+                ),
+          onTap: () async {
+            await importWorkMeetings(context, widget.store);
+            if (mounted) setState(() {});
+          },
+        ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Remind me when a planned time starts'),
