@@ -42,6 +42,11 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Item 111: the code shrinker (R8) renamed ML Kit's inner classes and broke its text
+            // reading in release builds ("Attempt to read from field ... on a null object
+            // reference"). The app is small enough to ship unshrunk.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

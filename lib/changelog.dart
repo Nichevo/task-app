@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.18', 'November 2026', [
+    'Work meetings from a photo: one more fix for "Could not read the photo" on Android. The Android app is now built without code shrinking, which was breaking the photo reader. The download is a little bigger.',
+  ]),
   Release('1.12.17', 'November 2026', [
     'Fixed: the Android app could close straight away when opened after updating to 1.12.15 or 1.12.16.',
   ]),
