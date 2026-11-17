@@ -65,6 +65,12 @@ class FakeScreen {
   }
 }
 
+void img(FakeScreen s, int i, (int, int, int) c) {
+  s.img.bytes[i] = c.$1;
+  s.img.bytes[i + 1] = c.$2;
+  s.img.bytes[i + 2] = c.$3;
+}
+
 String hm(DateTime d) => '${d.hour}:${d.minute.toString().padLeft(2, '0')}';
 
 void main() {
@@ -99,6 +105,47 @@ void main() {
     ]));
     expect(r.meetings.length, 9);
     expect(r.meetings.firstWhere((m) => m.meeting.title == 'Project review').meeting.place, 'Room 4');
+  });
+
+  test('a real photo: stray numbers, the taskbar, pale boxes with a hatched bar, an all-day strip', () {
+    final s = FakeScreen(tilt: 0.02)..headings([16, 17, 18, 19, 20]);
+    // A note in the all-day strip, just above the first hour label.
+    s.line('WFH', FakeScreen.colX + 60, FakeScreen.top - 14);
+    // A pale box (as light as the background) with a dark hatched bar down its left.
+    final x0 = (FakeScreen.colX + 3 * FakeScreen.colW + 6).round();
+    for (var y = s.yAt(10 * 60).round() + 1; y < s.yAt(10 * 60 + 45).round(); y++) {
+      for (var x = x0; x < x0 + 4; x++) {
+        final dy = (0.02 * (x - FakeScreen.colX)).round();
+        final i = ((y + dy) * FakeScreen.w + x) * 4;
+        final dark = (y + x) % 3 != 0;
+        img(s, i, dark ? (90, 105, 140) : (160, 170, 190));
+      }
+    }
+    s.line('Daily meeting', FakeScreen.colX + 3 * FakeScreen.colW + 16, s.yAt(10 * 60) + 4);
+    // The taskbar's clock and date, then keyboard keys, under the calendar.
+    s.line('9:42 p.m.', 900, 820);
+    s.line('17/11/2026', 900, 838);
+    s.word('4', 10, 870);
+    s.word('Retry', 300, 880);
+    final r = readWorkWeek(s.words, image: s.img, today: today);
+    expect(r.ok, true, reason: r.problem);
+    final titles = [for (final m in r.meetings) m.meeting.title];
+    expect(titles, isNot(contains('9:42 p.m.')));
+    expect(titles, isNot(contains('Retry')));
+    final wfh = r.meetings.firstWhere((m) => m.meeting.title == 'WFH').meeting;
+    expect(wfh.allDay, true);
+    final daily = r.meetings.firstWhere((m) => m.meeting.title == 'Daily meeting').meeting;
+    expect((hm(daily.start), hm(daily.end)), ('10:00', '10:45'));
+  });
+
+  test('the hour labels that agree win over a stray number, and an hour is never one line tall', () {
+    final s = FakeScreen()..headings([16, 17, 18, 19, 20]);
+    s.meeting(1, 14 * 60, 15 * 60, 'Planning');
+    s.word('0', 12, s.yAt(9 * 60) + 20);
+    s.word('1', 12, s.yAt(9 * 60) + 36);
+    final r = readWorkWeek(s.words, image: s.img, today: today);
+    final m = r.meetings.single.meeting;
+    expect((hm(m.start), hm(m.end)), ('14:00', '15:00'));
   });
 
   test('copes with a crooked photo and headings in the middle of their columns', () {

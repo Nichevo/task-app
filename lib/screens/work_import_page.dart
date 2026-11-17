@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -118,6 +120,20 @@ Future<void> _readAndCheck(BuildContext context, AppStore store, ImageSource sou
   if (retake == true && context.mounted) await _readAndCheck(context, store, source);
 }
 
+/// The words of the last photo read and its size, for "Copy what was read" (sent to get the
+/// reading fixed when it goes wrong).
+(int, int, List<OcrWord>)? lastPhotoWords;
+
+String _wordsJson() {
+  final l = lastPhotoWords;
+  if (l == null) return '';
+  return jsonEncode({
+    'w': l.$1,
+    'h': l.$2,
+    'words': [for (final x in l.$3) [x.text, x.l.round(), x.t.round(), x.r.round(), x.b.round()]],
+  });
+}
+
 /// Reads the photo at [path]: its words on the device, then the meetings from them and its colours.
 Future<ScreenRead> readPhoto(String path) async {
   final photo = await Native.readScreen(path);
@@ -130,6 +146,7 @@ Future<ScreenRead> readPhoto(String path) async {
   // Should the decoded size differ from the one the words were read at, scale the words.
   final sx = w / photo.width, sy = h / photo.height;
   final words = [for (final x in photo.words) OcrWord(x.text, x.l * sx, x.t * sy, x.r * sx, x.b * sy)];
+  lastPhotoWords = (w, h, words);
   final img = rgba == null ? null : RgbaImage(w, h, rgba.buffer.asUint8List());
   try {
     File(photo.path).deleteSync();
@@ -313,7 +330,20 @@ class _WorkImportPageState extends State<WorkImportPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('${_rows.where((r) => r.change != WorkChange.gone).length} work meetings'),
-        actions: [IconButton(tooltip: 'Take another photo', icon: const Icon(Icons.photo_camera_outlined), onPressed: () => Navigator.pop(context, true))],
+        actions: [
+          IconButton(tooltip: 'Take another photo', icon: const Icon(Icons.photo_camera_outlined), onPressed: () => Navigator.pop(context, true)),
+          if (lastPhotoWords != null)
+            PopupMenuButton<String>(
+              onSelected: (_) async {
+                await Clipboard.setData(ClipboardData(text: _wordsJson()));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Copied the words read from the photo, with where they are')));
+                }
+              },
+              itemBuilder: (_) => const [PopupMenuItem(value: 'copy', child: Text('Copy what was read'))],
+            ),
+        ],
       ),
       body: ListView(children: list),
       bottomNavigationBar: SafeArea(

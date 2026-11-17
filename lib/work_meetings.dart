@@ -206,10 +206,13 @@ int? _dayNumber(String text) {
 /// whether it said AM or PM (null when it didn't).
 (int, bool?)? _hourLabel(String text) {
   final s = text.toLowerCase().replaceAll('.', '').replaceAll(' ', '');
-  final m = RegExp(r'^(\d{1,2})(?::?([0-5]\d))?(am|pm|a|p)?$').firstMatch(s);
+  // Small grey labels photographed off a screen: O read for 0, I or l for 1.
+  final m = RegExp(r'^([0-9oil|]{1,2})(?::?([0-5o][0-9o]))?(am|pm|a|p)?$').firstMatch(s);
   if (m == null) return null;
-  var h = int.parse(m.group(1)!);
-  final min = int.tryParse(m.group(2) ?? '') ?? 0;
+  int digits(String x) => int.parse(x.replaceAll('o', '0').replaceAll(RegExp(r'[il|]'), '1'));
+  if (m.group(3) == null && m.group(2) == null && RegExp(r'[oil|]').hasMatch(m.group(1)!)) return null;
+  var h = digits(m.group(1)!);
+  final min = m.group(2) == null ? 0 : digits(m.group(2)!);
   final ap = m.group(3);
   if (h > 23) return null;
   bool? pm;
@@ -380,6 +383,108 @@ int _runEnd(RgbaImage img, int x, int y, int dir, {required int limit, required 
   return last;
 }
 
+double _lum((double, double, double) p) => p.$1 * 0.3 + p.$2 * 0.59 + p.$3 * 0.11;
+
+/// How dark the bar is around column [x] on row [y]: the mean brightness of five pixels.
+double? _barLum(RgbaImage img, int x, int y) {
+  var sum = 0.0;
+  for (var dx = -2; dx <= 2; dx++) {
+    final p = img.at(x + dx, y);
+    if (p == null) return null;
+    sum += _lum(p);
+  }
+  return sum / 5;
+}
+
+/// From (x, y) up or down ([dir] -1 or 1) along a meeting's left bar (solid or hatched), the last
+/// row it is still darker than halfway to [light]. It may drift a pixel sideways a row.
+int _barEnd(RgbaImage img, int x, int y, int dir, {required int limit, required double light, required int gaps}) {
+  final start = _barLum(img, x, y);
+  if (start == null) return y;
+  final edge = (start + light) / 2;
+  var last = y, miss = 0;
+  for (var yy = y + dir; (yy - y).abs() <= limit; yy += dir) {
+    double? best;
+    var bx = x;
+    for (final dx in const [0, -1, 1]) {
+      final v = _barLum(img, x + dx, yy);
+      if (v != null && (best == null || v < best - 3)) {
+        best = v;
+        bx = x + dx;
+      }
+    }
+    if (best == null) break;
+    if (best < edge) {
+      x = bx;
+      last = yy;
+      miss = 0;
+    } else if (++miss > gaps) {
+      break;
+    }
+  }
+  return last;
+}
+
+/// The leftmost dark column just left of (and a little into) a meeting's text at row [y]: the
+/// coloured bar Outlook draws down the side of a meeting. Null when there is none.
+(int, double)? _leftBar(RgbaImage img, double textL, int y, double lh) {
+  const lum = _lum;
+  final from = (textL - lh * 2).round(), to = (textL + lh * 0.5).round();
+  final ps = [for (var x = from; x <= to; x++) img.at(x, y)];
+  final known = [for (final p in ps) if (p != null) lum(p)];
+  if (known.isEmpty) return null;
+  final light = (known..sort()).last;
+  for (var i = 0; i < ps.length; i++) {
+    final p = ps[i];
+    if (p == null || light - lum(p) < 60) continue;
+    // A bar runs on down; a letter or an icon stops within a line.
+    // The darkest column of the bar, a few pixels wide.
+    var x = from + i;
+    for (var dx = 1; dx <= 3; dx++) {
+      final q = img.at(from + i + dx, y);
+      if (q != null && lum(q) < lum(img.at(x, y)!)) x = from + i + dx;
+    }
+    final here = img.at(x, y)!;
+    final below = img.at(x, y + (lh * 0.45).round());
+    if (below != null && _dist(below, here) < 30) return (x, light);
+  }
+  return null;
+}
+
+/// The straight line y = a + b·minutes that the most hour labels agree with (within a fifth of
+/// an hour), fitted through those. Only lines with an hour at least [minHourPx] tall count.
+(List<(double, double)>, double, double) _hourFit(List<(double, double)> pts, double minHourPx) {
+  if (pts.length < 2) return (pts, 0, 0);
+  List<(double, double)> best = const [];
+  var bestErr = double.infinity;
+  for (var i = 0; i < pts.length; i++) {
+    for (var j = i + 1; j < pts.length; j++) {
+      final dm = pts[j].$1 - pts[i].$1;
+      if (dm == 0) continue;
+      final b = (pts[j].$2 - pts[i].$2) / dm;
+      if (b * 60 < minHourPx) continue;
+      final a = pts[i].$2 - b * pts[i].$1;
+      final ins = <(double, double)>[];
+      var err = 0.0;
+      for (final p in pts) {
+        final e = (p.$2 - (a + b * p.$1)).abs();
+        if (e < b * 60 * 0.2) {
+          ins.add(p);
+          err += e;
+        }
+      }
+      if (ins.length > best.length || (ins.length == best.length && err < bestErr)) {
+        best = ins;
+        bestErr = err;
+      }
+    }
+  }
+  if (best.length < 2) return (best, 0, 0);
+  final (a, b) = _fit(best);
+  if (b * 60 < minHourPx) return (best, 0, 0);
+  return (best, a, b);
+}
+
 /// Reads an Outlook calendar photographed in Work week (or Day, or Week) view: the column dates
 /// from the headings, the hours from the labels down the left, and each meeting from where
 /// its text sits (with its length from its coloured box in [image], when given).
@@ -457,20 +562,33 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
 
   // 2. The hour labels down the left, under the headings: lines left of the first heading
   // that read as a time (meeting text can be there too when headings are centred).
+  // The taskbar under the calendar (its date, "17/11/2026") and anything below it (the
+  // keyboard, the desk) is not the calendar.
+  var gridBottom = double.infinity;
+  for (final w in words) {
+    if (w.t > headerBottom && RegExp(r'^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$').hasMatch(w.text.trim())) {
+      // The clock sits on the line above the date.
+      gridBottom = min(gridBottom, w.t - w.h * 1.6);
+    }
+  }
+  words = [for (final w in words) if (w.b < gridBottom + w.h * 0.6 || w.t < headerBottom) w];
   final gutterWords = <OcrWord>[];
-  final labels = <(double, int, bool?, double)>[]; // top, minutes, pm, right edge
+  var labels = <(double, int, bool?, double, bool, double)>[]; // top, minutes, pm, right edge, AM/PM or ":" written, height
   for (final line in _lines([for (final w in words) if (w.cx < lefts.first && w.t > headerBottom) w])) {
     final hl = _hourLabel(line.text);
     if (hl == null) continue;
-    labels.add((line.t, hl.$1, hl.$2, line.r));
+    labels.add((line.t, hl.$1, hl.$2, line.r, hl.$2 != null || line.text.contains(':'), line.h));
     gutterWords.addAll(line.words);
   }
+  // A lone number is a weak sign (a key on the keyboard, a stray mark): when the labels say
+  // AM and PM, only those count.
+  if (labels.where((x) => x.$5).length >= 2) labels = [for (final x in labels) if (x.$5) x];
   labels.sort((a, b) => a.$1.compareTo(b.$1));
   // Labels without AM or PM in a 12-hour day: count on past noon when they start again.
   final anyAmPm = labels.any((x) => x.$3 != null);
   final pts = <(double, double)>[];
   var prev = -1;
-  for (final (top, m0, pm, _) in labels) {
+  for (final (top, m0, pm, _, _, _) in labels) {
     var m = m0;
     if (pm == null && m < 13 * 60) {
       while (m <= prev && m + 12 * 60 < 24 * 60) {
@@ -482,22 +600,11 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
     prev = m;
     pts.add((m.toDouble(), top));
   }
-  // y = a + b·minutes, leaving out a label that doesn't fit the others (a misread).
-  var fitPts = pts;
-  var (a, b) = fitPts.length >= 2 ? _fit(fitPts) : (0.0, 0.0);
-  while (fitPts.length >= 3 && b > 0) {
-    var worst = 0, worstErr = 0.0;
-    for (var i = 0; i < fitPts.length; i++) {
-      final e = (fitPts[i].$2 - (a + b * fitPts[i].$1)).abs();
-      if (e > worstErr) {
-        worst = i;
-        worstErr = e;
-      }
-    }
-    if (worstErr < b * 60 * 0.2) break;
-    fitPts = [...fitPts]..removeAt(worst);
-    (a, b) = _fit(fitPts);
-  }
+  // y = a + b·minutes through the labels that agree with each other most (a misread label or
+  // a stray number is left out). An hour is always several lines of text tall.
+  final labelH = _median([for (final x in labels) x.$6]);
+  final minHourPx = max(labelH, hh) * 2.2;
+  final (fitPts, a, b) = _hourFit(pts, minHourPx);
   if (fitPts.length < 2 || b <= 0) {
     return ScreenRead(problem: "Couldn't read the times down the left side (8 AM, 9 AM…). Make sure they are in the photo.");
   }
@@ -565,9 +672,11 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
 
   // 4. The meetings: text in the columns, below the headings.
   final firstLabelTop = pts.isEmpty ? headerBottom : fitPts.first.$2;
+  // Without a taskbar to go by, nothing far past the last hour that could be read.
+  final lastY = a + b * (fitPts.last.$1 + 180);
   final inGrid = [
     for (final w in words)
-      if (w.t > headerBottom && w.cx > colL.first && w.cx < colR.last && !gutterWords.contains(w)) w,
+      if (w.t > headerBottom && w.t < lastY && w.cx > colL.first && w.cx < colR.last && !gutterWords.contains(w)) w,
   ];
   final meetings = <ReadMeeting>[];
   var skipped = 0;
@@ -579,7 +688,7 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
       if (texts.join().replaceAll(RegExp(r'[^A-Za-z0-9]'), '').length < 2) continue;
       final day = days[c];
       // All-day notes ("Annual leave") sit in a strip under the headings, above the hours.
-      if (bl.b < firstLabelTop - hourPx * 0.1 && bl.t < headerBottom + bl.lineH * 3) {
+      if (bl.t < firstLabelTop - bl.lineH * 0.5 && bl.t < headerBottom + bl.lineH * 3) {
         meetings.add(ReadMeeting(WorkMeeting(title: texts.join(' '), start: day, end: day, allDay: true)));
         continue;
       }
@@ -612,15 +721,29 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
             .fold<double?>(null, (m, v) => m == null || v < m ? v : m);
         double? bottom;
         if (image != null) {
-          final x = (bl.l - max(2.0, lh * 0.35)).round();
+          // Outlook draws a dark bar down the left of each meeting: follow it when there is
+          // one (a pale box can be too close to the background), else the box's own colour.
+          final bar = _leftBar(image, bl.l, rawY(bl.l, bl.lines.first.cy), lh);
+          final x = bar?.$1 ?? (bl.l - max(2.0, lh * 0.35)).round();
           final midY = bl.lines.first.cy;
           final y0 = rawY(x.toDouble(), midY);
-          final up = _runEnd(image, x, y0, -1, limit: (hourPx * 0.5).round() + 4, gaps: max(2, (lh * 0.12).round()));
-          final down = _runEnd(image, x, y0, 1, limit: (hourPx * 10).round(), gaps: max(2, (lh * 0.12).round()));
+          final gaps = max(2, (lh * 0.12).round());
+          final upLimit = (hourPx * 0.5).round() + 4, downLimit = (hourPx * 10).round();
+          final up = bar != null
+              ? _barEnd(image, x, y0, -1, limit: upLimit, light: bar.$2, gaps: gaps)
+              : _runEnd(image, x, y0, -1, limit: upLimit, gaps: gaps);
+          final down = bar != null
+              ? _barEnd(image, x, y0, 1, limit: downLimit, light: bar.$2, gaps: gaps)
+              : _runEnd(image, x, y0, 1, limit: downLimit, gaps: gaps);
           final topY = up - (y0 - midY);
+          // With a bar to go by, the box's top is the start (the text sits a little lower).
+          if (bar != null && topY < bl.t && bl.t - topY < hourPx * 0.25) start = snapMinutes(minuteAt(topY));
           final pad = (bl.t - topY).clamp(0.0, hourPx * 0.25);
           bottom = down - (y0 - midY) + 1 + pad;
-          if (next != null && bottom > next + lh * 0.2) {
+          // The same colour well above the text too: a pale box that can't be told from the
+          // background, so its pixels say nothing about its end.
+          if (y0 - up >= (hourPx * 0.5).round()) bottom = null;
+          if (bottom != null && next != null && bottom > next + lh * 0.2) {
             bottom = next;
             check = 'Check the end time';
           }

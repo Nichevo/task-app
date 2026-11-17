@@ -1656,3 +1656,24 @@ The owner asked for subtasks (steps) to have tags too, like the task tags from i
   come from our own R8 pass renaming ML Kit internals (its protobuf-style fields are read by
   name). Release builds now have `isMinifyEnabled = false` and `isShrinkResources = false`
   (no keep rules or optimize config, which is what stopped 1.12.15 opening).
+- Fix 5 (1.12.19), from the first real photo (Fold camera, Outlook Work week, 1.12.18 reading
+  now works): every timed meeting came out 23:55 to 00:00, WFH became 16:35 to 19:55 and the
+  taskbar (clock, date, ENG) was read as meetings. The hour fit had settled on an hour about one
+  line tall. Now:
+  - Hour labels accept O for 0 and I/l for 1; when two or more labels say AM/PM (or have a
+    colon), lone numbers are dropped (keyboard keys under the monitor).
+  - `_hourFit` is a consensus fit: the line most labels agree with (within a fifth of an hour),
+    and an hour must be at least 2.2 label heights tall. Then least squares on those labels.
+  - Anything from the taskbar date row (d/m/yyyy) up a line and a half down is dropped, and
+    nothing more than 3 hours past the last label read.
+  - All-day strip: a block whose top is half a line above the first label (and within three
+    lines of the headings).
+  - Meeting length: `_leftBar` finds Outlook's dark (often hatched) bar left of the text and
+    `_barEnd` follows it by brightness, drifting with the tilt; the bar's top is the start.
+    Without a bar, a box the same colour half an hour above its text is too pale to measure:
+    the next meeting or half an hour, marked to check.
+  - Android reads the upright copy (work_screen.jpg) with ML Kit, so the words' places and the
+    colours come from the same picture.
+  - "Copy what was read" on the check screen copies the words and their boxes as JSON.
+  - Tested on the owner's photo through a desktop OCR (not committed: it has colleagues' names);
+    tests in test/work_meetings_test.dart.
