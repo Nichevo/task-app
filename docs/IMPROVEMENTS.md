@@ -1556,7 +1556,7 @@ timer widget (item 102, part 4) already existed, but every button opened the app
   app's last view of the timer until it opens.
 - Tests: test/focus_widgets_test.dart.
 
-### 110: work meetings from a photo of Outlook (version 1.12.12)
+### 110: work meetings from a photo of Outlook (version 1.12.13)
 
 The owner's work calendar is Outlook on a locked-down work PC (no app, no publishing, no Outlook
 website on personal devices). Chosen after a brainstorm: photograph the calendar in Work week
