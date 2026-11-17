@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.19', 'November 2026', [
+    'Work meetings from a photo: the times are now read properly from the hour labels down the left, instead of every meeting landing at 23:55. Stray numbers (a keyboard key under the screen) no longer throw them off.',
+    'The Windows taskbar and anything below it (its clock, date and "ENG") are no longer read as meetings, and notes like "WFH" at the top of a day are all-day notes again.',
+    'Meeting lengths follow the coloured bar down the left of each Outlook meeting, so pale meetings no longer stretch to the bottom of the day.',
+    'On the check screen, the menu has "Copy what was read": paste it to Claude when a photo is read wrongly so the reading can be fixed.',
+  ]),
   Release('1.12.18', 'November 2026', [
     'Work meetings from a photo: one more fix for "Could not read the photo" on Android. The Android app is now built without code shrinking, which was breaking the photo reader. The download is a little bigger.',
   ]),

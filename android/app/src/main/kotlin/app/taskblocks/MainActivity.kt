@@ -173,12 +173,12 @@ class MainActivity : FlutterActivity() {
         val w = bmp.width
         val h = bmp.height
         bmp.recycle()
-        // Read the picked photo itself, exactly as "photo of a list" does (which works); ML Kit
-        // turns it upright, so its boxes match the upright copy saved above for the colours.
+        // Read the upright copy, so the words' places are exactly those of the colours read
+        // from it (no question of how the photo's turn is handled).
         runOnUiThread {
           try {
             TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                .process(InputImage.fromFilePath(this, Uri.fromFile(File(path))))
+                .process(InputImage.fromFilePath(this, Uri.fromFile(out)))
                 .addOnSuccessListener { text ->
                   try {
                     val words = ArrayList<Map<String, Any>>()
