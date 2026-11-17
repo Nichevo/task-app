@@ -551,7 +551,7 @@ class _DayPlanPageState extends State<DayPlanPage> {
   Widget _eventBlock(BuildContext context, EventBlock e, double hh) {
     final theme = Theme.of(context);
     final hm = DateFormat('HH:mm');
-    // Item 110: a work meeting from a photo is blue.
+    // Item 111: a work meeting from a photo is blue.
     final work = e.event.calendarId == workCalendarId;
     final fg = work ? Color.lerp(workBlue, theme.colorScheme.onSurface, 0.35)! : theme.colorScheme.onSurfaceVariant;
     return GestureDetector(

@@ -152,7 +152,7 @@ class MainActivity : FlutterActivity() {
   }
 
   /**
-   * Item 110: a photo of a calendar on a screen, read word by word with where each word is, for
+   * Item 111: a photo of a calendar on a screen, read word by word with where each word is, for
    * working out meeting times from their places. The photo is turned upright and saved again,
    * so the app can look at its colours with the same coordinates.
    */

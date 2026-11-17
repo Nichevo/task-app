@@ -146,7 +146,7 @@ final class NativeChannel {
     }
   }
 
-  /// Item 110: a photo of a calendar on a screen, read word by word with where each word is
+  /// Item 111: a photo of a calendar on a screen, read word by word with where each word is
   /// (pixels from the top left of the upright photo, which is saved again for its colours).
   private func readScreen(_ path: String?, _ result: @escaping FlutterResult) {
     guard let path, let image = UIImage(contentsOfFile: path) else {

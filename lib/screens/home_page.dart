@@ -845,7 +845,7 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || tagsInUse(data).isNotEmpty) && !_searching)
+        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty) && !_searching)
           _filterChips(),
         if (data.habits.isNotEmpty && !_searching && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
         if (breaking.isNotEmpty) _stillNeedsYou(breaking, now),

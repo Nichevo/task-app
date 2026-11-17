@@ -44,7 +44,7 @@ class CalendarEvent {
   final String? location;
 }
 
-/// Item 110: a photo of a screen as read by [Native.readScreen].
+/// Item 111: a photo of a screen as read by [Native.readScreen].
 class ScreenPhoto {
   const ScreenPhoto({required this.path, required this.width, required this.height, required this.words});
   final String path;
@@ -151,7 +151,7 @@ class Native {
     ];
   }
 
-  /// Item 110: the words in a photo of a screen and where each one is, read on the phone, with
+  /// Item 111: the words in a photo of a screen and where each one is, read on the phone, with
   /// the photo turned upright and saved again ([ScreenPhoto.path]) so its colours line up.
   static Future<ScreenPhoto> readScreen(String imagePath) async {
     final m = await _channel.invokeMapMethod<String, dynamic>('readScreen', {'path': imagePath});

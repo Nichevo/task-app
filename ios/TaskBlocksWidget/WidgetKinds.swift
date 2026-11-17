@@ -1118,7 +1118,7 @@ func planRows(_ snap: Snapshot, now: Date) -> [PlanRow] {
     return PlanRow(id: p.id + "/" + (p.step ?? "") + "/\(p.at.timeIntervalSince1970)", title: title, start: p.at, end: p.end, plan: p, task: t)
   }
   var events = Events.today(now).filter { !$0.allDay }.map { (id: "ev:" + $0.id, title: $0.title, start: $0.start, end: $0.end) }
-  // Item 110: work meetings read from a photo of Outlook, shown like calendar events.
+  // Item 111: work meetings read from a photo of Outlook, shown like calendar events.
   events += snap.work.filter { cal.isDate($0.start, inSameDayAs: now) }
   out += events.map { PlanRow(id: $0.id, title: $0.title, start: $0.start, end: $0.end) }
   // Free time still to come, less calendar events, 15 minutes or more.

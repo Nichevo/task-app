@@ -156,7 +156,7 @@ struct Snapshot {
   var baseLengths = [25, 5, 15, 4]
   /** Item 101: free time in working hours (the app's view, before calendar events). */
   var planFree: [(start: Date, end: Date)] = []
-  /** Item 110: work meetings read from a photo of Outlook (id, title, start, end). */
+  /** Item 111: work meetings read from a photo of Outlook (id, title, start, end). */
   var work: [(id: String, title: String, start: Date, end: Date)] = []
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */

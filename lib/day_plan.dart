@@ -469,7 +469,7 @@ DayLayout layoutDay(AppData data, DateTime day, {List<CalendarEvent> events = co
 (List<EventBlock>, List<CalendarEvent>) eventsOn(AppData data, DateTime day, List<CalendarEvent> events) {
   final d0 = DateTime(day.year, day.month, day.day), d1 = d0.add(const Duration(days: 1));
   final timed = <EventBlock>[], allDay = <CalendarEvent>[];
-  // Item 110: work meetings from photos show whatever the phone calendar setting, except one
+  // Item 111: work meetings from photos show whatever the phone calendar setting, except one
   // linked to a task: the task's planned time stands for it.
   final work = [
     for (final e in data.workEvents(d0, d1))

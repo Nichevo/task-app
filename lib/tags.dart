@@ -6,7 +6,9 @@ import 'models.dart';
 /// "coding" are one tag; a new tag that matches an old one takes the old spelling.
 
 /// "#Deep work " -> "Deep work"; empty when nothing is left.
-String cleanTag(String raw) => raw.trim().replaceFirst(RegExp(r'^#+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
+String cleanTag(String raw) => raw.trim().replaceFirst(_hashes, '').replaceAll(_spaces, ' ').trim();
+
+final _hashes = RegExp(r'^#+'), _spaces = RegExp(r'\s+');
 
 /// The key two tags are compared by.
 String tagKey(String tag) => cleanTag(tag).toLowerCase();
@@ -25,6 +27,7 @@ const untaggedFilter = '';
 bool passesTagFilter(Task t, Set<String> filter) {
   if (filter.isEmpty) return true;
   if (filter.contains(untaggedFilter) && t.tags.isEmpty) return true;
+  if (t.tags.isEmpty) return false;
   final keys = {
     for (final f in filter)
       if (f != untaggedFilter) tagKey(f),

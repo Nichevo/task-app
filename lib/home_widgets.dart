@@ -171,7 +171,7 @@ class HomeWidgets {
       'plan': dayPlanRows(data, now),
       // Free time in working hours on those days (the widgets take out calendar events).
       'planFree': dayPlanFree(data, now),
-      // Item 110: work meetings from a photo of Outlook, for Today's plan (not those a task stands for).
+      // Item 111: work meetings from a photo of Outlook, for Today's plan (not those a task stands for).
       'work': [
         for (final e in data.workEvents(DateTime(now.year, now.month, now.day), DateTime(now.year, now.month, now.day + 7)))
           if (!e.allDay && data.linkedToMeeting(e.id) == null)

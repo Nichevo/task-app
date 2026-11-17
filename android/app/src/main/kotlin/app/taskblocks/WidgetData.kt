@@ -582,7 +582,7 @@ object WidgetData {
           ))
     }
     val events = todayEvents(c).filter { it.due != null && it.due >= from }.toMutableList()
-    // Item 110: work meetings read from a photo of Outlook, drawn like calendar events.
+    // Item 111: work meetings read from a photo of Outlook, drawn like calendar events.
     val work = snap.root.optJSONArray("work") ?: JSONArray()
     for (i in 0 until work.length()) {
       val o = work.getJSONObject(i)

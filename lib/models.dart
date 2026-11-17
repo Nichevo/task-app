@@ -625,7 +625,7 @@ class TimeSlot {
 
   DateTime get end => start.add(Duration(minutes: minutes));
 
-  /// Item 110: the work meeting ([WorkMeeting.id]) this time is linked to; it moves with the
+  /// Item 111: the work meeting ([WorkMeeting.id]) this time is linked to; it moves with the
   /// meeting when a new photo shows it moved. Kept in [extra] so older versions keep it too.
   String? get meetingId => extra['meeting'] as String?;
   set meetingId(String? id) => id == null ? extra.remove('meeting') : extra['meeting'] = id;
@@ -2009,12 +2009,12 @@ class AppData {
   /// Item 102: the focus timer's lengths and Do not disturb choice.
   final FocusSettings focusSettings;
 
-  /// Item 110: work meetings read from photos of the Outlook calendar, oldest first, and when
+  /// Item 111: work meetings read from photos of the Outlook calendar, oldest first, and when
   /// they last changed (the newer list wins when two devices sync).
   List<WorkMeeting> workMeetings;
   DateTime workUpdatedAt;
 
-  /// Item 110: the work meetings as calendar events, for the Day plan and the widgets.
+  /// Item 111: the work meetings as calendar events, for the Day plan and the widgets.
   List<CalendarEvent> workEvents(DateTime from, DateTime to) => [
         for (final m in workMeetings)
           if (m.start.isBefore(to) && (m.allDay ? DateTime(m.start.year, m.start.month, m.start.day + 1) : m.end).isAfter(from)) m.toEvent(),
@@ -2022,7 +2022,7 @@ class AppData {
 
   WorkMeeting? workMeeting(String id) => workMeetings.where((m) => m.id == id).firstOrNull;
 
-  /// Item 110: the task and planned time linked to work meeting [id], if any.
+  /// Item 111: the task and planned time linked to work meeting [id], if any.
   (Task, TimeSlot)? linkedToMeeting(String id) {
     for (final t in active) {
       for (final s in t.slots) {

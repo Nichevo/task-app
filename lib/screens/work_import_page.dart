@@ -12,7 +12,7 @@ import '../store.dart';
 import '../work_meetings.dart';
 import 'starred_page.dart' show pickTask;
 
-/// Item 110: the blue work meetings are drawn in.
+/// Item 111: the blue work meetings are drawn in.
 const workBlue = Color(0xFF3F6FB5);
 
 /// Asks for a photo of the Outlook calendar, reads it and opens the check screen.

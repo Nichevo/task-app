@@ -1556,7 +1556,34 @@ timer widget (item 102, part 4) already existed, but every button opened the app
   app's last view of the timer until it opens.
 - Tests: test/focus_widgets_test.dart.
 
-### 110: work meetings from a photo of Outlook (version 1.12.13)
+### 110: second whole-app review fixes (version 1.12.12) ☑
+
+A review of 1.12.11 for bugs and wasted work (report only, then the owner asked for the fixes).
+
+- Focus timer widget presses: the app moved the timer on to "now" (on start, on resume, or as a
+  round ended in the background) before replaying the widget's presses, so a pause made before
+  the round ended was applied to the break and the whole round counted. `tickFocus` now keeps a
+  short journal of the timer moving on by itself (`_autoTicks`: the timer before and the minutes
+  it saved); `applyFocusOps` rewinds past the first press (`_rewindFocus`) and replays the presses
+  at their times. Anything pressed in the app clears the journal.
+- Tag filter: `liveTagFilter` ran `tagsInUse` (every open and ticked-off task) once per task the
+  list checked. It and the new `tagKeysInUse` are now worked out once per change (keyed on the
+  data and its `updatedAt`); `cleanTag` reuses its RegExps.
+- Mode history: `modeLog` is synced but the mode is per device (hand choice on this device,
+  place, event), so each sync closed the other device's open stretch and opened a new one. Each
+  entry now has a `dev` (`AppStore.deviceKey`, device settings, made on first start); `_logMode`
+  only closes its own, and `modeStats` / `noonModesFrom` count this device's entries plus older
+  ones without a device (`modeLogMine`).
+- `moveStepToStage` into the last stage now ticks steps linked to the step (item 106).
+- "Plan a time" sheet: the first free time now takes the phone's calendar events into account
+  (loaded after the sheet opens; the suggestion moves only if you haven't changed it).
+- Modes by event: `checkAutoModes` reads the calendar at most every 30 minutes (and on resume)
+  and picks the events happening now from that.
+- Not changed: free time on the Day plan still ignores tasks hidden by the mode or chips when
+  the hidden strip is off (that is how the setting is meant to work); the place check still takes
+  a location fix every 5 minutes while the app is open.
+- Tests: test/review_fixes_2_test.dart.
+### 111: work meetings from a photo of Outlook (version 1.12.13)
 
 The owner's work calendar is Outlook on a locked-down work PC (no app, no publishing, no Outlook
 website on personal devices). Chosen after a brainstorm: photograph the calendar in Work week
