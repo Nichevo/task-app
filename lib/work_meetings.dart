@@ -650,9 +650,7 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
       ));
     }
   }
-  meetings.sort((x, y) => x.meeting.allDay != y.meeting.allDay
-      ? (x.meeting.allDay ? -1 : 1)
-      : x.meeting.start.compareTo(y.meeting.start));
+  meetings.sort((x, y) => byDay(x.meeting, y.meeting));
 
   final double bottomY = image?.height.toDouble() ?? words.map((w) => w.b).fold<double>(0.0, (m, v) => max(m, v));
   return ScreenRead(
@@ -662,6 +660,14 @@ ScreenRead readWorkWeek(List<OcrWord> words, {RgbaImage? image, DateTime? today}
     toMinute: min(24 * 60, minuteAt(bottomY).ceil()),
     skipped: skipped,
   );
+}
+
+/// By day, a day's all-day notes first, then by start.
+int byDay(WorkMeeting a, WorkMeeting b) {
+  final d = a.day.compareTo(b.day);
+  if (d != 0) return d;
+  if (a.allDay != b.allDay) return a.allDay ? -1 : 1;
+  return a.start.compareTo(b.start);
 }
 
 // --- Adding them ---
@@ -719,9 +725,7 @@ List<WorkRow> compareImport(List<WorkMeeting> existing, ScreenRead read) {
   for (final o in left) {
     rows.add(WorkRow(o, WorkChange.gone, keep: false, was: o));
   }
-  rows.sort((x, y) => x.meeting.allDay != y.meeting.allDay
-      ? (x.meeting.allDay ? -1 : 1)
-      : x.meeting.start.compareTo(y.meeting.start));
+  rows.sort((x, y) => byDay(x.meeting, y.meeting));
   return rows;
 }
 
