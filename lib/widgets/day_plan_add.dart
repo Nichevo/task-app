@@ -174,7 +174,7 @@ class _AddAtSheetState extends State<_AddAtSheet> {
     final store = widget.store;
     if (_kind == AddKind.step) {
       final owner = _owner!;
-      final step = store.addStep(owner, title);
+      final step = store.addStep(owner, title, readTags: true);
       store.planTime(owner, _start, _minutes, step: step);
       Navigator.pop(context, (task: owner, step: step, title: title, start: _start));
     } else {

@@ -55,10 +55,42 @@ Future<void> showTaskTagsSheet(BuildContext context, AppStore store, Task task) 
   builder: (c) => _TaskTagsSheet(store: store, task: task),
 );
 
+/// Item 112: the same sheet for one or more steps of [task]. A tag ticked here goes on every one
+/// of [steps]; unticking takes it off all of them.
+Future<void> showStepTagsSheet(BuildContext context, AppStore store, Task task, List<TaskStep> steps) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (c) => _TaskTagsSheet(store: store, task: task, steps: steps),
+    );
+
+/// Item 112: a step's own tags as chips, for its row on the task page.
+class StepTagChips extends StatelessWidget {
+  const StepTagChips({super.key, required this.step});
+  final TaskStep step;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(spacing: 4, runSpacing: 2, children: [
+      for (final x in step.tags)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(8)),
+          child: Text('#$x', style: TextStyle(fontSize: 11.5, color: scheme.onSecondaryContainer)),
+        ),
+    ]);
+  }
+}
+
 class _TaskTagsSheet extends StatefulWidget {
-  const _TaskTagsSheet({required this.store, required this.task});
+  const _TaskTagsSheet({required this.store, required this.task, this.steps});
   final AppStore store;
   final Task task;
+
+  /// Item 112: tag these steps instead of the task.
+  final List<TaskStep>? steps;
 
   @override
   State<_TaskTagsSheet> createState() => _TaskTagsSheetState();
@@ -77,15 +109,33 @@ class _TaskTagsSheetState extends State<_TaskTagsSheet> {
     final text = _field.text;
     // Several at once: "meeting, coding" or "#meeting #coding".
     for (final part in text.split(RegExp(r'[,;]|\s(?=#)'))) {
-      widget.store.addTag(widget.task, part);
+      _set(part, true);
     }
     _field.clear();
     setState(() {});
   }
 
+  /// Puts [tag] on (or takes it off) the task, or every step being tagged.
+  void _set(String tag, bool on) {
+    final steps = widget.steps;
+    if (steps == null) {
+      on ? widget.store.addTag(widget.task, tag) : widget.store.removeTag(widget.task, tag);
+      return;
+    }
+    for (final st in steps) {
+      on ? widget.store.addStepTag(widget.task, st, tag) : widget.store.removeStepTag(widget.task, st, tag);
+    }
+  }
+
+  bool _has(String tag) {
+    final steps = widget.steps;
+    return steps == null ? hasTag(widget.task, tag) : steps.isNotEmpty && steps.every((st) => stepHasTag(st, tag));
+  }
+
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
+    final steps = widget.steps;
     final typed = tagKey(_field.text);
     final all = tagsInUse(widget.store.data);
     final shown = [
@@ -100,14 +150,21 @@ class _TaskTagsSheetState extends State<_TaskTagsSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tags for "${task.title}"',
+            steps == null
+                ? 'Tags for "${task.title}"'
+                : steps.length == 1
+                ? 'Tags for step "${steps.single.title}"'
+                : 'Tags for ${steps.length} steps',
             style: Theme.of(context).textTheme.titleMedium,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
-            'Words like meeting, brainstorming or coding. Filter by them above the list, the board and the matrix.',
+            steps == null
+                ? 'Words like meeting, brainstorming or coding. Filter by them above the list, the board and the matrix.'
+                : 'A step also counts as having its task\'s tags${task.tags.isEmpty ? '' : ' (${tagLine(task.tags)})'}. '
+                      'Filtering by a step\'s tag shows its task, and the step itself on the board and the Day plan.',
             style: TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor),
           ),
           const SizedBox(height: 12),
@@ -144,9 +201,9 @@ class _TaskTagsSheetState extends State<_TaskTagsSheet> {
                       FilterChip(
                         label: Text('#${x.tag}'),
                         tooltip: '${x.open} open task${x.open == 1 ? '' : 's'}',
-                        selected: hasTag(task, x.tag),
+                        selected: _has(x.tag),
                         onSelected: (on) {
-                          on ? widget.store.addTag(task, x.tag) : widget.store.removeTag(task, x.tag);
+                          _set(x.tag, on);
                           setState(() {});
                         },
                       ),
@@ -229,7 +286,8 @@ Future<void> showTagFilterSheet(BuildContext context, AppStore store) => showMod
             Text('Show tasks tagged', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'Pick one or more: a task shows when it has any of them. Used by the list, the board and the matrix.',
+              'Pick one or more: a task shows when it or one of its open steps has any of them. '
+              'Used by the list, the board, the matrix and the Day plan\'s "To plan" tray.',
               style: TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor),
             ),
             const SizedBox(height: 12),
@@ -310,7 +368,7 @@ class TagsPage extends StatelessWidget {
           return const Padding(
             padding: EdgeInsets.all(24),
             child: Text(
-              'No tags yet. Add them on a task\'s page (Tags), or type #word in the add box: '
+              'No tags yet. Add them on a task\'s page (Tags) or a step\'s menu, or type #word in the add box: '
               'a #word that isn\'t a category becomes a tag.',
             ),
           );
@@ -337,7 +395,7 @@ class TagsPage extends StatelessWidget {
                       context: context,
                       builder: (c) => AlertDialog(
                         title: Text('Delete #${x.tag}?'),
-                        content: Text('It comes off ${x.all} task${x.all == 1 ? '' : 's'}. The tasks stay.'),
+                        content: Text('It comes off ${x.all} task${x.all == 1 ? '' : 's'} and their steps. The tasks stay.'),
                         actions: [
                           TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
                           FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),

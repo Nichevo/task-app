@@ -974,6 +974,37 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  /// Item 112: adds a tag to step [s] of [t]; false if it was empty or already there.
+  bool addStepTag(Task t, TaskStep s, String raw) {
+    final tag = tagSpelling(data, raw);
+    if (tag == null || stepHasTag(s, tag)) return false;
+    s.tags.add(tag);
+    changed(task: t);
+    return true;
+  }
+
+  void removeStepTag(Task t, TaskStep s, String tag) {
+    final k = tagKey(tag);
+    s.tags.removeWhere((x) => tagKey(x) == k);
+    changed(task: t);
+  }
+
+  /// [a] then the tags of [b] not in [a].
+  static List<String> _joinTags(List<String> a, List<String> b) => [
+        ...a,
+        for (final x in b)
+          if (!a.any((y) => tagKey(y) == tagKey(x))) x,
+      ];
+
+  /// Renames tag key [k] to [target] in [tags]; true if it was there.
+  static bool _renameIn(List<String> tags, String k, String k2, String target) {
+    if (!tags.any((x) => tagKey(x) == k)) return false;
+    final at = tags.indexWhere((x) => tagKey(x) == k);
+    tags.removeWhere((x) => tagKey(x) == k || tagKey(x) == k2);
+    tags.insert(at.clamp(0, tags.length), target);
+    return true;
+  }
+
   /// Renames [from] to [to] on every task, open and ticked off. Renaming onto a tag that
   /// already exists merges the two.
   void renameTag(String from, String to) {
@@ -983,11 +1014,11 @@ class AppStore extends ChangeNotifier {
     // Merging into an existing tag keeps that tag's spelling.
     final target = k == k2 ? clean : (tagSpelling(data, clean) ?? clean);
     for (final t in data.allTasks) {
-      if (!t.tags.any((x) => tagKey(x) == k)) continue;
-      final at = t.tags.indexWhere((x) => tagKey(x) == k);
-      t.tags.removeWhere((x) => tagKey(x) == k || tagKey(x) == k2);
-      t.tags.insert(at.clamp(0, t.tags.length), target);
-      changed(task: t);
+      var hit = _renameIn(t.tags, k, k2, target);
+      for (final st in t.steps) {
+        if (_renameIn(st.tags, k, k2, target)) hit = true;
+      }
+      if (hit) changed(task: t);
     }
     if (tagFilter.any((f) => f != untaggedFilter && tagKey(f) == k)) {
       tagFilter
@@ -1001,9 +1032,12 @@ class AppStore extends ChangeNotifier {
   void deleteTag(String tag) {
     final k = tagKey(tag);
     for (final t in data.allTasks) {
-      if (!t.tags.any((x) => tagKey(x) == k)) continue;
+      final before = t.tags.length + t.steps.fold(0, (n, st) => n + st.tags.length);
       t.tags.removeWhere((x) => tagKey(x) == k);
-      changed(task: t);
+      for (final st in t.steps) {
+        st.tags.removeWhere((x) => tagKey(x) == k);
+      }
+      if (t.tags.length + t.steps.fold(0, (n, st) => n + st.tags.length) != before) changed(task: t);
     }
     if (tagFilter.any((f) => f != untaggedFilter && tagKey(f) == k)) {
       tagFilter.removeWhere((f) => f != untaggedFilter && tagKey(f) == k);
@@ -2583,8 +2617,11 @@ class AppStore extends ChangeNotifier {
     if (key == _tagKeysKey && _tagKeys != null) return _tagKeys!;
     _tagKeysKey = key;
     return _tagKeys = {
-      for (final t in data.allTasks)
+      for (final t in data.allTasks) ...[
         for (final x in t.tags) tagKey(x),
+        for (final st in t.steps)
+          for (final x in st.tags) tagKey(x),
+      ],
     };
   }
 
@@ -2666,8 +2703,12 @@ class AppStore extends ChangeNotifier {
 
   // --- Checklists ---
 
-  TaskStep addStep(Task t, String title) {
-    final s = TaskStep.create(title);
+  /// Adds a step to [t]. With [readTags] (typed by hand), "#words" in [title] become its tags
+  /// (item 112).
+  TaskStep addStep(Task t, String title, {bool readTags = false}) {
+    final typed = readTags ? takeStepTags(data, title) : null;
+    final s = TaskStep.create(typed?.title ?? title);
+    if (typed != null) s.tags.addAll(typed.tags);
     t.steps.add(s);
     if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
     changed(task: t);
@@ -2701,7 +2742,8 @@ class AppStore extends ChangeNotifier {
       ..categoryId = t.categoryId
       ..dueAt = s.dueAt
       ..remindBefore = s.dueAt == null ? null : s.remindBefore
-      ..notes = s.note;
+      ..notes = s.note
+      ..tags.addAll(_joinTags(t.tags, s.tags));
     final at = data.active.indexOf(t);
     data.active.insert(at < 0 ? data.active.length : at + 1, linked);
     s.taskId = linked.id;
@@ -2729,6 +2771,10 @@ class AppStore extends ChangeNotifier {
       ..dueAt = s.dueAt
       ..remindBefore = s.dueAt == null ? null : s.remindBefore
       ..splitFrom = t.id;
+    // Item 112: the step started with the task's tags; any changed since win.
+    n.tags
+      ..clear()
+      ..addAll(s.tags);
     if (n.notes.trim().isEmpty && s.note.isNotEmpty) n.notes = s.note;
     n.eventId ??= s.eventId;
     n.startAt ??= s.startAt;
@@ -2794,6 +2840,7 @@ class AppStore extends ChangeNotifier {
       ..note = t.notes.trim().length > 200 ? '${t.notes.trim().substring(0, 200)}…' : t.notes.trim()
       ..eventId = t.eventId
       ..carried = t.toJson();
+    step.tags.addAll(t.tags);
     if (parent.kanban && parent.stepsOnBoard && data.stages.isNotEmpty) {
       if (t.kanban && data.stage(t.stageId) != null) {
         step
@@ -2984,7 +3031,7 @@ class AppStore extends ChangeNotifier {
     final n = Task.create(s.title, source: TaskSource.step)
       ..categoryId = t.categoryId
       ..starred = t.starred
-      ..tags.addAll(t.tags)
+      ..tags.addAll(_joinTags(t.tags, s.tags))
       ..place = t.place
       ..placeLeave = t.placeLeave
       ..where = t.where

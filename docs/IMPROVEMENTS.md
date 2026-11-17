@@ -1617,3 +1617,27 @@ view with the phone and read it on the device.
   failed inside the library (a null field read), so every import said "Could not read the
   photo". The photo is still turned upright off the main thread, but is now read from the saved
   file on the main thread with listeners, as the "photo of a list" import does.
+
+### 112: tags on steps (version 1.12.16)
+
+The owner asked for subtasks (steps) to have tags too, like the task tags from item 107.
+
+- `TaskStep.tags` (JSON `tags` on the step, a list of strings without the "#"); same spelling
+  and case rules as task tags. `store.addStepTag` / `removeStepTag`; Settings > Tags counts,
+  renames and deletes them on steps too (`tagsInUse`, `tagSpelling`, `tagKeysInUse` look at
+  steps).
+- Adding: "Add a tag" / "Change its tags" in a step's menu on the task page (`showStepTagsSheet`,
+  the task tag sheet for one or more steps); "#words" typed into a new step (task page add box,
+  "Edit all steps" > Add a step, Day plan + step) become its tags (`takeStepTags`; numbers like
+  "#2" stay in the name; other ways of adding steps, such as templates and calendar events, are
+  left as they are). "Edit all steps": a "+ tag" line under each row (wide) or a Tag chip
+  (cards), and a Tags action for the ticked steps (one Undo). Tags show as chips under the step
+  on the task page and as "#tag" on board step cards.
+- Filtering: `passesTagFilter` lets a task through when an open step has a picked tag.
+  `stepPassesTagFilter` counts a step as having its own tags plus its task's ("No tag" = neither
+  has any); used for Kanban step cards and the Day plan "To plan" tray, which now has the shared
+  `TagFilterChip` beside its category chips. Search text includes step tags.
+- Carried along: repeats copy step tags; "Make into a linked task" gives the new task the task's
+  and the step's tags; "Make into a step of…" gives the step the task's tags, and splitting it
+  out again restores the step's tags.
+- Tests: test/step_tags_test.dart.

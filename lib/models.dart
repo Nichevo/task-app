@@ -386,6 +386,7 @@ class Task {
       for (final st in steps)
         TaskStep.create(st.title)
           ..note = st.note
+          ..tags.addAll(st.tags)
           ..remindBefore = st.remindBefore
           ..dueAt = st.dueAt == null || shift == null ? null : st.dueAt!.add(shift),
     ]);
@@ -935,11 +936,13 @@ class TaskStep {
     this.takesMinutes,
       this.progress,
       List<String>? afterIds,
+      List<String>? tags,
       List<StageMove>? moves,
       Map<String, dynamic>? extra})
       // ignore: prefer_initializing_formals
       : _done = done,
         afterIds = afterIds ?? [],
+        tags = tags ?? [],
         moves = moves ?? [],
         extra = extra ?? {};
 
@@ -949,7 +952,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep',
+    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep', 'tags',
   };
 
   final String id;
@@ -1016,6 +1019,10 @@ class TaskStep {
   /// those later moves this one later too (see pushSteps).
   final List<String> afterIds;
 
+  /// Item 112: its own tags, like [Task.tags] (without the "#"). A step also counts as having
+  /// its task's tags when filtering (see stepPassesTagFilter).
+  final List<String> tags;
+
   /// Done share for the chart: 1 when ticked, else [progress].
   double get share => done ? 1 : (progress ?? 0).clamp(0, 100) / 100;
 
@@ -1055,6 +1062,7 @@ class TaskStep {
         if (takesMinutes != null) 'takesMin': takesMinutes,
         if (progress != null) 'progress': progress,
         if (afterIds.isNotEmpty) 'after': afterIds,
+        if (tags.isNotEmpty) 'tags': tags,
       };
 
   factory TaskStep.fromJson(Map<String, dynamic> j) => TaskStep(
@@ -1076,6 +1084,7 @@ class TaskStep {
         takesMinutes: (j['takesMin'] as num?)?.toInt(),
         progress: (j['progress'] as num?)?.toInt(),
         afterIds: [for (final id in j['after'] as List? ?? []) id as String],
+        tags: [for (final x in j['tags'] as List? ?? []) if (x is String && x.trim().isNotEmpty) x],
         extra: unknownFields(j, _known),
       );
 }
