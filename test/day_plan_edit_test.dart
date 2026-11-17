@@ -183,4 +183,18 @@ void main() {
       expect(find.textContaining('Added "Call Sam" at 11:30'), findsOneWidget);
     });
   });
+
+  test('item 113: the Day plan search finds open steps, with their task', () {
+    final s = AppStore();
+    final t = s.addTask('AI showcase');
+    s.addStep(t, 'Poster group review');
+    s.addStep(t, 'Plotter training');
+    t.steps.last.done = true;
+    s.addTask('Poster printing');
+    final all = ownerChoices(s.data, DateTime.now());
+    expect(matchingSteps(all, ''), isEmpty);
+    final hits = matchingSteps(all, 'poster');
+    expect(hits.map((p) => (p.task.title, p.step!.title)), [('AI showcase', 'Poster group review')]);
+    expect(matchingSteps(all, 'plotter'), isEmpty); // ticked
+  });
 }

@@ -127,6 +127,8 @@ class PaceChip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: small ? 10.5 : 11,
           fontWeight: FontWeight.w600,
@@ -159,18 +161,27 @@ class LabelledBar extends StatelessWidget {
     final style = TextStyle(fontSize: small ? 10.5 : 11, color: ink.withValues(alpha: 0.7));
     return Padding(
       padding: EdgeInsets.only(top: small ? 1 : 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: small ? 34 : 44,
-            child: Text(label, style: style),
-          ),
-          Expanded(child: bar),
-          const SizedBox(width: 6),
-          Text(trailing, style: style.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-          const SizedBox(width: 6),
-        ],
-      ),
+      // Label and figure never wrap (big text sizes) and never push the row past the card:
+      // each is capped to a share of the width and ends in "…" if it must.
+      child: LayoutBuilder(builder: (context, box) {
+        Widget capped(String text, double share, TextStyle st) => ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: box.maxWidth * share),
+              child: Text(text, style: st, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
+            );
+        return Row(
+          children: [
+            // A minimum width keeps the bars lined up.
+            ConstrainedBox(
+              constraints: BoxConstraints(minWidth: min(small ? 34.0 : 44.0, box.maxWidth * 0.3)),
+              child: Padding(padding: const EdgeInsets.only(right: 4), child: capped(label, 0.3, style)),
+            ),
+            Expanded(child: bar),
+            const SizedBox(width: 6),
+            capped(trailing, 0.4, style.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+            const SizedBox(width: 6),
+          ],
+        );
+      }),
     );
   }
 }
