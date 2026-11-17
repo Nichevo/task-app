@@ -65,6 +65,8 @@
             </intent-filter>
         </receiver>
         <!-- Place reminders. -->
+        <!-- Item 108: Focus timer and Focus mode widget buttons, and the timer's end alarm. -->
+        <receiver android:name=".FocusOpReceiver" android:exported="false" />
         <receiver android:name=".PlaceReceiver" android:exported="false" />
         <receiver android:name=".PlaceBootReceiver" android:exported="false">
             <intent-filter>

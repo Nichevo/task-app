@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.12.11', 'November 2026', [
+    'Focus timer widget: Start, Pause, Resume, +5, Skip break and Stop now work right on the widget, without opening the app. You still get the "Time for a break" and "Break\'s over" reminders, the countdown in the notification shade (Android) and Do not disturb if you use it. The app catches up with what you pressed the next time it opens.',
+    'Each widget that lists tasks can now have its own focus mode: follow the mode that is on (as before), always show everything, or always show one mode (say Work), whatever mode you are in. Android asks when you place the widget (press and hold it, then the pencil, to change it); on the iPad it is "Focus mode" in Edit Widget. The Focus timer widget has the choice too, for the top task it offers.',
+    'Focus mode widget: make it two rows tall (Android) or pick the wider size (iPad) and it shows a button for each mode. Tap one to switch straight away, until the schedule next changes, without opening the app.',
+    'A focus mode can have its own round lengths, for example 50 minutes with 10 minute breaks at Work and 25/5 at Home. Set them in the focus timer\'s settings (the gear on the Focus screen) under "Round lengths for". A new length starts with the next round or break.',
+    'Settings, Focus modes, "Widgets follow the mode" switched off now only stops widgets that follow the mode; the Focus mode widget still shows the mode you are in.',
+  ]),
   Release('1.12.10', 'November 2026', [
     'How long a task takes can now be given in hours as well as days: on the task page, tap Takes and pick Hours (or type "6h"). On the Gantt chart it fills the working days those hours need (a working day is the Day plan\'s working hours, 9 h unless you changed them), and the task page shows "6 h" or "12 h (2 work days)". Steps too: "Change its start, how long or progress" in a step\'s menu.',
     'A task or step given in hours (a working day or less) gets that length when you plan it on the Day plan, unless it has its own "How long" estimate.',

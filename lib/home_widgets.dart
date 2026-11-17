@@ -117,6 +117,8 @@ class HomeWidgets {
         data.focusSettings.longBreak,
         data.focusSettings.every,
       ],
+      // Item 108: the Focus timer widget's buttons work without the app, Do not disturb too.
+      if (data.focusSettings.dnd) 'focusDnd': true,
       'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,
@@ -226,10 +228,12 @@ class HomeWidgets {
 
   /// Item 102: what the widgets need to follow the focus modes: each mode's name, colour and
   /// what breaks through, and a timeline of the mode in force for the next 8 days (the current
-  /// mode until it ends, then the weekly schedule). Null when there are no modes, or the widgets
-  /// are set to show everything. Everything is listed as a mode ('all') that hides nothing.
+  /// mode until it ends, then the weekly schedule). Null when there are no modes. Everything is
+  /// listed as a mode ('all') that hides nothing. Item 108: sent even when the widgets are set
+  /// not to follow the mode ('modeWidgets' false), for the Focus mode widget and for widgets set
+  /// to one mode of their own; each mode carries its own focus timer lengths, if it has them.
   static Map<String, Object?>? modeWidgetData(AppData data, DateTime now) {
-    if (data.modes.isEmpty || !data.modeWidgets) return null;
+    if (data.modes.isEmpty) return null;
     // From the start of today, so the data (and the widgets) only change when the mode does.
     final start = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
     final end = DateTime(now.year, now.month, now.day + 8);
@@ -245,7 +249,7 @@ class HomeWidgets {
       }
     }
     return {
-      'modeWidgets': true,
+      'modeWidgets': data.modeWidgets,
       'modes': [
         {'id': everythingId, 'name': 'Everything', 'colour': 0xFF006A6A},
         for (final m in data.modes)
@@ -256,6 +260,7 @@ class HomeWidgets {
             if (!m.overdue) 'overdue': false,
             'due': m.due.name,
             if (!m.starred) 'starred': false,
+            if (m.timer case final t?) 'timer': [t.focus, t.shortBreak, t.longBreak, t.every],
           },
       ],
       'modeLine': line,
@@ -385,6 +390,30 @@ class HomeWidgets {
         for (final e in await _take('widget_worked'))
           if (DateTime.tryParse(e['day'] as String? ?? '') case final d?) (e['id'] as String, d, e['on'] as bool? ?? true),
       ];
+
+  /// Item 108: buttons pressed on the Focus timer widget, in order: (op, when, task, step). The
+  /// widget moved its own copy of the timer on ('focus_local'); the app now does the same.
+  Future<List<({String op, DateTime at, String? task, String? step})>> takeFocusOps() async => [
+        for (final e in await _take('widget_focus'))
+          (op: e['op'] as String, at: _ms(e['at']), task: e['task'] as String?, step: e['step'] as String?),
+      ];
+
+  /// Item 108: modes picked on the Focus mode widget, in order: (mode id, when).
+  Future<List<(String, DateTime)>> takeModePicks() async =>
+      [for (final e in await _take('widget_mode')) (e['mode'] as String, _ms(e['at']))];
+
+  /// Item 108: forgets the widgets' own copies of the timer and the mode once the app has
+  /// caught up with them, and redraws the widgets from what the app shares.
+  Future<void> clearWidgetCopies({bool focus = false, bool mode = false}) async {
+    if (!supported || !await _ok) return;
+    try {
+      if (focus) await HomeWidget.saveWidgetData<String>('focus_local', null);
+      if (mode) await HomeWidget.saveWidgetData<String>('widget_mode_local', null);
+      _lastJson = null;
+    } catch (e) {
+      debugPrint('Could not clear widget copies: $e');
+    }
+  }
 
   /// Item 48B: tasks sent by other Android apps (Tasker and the like) while the app was closed,
   /// in the inbox file format (docs/PUSH_TASKS.md).

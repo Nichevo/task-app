@@ -79,10 +79,36 @@ class WidgetMode(val id: String, val name: String, val colour: Int, val until: L
     return true
   }
 
+  /** Item 108: this mode's own focus timer lengths (focus, short, long, every), if it has them. */
+  val timer: IntArray?
+    get() {
+      val a = rule.optJSONArray("timer") ?: return null
+      return if (a.length() < 4) null else IntArray(4) { a.optInt(it) }
+    }
+
   companion object {
+    /** Item 108: mode [id] as the app shared it (null for Everything or one no longer there). */
+    fun byId(root: JSONObject, id: String, until: Long?): WidgetMode? {
+      if (id == "all") return null
+      val modes = root.optJSONArray("modes") ?: return null
+      for (j in 0 until modes.length()) {
+        val m = modes.getJSONObject(j)
+        if (m.optString("id") == id) return WidgetMode(id, m.optString("name"), m.optLong("colour", 0xFF3F6FB5).toInt(), until, m)
+      }
+      return null
+    }
+
+    /** Item 108: the modes to pick from on the Focus mode widget: (id, name, colour), Everything first. */
+    fun list(root: JSONObject): List<Triple<String, String, Int>> {
+      val modes = root.optJSONArray("modes") ?: return emptyList()
+      return (0 until modes.length()).map {
+        val m = modes.getJSONObject(it)
+        Triple(m.optString("id"), m.optString("name"), m.optLong("colour", 0xFF3F6FB5).toInt())
+      }
+    }
+
     /** The mode in force at [now] from the app's timeline; null for Everything or no modes. */
     fun at(root: JSONObject, now: Long): WidgetMode? {
-      if (!root.optBoolean("modeWidgets", true)) return null
       val line = root.optJSONArray("modeLine") ?: return null
       val modes = root.optJSONArray("modes") ?: return null
       for (i in 0 until line.length()) {
@@ -130,15 +156,22 @@ class WidgetMode(val id: String, val name: String, val colour: Int, val until: L
   }
 }
 
-/** Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once. */
+/**
+ * Everything the app last shared with the widgets (see lib/home_widgets.dart), parsed once.
+ * Item 108: [pin] is a widget's own focus mode choice (null = follow the mode in force, "all" =
+ * always everything, else a mode id), and [picked] a mode chosen on the Focus mode widget that
+ * the app hasn't seen yet (id, until; 0 = until changed).
+ */
 class Snapshot(
     val root: JSONObject,
-    done: Set<String>,
-    snoozed: Set<String>,
-    steps: Set<String>,
-    moves: Map<String, Pair<String, Long>> = emptyMap(),
+    private val done: Set<String>,
+    private val snoozed: Set<String>,
+    private val steps: Set<String>,
+    private val moves: Map<String, Pair<String, Long>> = emptyMap(),
     /** Item 75: "taskId/yyyy-MM-dd" -> ticked or unticked on the widget, not yet seen by the app. */
-    workedTicks: Map<String, Boolean> = emptyMap(),
+    private val workedTicks: Map<String, Boolean> = emptyMap(),
+    val pin: String? = null,
+    private val picked: Pair<String, Long>? = null,
 ) {
   val hoursToRed = root.optDouble("hoursToRed", 72.0)
   val byDue = root.optBoolean("colourByDue", true)
@@ -160,8 +193,14 @@ class Snapshot(
   val doneThisWeek: Int
   val streak: Int
 
-  /** Item 102: the focus mode in force now, from the app's timeline (null = Everything). */
+  /**
+   * Item 102: the focus mode these widgets filter by (null = Everything): the widget's own choice,
+   * else the mode in force when the widgets follow it.
+   */
   val mode: WidgetMode?
+
+  /** Item 108: the focus mode in force now (null = Everything), whatever the widgets filter by. */
+  val currentMode: WidgetMode?
 
   /** Item 102: open tasks the mode hides right now (they still break through when urgent). */
   val hiddenByMode: Int
@@ -175,7 +214,17 @@ class Snapshot(
         }
     val arr = root.optJSONArray("tasks") ?: JSONArray()
     val nowMs = System.currentTimeMillis()
-    mode = WidgetMode.at(root, nowMs)
+    val pick = picked
+    currentMode =
+        if (pick != null && (pick.second == 0L || pick.second > nowMs)) WidgetMode.byId(root, pick.first, pick.second.takeIf { it > 0 })
+        else WidgetMode.at(root, nowMs)
+    mode =
+        when {
+          pin == "all" -> null
+          pin != null -> WidgetMode.byId(root, pin, null) ?: currentMode.takeIf { root.optBoolean("modeWidgets", true) }
+          !root.optBoolean("modeWidgets", true) -> null
+          else -> currentMode
+        }
     var hidden = 0
     val out = ArrayList<WidgetTask>()
     for (i in 0 until arr.length()) {
@@ -278,6 +327,20 @@ class Snapshot(
     streak = stats.optInt("streak")
   }
 
+  /** Item 108: the same data as widget [id] sees it, with its own focus mode choice. */
+  fun forWidget(c: Context, id: Int): Snapshot {
+    val p = WidgetData.modePin(c, id)
+    return if (p == pin) this else Snapshot(root, done, snoozed, steps, moves, workedTicks, p, picked)
+  }
+
+  /** Item 108: the focus timer's lengths (focus, short, long minutes, long break after), the mode's own when it has them. */
+  val focusLengths: IntArray
+    get() {
+      currentMode?.timer?.let { return it }
+      val a = root.optJSONArray("focusLengths")
+      return if (a == null || a.length() < 4) intArrayOf(25, 5, 15, 4) else IntArray(4) { a.optInt(it) }
+    }
+
   fun categoryName(id: String?): String? = categories.firstOrNull { it.first == id }?.second
 
   fun task(id: String): WidgetTask? = all.firstOrNull { it.id == id }
@@ -343,7 +406,7 @@ object WidgetData {
     return (0 until a.length()).map { a.getJSONObject(it).optString(field) }.toSet()
   }
 
-  fun snapshot(c: Context): Snapshot {
+  fun snapshot(c: Context, widgetId: Int? = null): Snapshot {
     val root =
         try {
           JSONObject(prefs(c).getString("widget_data", null) ?: "{}")
@@ -371,7 +434,36 @@ object WidgetData {
       val o = workedArr.getJSONObject(i)
       worked[o.optString("id") + "/" + o.optString("day")] = o.optBoolean("on", true)
     }
-    return Snapshot(root, ids(c, "widget_done", "id"), ids(c, "widget_snoozed", "id"), steps, moves, worked)
+    val picked =
+        try {
+          prefs(c).getString("widget_mode_local", null)?.let { JSONObject(it) }?.let { it.optString("mode") to it.optLong("until") }
+        } catch (e: Exception) {
+          null
+        }
+    return Snapshot(
+        root,
+        ids(c, "widget_done", "id"),
+        ids(c, "widget_snoozed", "id"),
+        steps,
+        moves,
+        worked,
+        widgetId?.let { modePin(c, it) },
+        picked,
+    )
+  }
+
+  /** Item 108: a widget's own focus mode choice: null = follow the mode in force, "all", or a mode id. */
+  fun modePin(c: Context, widgetId: Int): String? = prefs(c).getString("modepin_$widgetId", null)
+
+  fun setModePin(c: Context, widgetId: Int, pin: String?) {
+    if (pin == null) prefs(c).edit().remove("modepin_$widgetId").apply()
+    else prefs(c).edit().putString("modepin_$widgetId", pin).apply()
+  }
+
+  /** Item 108: records a mode picked on the Focus mode widget, for the app, and shows it at once. */
+  fun pickMode(c: Context, id: String, until: Long?) {
+    append(c, "widget_mode", JSONObject().put("mode", id).put("at", System.currentTimeMillis()))
+    prefs(c).edit().putString("widget_mode_local", JSONObject().put("mode", id).put("until", until ?: 0L).toString()).apply()
   }
 
   /** For the board and matrix widgets, whose filter is "all" or "cat:<id>". */
@@ -398,7 +490,7 @@ object WidgetData {
 
   fun forget(c: Context, widgetIds: IntArray) {
     val e = prefs(c).edit()
-    for (id in widgetIds) e.remove("filter_$id").remove("look_$id").remove("compact_$id").remove("stage_$id")
+    for (id in widgetIds) e.remove("filter_$id").remove("look_$id").remove("compact_$id").remove("stage_$id").remove("modepin_$id")
     e.apply()
   }
 
@@ -596,7 +688,7 @@ object WidgetData {
 
   // --- Things done on a widget, for the app to apply ---
 
-  private fun append(c: Context, key: String, o: JSONObject) {
+  fun append(c: Context, key: String, o: JSONObject) {
     val arr = array(c, key)
     arr.put(o)
     prefs(c).edit().putString(key, arr.toString()).apply()

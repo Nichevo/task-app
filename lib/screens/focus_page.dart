@@ -107,7 +107,7 @@ class _FocusPageState extends State<FocusPage> {
 
   Widget _running(BuildContext context, FocusTimer f, Task t) {
     final now = DateTime.now();
-    final s = store.data.focusSettings;
+    final s = focusLengthsNow(store.data);
     final left = f.remaining(now);
     final onBreak = f.phase.isBreak;
     final hm = DateFormat('HH:mm');
@@ -351,54 +351,111 @@ Future<void> pickFocusTask(BuildContext context, AppStore store, {bool open = tr
   if (open) openFocus(context, store);
 }
 
-/// The timer's lengths and Do not disturb.
+/// The timer's lengths and Do not disturb. Item 108: a focus mode can have lengths of its own
+/// (Work 50/10, Home 25/5); the sheet starts on the mode in force.
 Future<void> showFocusSettings(BuildContext context, AppStore store) => showModalBottomSheet(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => ListenableBuilder(
+      builder: (_) => FocusSettingsSheet(store: store),
+    );
+
+class FocusSettingsSheet extends StatefulWidget {
+  const FocusSettingsSheet({super.key, required this.store});
+
+  final AppStore store;
+
+  @override
+  State<FocusSettingsSheet> createState() => _FocusSettingsSheetState();
+}
+
+class _FocusSettingsSheetState extends State<FocusSettingsSheet> {
+  AppStore get store => widget.store;
+
+  /// Whose lengths are shown: null = every mode, else a mode's id.
+  late String? _for = modeNow.mode?.timer != null ? modeNow.mode!.id : null;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
         listenable: store,
         builder: (c, _) {
-          final s = store.data.focusSettings;
+          final data = store.data;
+          final mode = _for == null ? null : data.mode(_for!);
+          final own = mode?.timer;
+          final s = own ?? data.focusSettings;
           void set(VoidCallback f) {
             f();
-            store.changed(settings: true);
+            mode != null ? store.modeChanged() : store.changed(settings: true);
           }
 
           Widget row(String label, int value, int min, int max, ValueChanged<int> on, {String unit = 'min'}) => ListTile(
+                enabled: mode == null || own != null,
                 title: Text(label),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(
-                      icon: const Icon(Icons.remove), onPressed: value > min ? () => set(() => on(value - 1)) : null),
+                      icon: const Icon(Icons.remove),
+                      onPressed: value > min && (mode == null || own != null) ? () => set(() => on(value - 1)) : null),
                   SizedBox(width: 64, child: Text('$value $unit', textAlign: TextAlign.center)),
-                  IconButton(icon: const Icon(Icons.add), onPressed: value < max ? () => set(() => on(value + 1)) : null),
+                  IconButton(
+                      icon: const Icon(Icons.add),
+                      onPressed: value < max && (mode == null || own != null) ? () => set(() => on(value + 1)) : null),
                 ]),
               );
           return SafeArea(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Focus timer', style: TextStyle(fontSize: 20)),
-              row('Focus round', s.focus, 5, 120, (v) => s.focus = v),
-              row('Short break', s.shortBreak, 1, 30, (v) => s.shortBreak = v),
-              row('Long break', s.longBreak, 5, 60, (v) => s.longBreak = v),
-              row('Long break after', s.every, 2, 8, (v) => s.every = v, unit: 'rounds'),
-              if (Native.dndSupported)
-                SwitchListTile(
-                  title: const Text('Do not disturb while focusing'),
-                  subtitle: const Text('Turns on in each round and off for breaks. Android asks you to allow it the first time.'),
-                  value: s.dnd,
-                  onChanged: (v) async {
-                    if (v && !await Native.dndAllowed()) {
-                      await Native.askDnd();
-                    }
-                    set(() => s.dnd = v);
-                  },
-                ),
-              const SizedBox(height: 8),
-            ]),
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Focus timer', style: TextStyle(fontSize: 20)),
+                if (data.modes.isNotEmpty)
+                  ListTile(
+                    title: const Text('Round lengths for'),
+                    trailing: DropdownButton<String?>(
+                      value: mode?.id,
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Every mode')),
+                        for (final m in data.modes)
+                          DropdownMenuItem(value: m.id, child: Text(m.timer == null ? m.name : '${m.name} (own)')),
+                      ],
+                      onChanged: (v) => setState(() => _for = v),
+                    ),
+                  ),
+                if (mode != null)
+                  SwitchListTile(
+                    title: Text('Own lengths in ${mode.name}'),
+                    subtitle: Text(own == null
+                        ? 'Off: ${mode.name} uses the lengths for every mode'
+                        : 'The timer uses these while ${mode.name} is on, from the next round or break'),
+                    value: own != null,
+                    onChanged: (v) => set(() => mode.timer = v
+                        ? FocusSettings(
+                            focus: data.focusSettings.focus,
+                            shortBreak: data.focusSettings.shortBreak,
+                            longBreak: data.focusSettings.longBreak,
+                            every: data.focusSettings.every)
+                        : null),
+                  ),
+                row('Focus round', s.focus, 5, 120, (v) => s.focus = v),
+                row('Short break', s.shortBreak, 1, 30, (v) => s.shortBreak = v),
+                row('Long break', s.longBreak, 5, 60, (v) => s.longBreak = v),
+                row('Long break after', s.every, 2, 8, (v) => s.every = v, unit: 'rounds'),
+                if (Native.dndSupported)
+                  SwitchListTile(
+                    title: const Text('Do not disturb while focusing'),
+                    subtitle: const Text('Turns on in each round and off for breaks. Android asks you to allow it the first time.'),
+                    value: data.focusSettings.dnd,
+                    onChanged: (v) async {
+                      if (v && !await Native.dndAllowed()) {
+                        await Native.askDnd();
+                      }
+                      set(() => data.focusSettings.dnd = v);
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ]),
+            ),
           );
         },
-      ),
-    );
+      );
+}
 
 /// Item 102: the countdown beside the mode chip while the timer runs; tapping opens the timer.
 class FocusCountdown extends StatefulWidget {

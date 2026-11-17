@@ -24,13 +24,14 @@ import org.json.JSONObject
  * Item 102, part 4: the focus timer on the home screen. 4x3 (the main size): the ring and
  * countdown with Pause, +5 and Stop on the left, the task and its steps (tick them here) on the
  * right, today's focus time and what is next below. Smaller sizes keep the ring and buttons.
- * With no timer running it offers the top task: Start, or Pick another. The buttons open the app,
- * which runs the timer.
+ * With no timer running it offers the top task: Start, or Pick another. Item 108: the buttons
+ * work the timer without opening the app (FocusOps); "Pick another" and taps on the text open it.
+ * The top task follows the widget's own focus mode choice, and the round lengths the mode's.
  */
 class FocusTimerWidget : AppWidgetProvider() {
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val snap = WidgetData.snapshot(context)
-    for (id in ids) update(context, manager, id, snap)
+    for (id in ids) update(context, manager, id, snap.forWidget(context, id))
   }
 
   override fun onEnabled(context: Context) = WidgetRefreshJob.schedule(context)
@@ -87,11 +88,6 @@ class FocusTimerWidget : AppWidgetProvider() {
       return State(phase, round, end, if (ready) length else left, length, ready)
     }
 
-    fun lengths(root: JSONObject): IntArray {
-      val a = root.optJSONArray("focusLengths")
-      return if (a == null || a.length() < 4) intArrayOf(25, 5, 15, 4) else IntArray(4) { a.optInt(it) }
-    }
-
     fun update(c: Context, m: AppWidgetManager, id: Int, snap: Snapshot) {
       val v = RemoteViews(c.packageName, R.layout.widget_focus_timer)
       val opts = m.getAppWidgetOptions(id)
@@ -110,8 +106,8 @@ class FocusTimerWidget : AppWidgetProvider() {
         v.setTextViewTextSize(R.id.ft_clock, android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
       }
       val now = System.currentTimeMillis()
-      val f = snap.root.optJSONObject("focusTimer")
-      val lengths = lengths(snap.root)
+      val f = FocusOps.timer(c, snap)
+      val lengths = snap.focusLengths
       val stepRows = intArrayOf(R.id.ft_s1, R.id.ft_s2, R.id.ft_s3, R.id.ft_s4)
       fun link(q: String) = HomeWidgetLaunchIntent.getActivity(c, MainActivity::class.java, Uri.parse("taskblocks://focus$q"))
       val buttons = intArrayOf(R.id.ft_b1, R.id.ft_b2, R.id.ft_b3)
@@ -122,7 +118,11 @@ class FocusTimerWidget : AppWidgetProvider() {
         }
         v.setViewVisibility(buttons[i], View.VISIBLE)
         v.setTextViewText(buttons[i], label)
-        v.setOnClickPendingIntent(buttons[i], link(q))
+        // "?op=start&id=..": done right here; "?op=pick" (and anything else) opens the app.
+        val parsed = Uri.parse("x://f$q")
+        val op = parsed.getQueryParameter("op")
+        v.setOnClickPendingIntent(
+            buttons[i], if (op == null || op == "pick") link(q) else FocusOps.opIntent(c, id, op, parsed.getQueryParameter("id")))
       }
       if (f == null) {
         // Idle: the top task, ready to start.
@@ -189,7 +189,9 @@ class FocusTimerWidget : AppWidgetProvider() {
           if (arr == null) emptyList()
           else (0 until arr.length()).map {
             val o = arr.getJSONObject(it)
-            Triple(o.optString("id"), o.optString("title"), o.optBoolean("done"))
+            // Ticked on a widget since counts as ticked.
+            val sid = o.optString("id")
+            Triple(sid, o.optString("title"), o.optBoolean("done") || snap.task(taskId)?.steps?.any { s -> s.id == sid && s.done } == true)
           }
       fillSteps(c, v, id, taskId, steps, f.optString("step").ifEmpty { null }, stepRows, tall)
       v.setTextViewText(R.id.ft_foot, footer(snap, taskId))
@@ -224,7 +226,7 @@ class FocusTimerWidget : AppWidgetProvider() {
       }
     }
 
-    private fun focusToday(snap: Snapshot, id: String): Int {
+    fun focusToday(snap: Snapshot, id: String): Int {
       val arr = snap.root.optJSONArray("tasks") ?: return 0
       for (i in 0 until arr.length()) {
         val o = arr.getJSONObject(i)

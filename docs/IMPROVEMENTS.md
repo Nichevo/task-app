@@ -1523,3 +1523,35 @@ mode's categories selected (tags are a separate item).
   to the hours when they fit in a working day (`planLength`; an estimate still comes first).
   Tests: test/takes_hours_test.dart.
 
+
+### 108: Pomodoro timer widget buttons and focus mode widget options (version 1.12.11) ☑
+
+The owner asked for a Pomodoro timer widget and for widget options tied to focus. The Focus
+timer widget (item 102, part 4) already existed, but every button opened the app.
+
+- A. Timer buttons without the app. Android: `FocusOpReceiver` / `FocusOps` (FocusOps.kt);
+  iPad: `FocusOpAction` / `FocusOps` (WidgetActions.swift). The widget moves its own copy of the
+  timer on (`focus_local`, same shape as the app's `focusTimer`) and notes each press in
+  `widget_focus`. The app replays the presses at the times they were made
+  (`AppStore.applyFocusOp`, from `applyPending`), then clears `focus_local`
+  (`HomeWidgets.clearWidgetCopies`). Until then the widget sets the round's end reminder (the
+  app's own one, id -950000001, is cancelled; on Android an AlarmManager alarm posts it and
+  chains to the next phase), the ongoing countdown notification (Android, id -950000002) and Do
+  not disturb (when on, `focusDnd` in the widget data).
+- B. A focus mode per widget: follow (default), everything ("all"), or one mode id. Android:
+  `modepin_<id>` asked last in `WidgetConfigActivity` for widgets that list tasks
+  (`Snapshot.forWidget`); the Focus timer widget is now reconfigurable (configuration optional).
+  iPad: "Focus mode" parameter (`ModeEntity`, `ModeChoosing`) on the intents, applied in
+  `SnapProvider.load`; the Focus timer kind now has an intent too. The widget data now always
+  carries the modes when there are any (`modeWidgets` says whether to follow them).
+- C. Mode buttons: the Android Focus mode widget, two rows or taller, shows up to five (the last
+  is "More…" with more modes); the iPad gets a medium size with a button grid. A pick goes to
+  `widget_mode` and shows at once via `widget_mode_local`; the app applies it like the mode
+  sheet's "until the schedule changes" (`AppStore.applyModePick`).
+- D. `FocusMode.timer` (JSON `timer`, a FocusSettings without dnd): the mode's own round
+  lengths, used through `focusLengthsNow(data)`; edited in the focus settings sheet under
+  "Round lengths for". Widgets get each mode's `timer` and use the mode in force's.
+- Known limits: while the app is open in the background, a press on the widget reaches it only
+  when it comes back to the front. Held reminders (other tasks wait till the break) follow the
+  app's last view of the timer until it opens.
+- Tests: test/focus_widgets_test.dart.

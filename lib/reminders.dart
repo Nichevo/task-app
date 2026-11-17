@@ -388,7 +388,7 @@ class Reminders {
           focus.end!,
           focus.phase == FocusPhase.focus ? 'Time for a break' : 'Break\'s over',
           focus.phase == FocusPhase.focus
-              ? 'Round ${focus.round} on "${t.title}" is done. ${data.focusSettings.lengthOf(focus.round % data.focusSettings.every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak).inMinutes} minutes off.'
+              ? 'Round ${focus.round} on "${t.title}" is done. ${focusLengthsNow(data).lengthOf(focus.round % focusLengthsNow(data).every == 0 ? FocusPhase.longBreak : FocusPhase.shortBreak).inMinutes} minutes off.'
               : 'Ready for round ${focus.round + 1} on "${t.title}"?',
           t,
           ReminderKind.focus,

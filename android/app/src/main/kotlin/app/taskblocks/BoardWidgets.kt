@@ -30,7 +30,7 @@ abstract class BaseWidget : AppWidgetProvider() {
 
   override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
     val snap = WidgetData.snapshot(context)
-    for (id in ids) draw(context, manager, id, snap)
+    for (id in ids) draw(context, manager, id, snap.forWidget(context, id))
     listId?.let { manager.notifyAppWidgetViewDataChanged(ids, it) }
   }
 
@@ -196,16 +196,21 @@ class StageListWidget : BaseWidget() {
 /** Cards of [StageListWidget]. */
 class StageListService : RemoteViewsService() {
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-      Factory(applicationContext, intent.getStringExtra("stage") ?: "", intent.getStringExtra("filter") ?: "all")
+      Factory(
+          applicationContext,
+          intent.getStringExtra("stage") ?: "",
+          intent.getStringExtra("filter") ?: "all",
+          intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 0))
 
-  class Factory(private val c: Context, private val stageId: String, private val filter: String) : RemoteViewsFactory {
+  class Factory(private val c: Context, private val stageId: String, private val filter: String, private val widgetId: Int = 0) :
+      RemoteViewsFactory {
     private var snap: Snapshot? = null
     private var items: List<WidgetTask> = emptyList()
 
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-      val s = WidgetData.snapshot(c)
+      val s = WidgetData.snapshot(c, widgetId)
       snap = s
       items = s.boardTasks(stageId, filter).sortedBy { it.due ?: Long.MAX_VALUE }
     }
@@ -384,16 +389,21 @@ class BoardStepsService : RemoteViewsService() {
   }
 
   override fun onGetViewFactory(intent: Intent): RemoteViewsFactory =
-      Factory(applicationContext, intent.getStringExtra("filter") ?: "all", intent.getIntExtra("ink", 0xDD000000.toInt()))
+      Factory(
+          applicationContext,
+          intent.getStringExtra("filter") ?: "all",
+          intent.getIntExtra("ink", 0xDD000000.toInt()),
+          intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, 0))
 
-  class Factory(private val c: Context, private val filter: String, private val ink: Int) : RemoteViewsFactory {
+  class Factory(private val c: Context, private val filter: String, private val ink: Int, private val widgetId: Int = 0) :
+      RemoteViewsFactory {
     private var snap: Snapshot? = null
     private var items: List<Pair<WidgetStage, Pair<WidgetTask, WidgetStep>?>> = emptyList()
 
     override fun onCreate() {}
 
     override fun onDataSetChanged() {
-      val s = WidgetData.snapshot(c)
+      val s = WidgetData.snapshot(c, widgetId)
       snap = s
       items = rows(s, filter)
     }
