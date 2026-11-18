@@ -17,7 +17,6 @@ import '../widgets/tag_widgets.dart' show TagFilterChip;
 import '../widgets/task_colors.dart';
 import '../widgets/task_where.dart' show editDrive;
 import '../work_meetings.dart' show workCalendarId;
-import 'starred_page.dart' show pickTask;
 import 'task_page.dart';
 import 'work_import_page.dart';
 
@@ -1541,9 +1540,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
   // --- Actions ---
 
   Future<void> _planAny() async {
-    final t = await pickTask(context, data, title: 'Plan a time for');
-    if (t == null || !mounted) return;
-    await showPlanTimeSheet(context, store, t, day: _day);
+    final p = await pickPlanItem(context, data, title: 'Plan a time for', at: _day.add(const Duration(hours: 9)));
+    if (p == null || !mounted) return;
+    await showPlanTimeSheet(context, store, p.task, step: p.step, day: _day);
   }
 
   /// 1.12.8: a tap at [dy] on [day]'s column: add a new task or step there, or plan one already
@@ -1554,9 +1553,9 @@ class _DayPlanPageState extends State<DayPlanPage> {
     final snapped = (minutes ~/ s.snap * s.snap).clamp(0, 24 * 60 - s.snap);
     final start = day.add(Duration(minutes: snapped));
     final added = await showAddAtSheet(context, store, start, onExisting: (at) async {
-      final t = await pickOwner(context, data, title: 'Plan at ${DateFormat('HH:mm').format(at)}', at: at);
-      if (t == null || !mounted) return;
-      await showPlanTimeSheet(context, store, t, start: at, day: dayStart(at));
+      final p = await pickPlanItem(context, data, title: 'Plan at ${DateFormat('HH:mm').format(at)}', at: at);
+      if (p == null || !mounted) return;
+      await showPlanTimeSheet(context, store, p.task, step: p.step, start: at, day: dayStart(at));
     });
     if (added == null || !mounted) return;
     ScaffoldMessenger.of(context)
@@ -1876,6 +1875,14 @@ class _DayPlanPageState extends State<DayPlanPage> {
             title: Text(b.done ? 'Untick' : 'Tick'),
             onTap: () => Navigator.pop(c, 'tick'),
           ),
+          // Item 113: take a task or step off the work meeting it was linked to.
+          if (b.slot.meetingId != null)
+            ListTile(
+              leading: const Icon(Icons.link_off),
+              title: const Text('Unlink from the work meeting'),
+              subtitle: const Text('Takes this planned time off the meeting; the meeting stays'),
+              onTap: () => Navigator.pop(c, 'unlinkMeeting'),
+            ),
           ListTile(
             leading: const Icon(Icons.event_busy),
             title: const Text('Remove this time'),
@@ -1901,6 +1908,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
         await _toggle(b);
       case 'steps':
         _stepsInside(b);
+      case 'unlinkMeeting':
+        store.unlinkMeeting(b.task, b.slot);
       case 'remove':
         store.removeSlot(b.task, b.slot);
         ScaffoldMessenger.of(context)

@@ -12,7 +12,7 @@ import '../models.dart';
 import '../native.dart';
 import '../store.dart';
 import '../work_meetings.dart';
-import 'starred_page.dart' show pickTask;
+import '../widgets/day_plan_add.dart' show pickPlanItem;
 
 /// Item 111: the blue work meetings are drawn in.
 const workBlue = Color(0xFF3F6FB5);
@@ -414,8 +414,8 @@ Future<void> workMeetingSheet(BuildContext context, AppStore store, String meeti
           if (!m.allDay && link == null) ...[
             ListTile(
               leading: const Icon(Icons.link),
-              title: const Text('Link to a task…'),
-              subtitle: const Text('The task is planned into this meeting and moves with it'),
+              title: const Text('Link to a task or step…'),
+              subtitle: const Text('It is planned into this meeting and moves with it'),
               onTap: () => Navigator.pop(c, 'link'),
             ),
             ListTile(
@@ -427,8 +427,8 @@ Future<void> workMeetingSheet(BuildContext context, AppStore store, String meeti
           if (link != null)
             ListTile(
               leading: const Icon(Icons.link_off),
-              title: Text('Unlink "${link.$1.title}"'),
-              subtitle: const Text('Takes the task\'s planned time off this meeting'),
+              title: Text('Unlink "${_linkName(link.$1, link.$2)}"'),
+              subtitle: const Text('Takes the planned time off this meeting'),
               onTap: () => Navigator.pop(c, 'unlink'),
             ),
           if (!m.allDay)
@@ -446,8 +446,43 @@ Future<void> workMeetingSheet(BuildContext context, AppStore store, String meeti
   if (!context.mounted || choice == null) return;
   switch (choice) {
     case 'link':
-      final t = await pickTask(context, store.data, title: 'Link "${m.title}" to which task?');
-      if (t != null) store.linkMeeting(t, m);
+      final p = await pickPlanItem(context, store.data, title: 'Link "${m.title}" to which task or step?', at: m.start);
+      if (p == null || !context.mounted) return;
+      final t = p.task;
+      if (p.step != null) {
+        store.linkMeeting(t, m, step: p.step);
+        return;
+      }
+      final open = t.steps.where((x) => !x.done).toList();
+      if (open.isEmpty) {
+        store.linkMeeting(t, m);
+        return;
+      }
+      // Item 113: the whole task, or one of its open steps.
+      final pick = await showModalBottomSheet<Object>(
+        context: context,
+        showDragHandle: true,
+        builder: (c) => SafeArea(
+          child: ListView(shrinkWrap: true, children: [
+            ListTile(title: Text('Link "${m.title}" to', style: Theme.of(c).textTheme.titleSmall)),
+            ListTile(
+              leading: const Icon(Icons.task_alt),
+              title: Text(t.title),
+              subtitle: const Text('The whole task'),
+              onTap: () => Navigator.pop(c, t),
+            ),
+            for (final st in open)
+              ListTile(
+                leading: const Icon(Icons.subdirectory_arrow_right),
+                title: Text(st.title),
+                subtitle: Text('Step ${t.steps.indexOf(st) + 1} of ${t.steps.length}'),
+                onTap: () => Navigator.pop(c, st),
+              ),
+          ]),
+        ),
+      );
+      if (pick == null) return;
+      store.linkMeeting(t, m, step: pick is TaskStep ? pick : null);
     case 'task':
       final t = store.taskFromMeeting(m);
       if (context.mounted) {
@@ -510,4 +545,10 @@ Future<void> _editMeeting(BuildContext context, AppStore store, WorkMeeting m) a
       title: title.text,
       start: DateTime(d.year, d.month, d.day, start.hour, start.minute),
       end: DateTime(d.year, d.month, d.day, end.hour, end.minute));
+}
+
+/// The linked task's title, or "step (task)" when the meeting is linked to one of its steps.
+String _linkName(Task t, TimeSlot s) {
+  final step = s.stepId == null ? null : t.steps.where((x) => x.id == s.stepId).firstOrNull;
+  return step == null ? t.title : '${step.title} (${t.title})';
 }

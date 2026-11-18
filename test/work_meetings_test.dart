@@ -278,6 +278,32 @@ void main() {
     expect(store.data.active, contains(t));
   });
 
+  test('a step can be linked to a meeting, moves with it and can be unlinked', () {
+    final store = AppStore();
+    final s1 = week();
+    final r1 = readWorkWeek(s1.words, image: s1.img, today: today);
+    store.importWork(r1, compareImport(const [], r1));
+    final review = store.data.workMeetings.firstWhere((m) => m.title == 'Project review');
+    final t = store.addTask('AI showcase');
+    store.addStep(t, 'Rehearse');
+    final step = t.steps.single;
+    store.linkMeeting(t, review, step: step);
+    expect(t.slots.single.stepId, step.id);
+    expect(t.slots.single.start, DateTime(2026, 11, 16, 11));
+    expect(store.data.linkedToMeeting(review.id)?.$2.stepId, step.id);
+
+    final s2 = FakeScreen()..headings([16, 17, 18, 19, 20]);
+    s2.meeting(0, 14 * 60, 15 * 60, 'Project review');
+    final r2 = readWorkWeek(s2.words, image: s2.img, today: today);
+    store.importWork(r2, compareImport(store.data.workMeetings, r2));
+    expect(t.slots.single.start, DateTime(2026, 11, 16, 14));
+    expect(t.slots.single.stepId, step.id);
+
+    store.unlinkMeeting(t, t.slots.single);
+    expect(t.slots, isEmpty);
+    expect(store.data.linkedToMeeting(review.id), isNull);
+  });
+
   test('work meetings sync: the list changed last wins, and survive the saved file', () {
     final a = AppData(), b = AppData();
     a.workMeetings = [WorkMeeting(title: 'Old', start: DateTime(2026, 11, 16, 9), end: DateTime(2026, 11, 16, 10))];

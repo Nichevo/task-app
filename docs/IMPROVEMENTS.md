@@ -1677,3 +1677,27 @@ The owner asked for subtasks (steps) to have tags too, like the task tags from i
   - "Copy what was read" on the check screen copies the words and their boxes as JSON.
   - Tested on the owner's photo through a desktop OCR (not committed: it has colleagues' names);
     tests in test/work_meetings_test.dart.
+
+### 113: squashed Kanban card text, steps linked to work meetings, steps in Day plan search (version 1.12.20)
+
+The owner's screenshot (unfolded Fold, Kanban board, On pace shading) showed a big task card's
+"5 of 9 steps" squeezed to one letter a line beside the "Behind by 2 steps" chip, which then
+sat on top of it.
+
+- Kanban task card, On pace: the count and the pace chip are now in a `Wrap`, so on a narrow
+  card or with a large text size the chip drops under the count instead of squeezing it.
+- Step cards, On pace: the chip sits beside the bar when the card is 170 points or wider, under
+  it otherwise. `PaceChip` text is one line ("…" if it must).
+- `LabelledBar` (Two bars, step bars): the label and the figure never wrap and are capped to a
+  share of the width, so the row can't run past the card.
+- Work meetings: "Link to a task or step…" picks a task or a step (search finds steps); picking
+  a task that has open steps asks whether to link the whole task or one of its steps.
+  `store.linkMeeting(t, m, step:)` plans the step into the meeting, and it moves with the
+  meeting like a task does. The meeting's "Unlink" names the step.
+- Day plan: a block linked to a work meeting has "Unlink from the work meeting" in its ⋮ menu
+  (takes the planned time off; the meeting stays and can be linked again).
+- Day plan "One I have" (tap a time) and "Plan a time for" now search steps as well as tasks
+  (`pickPlanItem`, `matchingSteps`): matching open steps are listed under the tasks, each with
+  its task, and plan just that step.
+- Tests: test/card_pace_test.dart (big text on a Fold-sized board, every shading),
+  test/work_meetings_test.dart (step linked, moves, unlinked), test/day_plan_edit_test.dart.

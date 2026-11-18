@@ -1600,9 +1600,9 @@ class AppStore extends ChangeNotifier {
     _workChanged();
   }
 
-  /// Plans [t] into work meeting [m]'s time, linked to it.
-  void linkMeeting(Task t, WorkMeeting m) {
-    final s = planTime(t, m.start, max(5, m.end.difference(m.start).inMinutes));
+  /// Plans [t] (or its [step]) into work meeting [m]'s time, linked to it.
+  void linkMeeting(Task t, WorkMeeting m, {TaskStep? step}) {
+    final s = planTime(t, m.start, max(5, m.end.difference(m.start).inMinutes), step: step);
     s.meetingId = m.id;
     changed(task: t);
   }

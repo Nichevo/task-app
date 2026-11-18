@@ -146,6 +146,45 @@ void main() {
     });
   }
 
+  for (final shading in CardShading.values) {
+    testWidgets('narrow cards with big text keep "5 of 9 steps" on one line (${shading.name})', (tester) async {
+      // An unfolded Fold: about 757 x 840 points, with a large text size.
+      tester.view.physicalSize = const Size(1968, 2184);
+      tester.view.devicePixelRatio = 2.6;
+      addTearDown(tester.view.reset);
+      final s = AppStore();
+      s.data.cardShading = shading;
+      final now = DateTime.now();
+      final t = s.addTask('AI showcase')
+        ..dueAt = now.add(const Duration(days: 8))
+        ..readyAt = now.subtract(const Duration(days: 15));
+      for (var i = 0; i < 9; i++) {
+        t.steps.add(TaskStep(id: 's$i', title: 'Step $i', done: i < 5));
+      }
+      t.steps[5].dueAt = now.add(const Duration(days: 1));
+      s.setOnBoard(t, true, stage: s.data.stage('doing'));
+      s.setStepsOnBoard(t, true);
+      await tester.pumpWidget(MaterialApp(
+        builder: (c, child) => MediaQuery(data: MediaQuery.of(c).copyWith(textScaler: const TextScaler.linear(1.3)), child: child!),
+        home: KanbanPage(store: s),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final count = find.text('5 of 9 steps');
+      if (shading == CardShading.pace && count.evaluate().isNotEmpty) {
+        // It used to be squeezed to one letter wide (hundreds of points tall). The test font's
+        // glyphs are wide squares, so allow two lines here; a real font fits it on one.
+        expect(tester.getSize(count).width, greaterThan(60));
+        expect(tester.getSize(count).height, lessThan(45));
+      }
+      for (final label in ['Steps', 'Time']) {
+        for (final e in find.text(label).evaluate()) {
+          expect(tester.getSize(find.byWidget(e.widget)).height, lessThan(25));
+        }
+      }
+    });
+  }
+
   test('step cards can have their own shading, else they follow the task cards', () {
     final d = AppData()..cardShading = CardShading.fill;
     expect(d.stepCardShading, CardShading.fill);

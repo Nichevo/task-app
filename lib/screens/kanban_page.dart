@@ -985,10 +985,19 @@ class _StepCard extends StatelessWidget {
       if (open && shading == CardShading.pace && (used != null || done > 0))
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Row(children: [
-            Expanded(child: ShadeBar(value: done, marker: used, height: 5, ink: ink)),
-            if (pace.verdict != null) ...[const SizedBox(width: 6), PaceChip(pace, small: true)],
-          ]),
+          // Chip beside the bar when there is room, under it on a narrow card.
+          child: LayoutBuilder(builder: (context, box) {
+            final bar = ShadeBar(value: done, marker: used, height: 5, ink: ink);
+            if (pace.verdict == null) return bar;
+            if (box.maxWidth < 170) {
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                bar,
+                const SizedBox(height: 2),
+                PaceChip(pace, small: true),
+              ]);
+            }
+            return Row(children: [Expanded(child: bar), const SizedBox(width: 6), PaceChip(pace, small: true)]);
+          }),
         ),
       if (open && shading != CardShading.pace && shading != CardShading.off && pace.verdict == Pace.behind)
         Padding(padding: const EdgeInsets.only(top: 2), child: PaceChip(pace, small: true)),
@@ -1163,11 +1172,11 @@ class _KanbanCard extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 2, right: 6),
-            child: Row(children: [
-              Expanded(
-                child: Text(byHand || n == 0 ? '${(done * 100).round()}% done' : '${task.stepsDone} of $n steps',
-                    style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
-              ),
+            // A Wrap, not a Row: on a narrow card (or with big text) the chip drops under the
+            // count instead of squeezing it to one letter a line.
+            child: Wrap(spacing: 8, runSpacing: 2, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text(byHand || n == 0 ? '${(done * 100).round()}% done' : '${task.stepsDone} of $n steps',
+                  style: TextStyle(fontSize: 11, color: ink.withValues(alpha: 0.7))),
               PaceChip(pace),
             ]),
           ),

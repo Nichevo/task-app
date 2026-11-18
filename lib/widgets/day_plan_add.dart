@@ -59,16 +59,40 @@ List<Task> ownerChoices(AppData data, DateTime at, {Task? exclude}) {
 }
 
 /// Picks the task a step belongs to, the likely ones for [at] first ([ownerChoices]), with search.
-Future<Task?> pickOwner(BuildContext context, AppData data, {required String title, required DateTime at, Task? exclude}) {
+Future<Task?> pickOwner(BuildContext context, AppData data, {required String title, required DateTime at, Task? exclude}) async =>
+    (await _pickPlanItem(context, data, title: title, at: at, exclude: exclude, withSteps: false))?.task;
+
+/// A task, or one of its open steps, picked to plan on the Day plan.
+typedef PlanPick = ({Task task, TaskStep? step});
+
+/// Item 113: like [pickOwner], but open steps can be picked too: under each task planned or
+/// shown, and every step whose name matches the search (with the task it belongs to).
+Future<PlanPick?> pickPlanItem(BuildContext context, AppData data, {required String title, required DateTime at}) =>
+    _pickPlanItem(context, data, title: title, at: at, withSteps: true);
+
+/// The open steps of [all] that match [q] (or, with no search, none), each with its task.
+List<PlanPick> matchingSteps(List<Task> all, String q) {
+  if (q.trim().isEmpty) return const [];
+  final l = q.trim().toLowerCase();
+  return [
+    for (final t in all)
+      for (final st in t.steps)
+        if (!st.done && st.title.toLowerCase().contains(l)) (task: t, step: st),
+  ];
+}
+
+Future<PlanPick?> _pickPlanItem(BuildContext context, AppData data,
+    {required String title, required DateTime at, Task? exclude, required bool withSteps}) {
   final all = ownerChoices(data, at, exclude: exclude);
   final day = DateTime(at.year, at.month, at.day);
   bool plannedThatDay(Task t) => t.ownSlots.any((s) => DateUtils.isSameDay(s.start, day));
-  return showDialog<Task>(
+  return showDialog<PlanPick>(
     context: context,
     builder: (c) {
       var q = '';
       return StatefulBuilder(builder: (c, setState) {
         final tasks = q.isEmpty ? all : all.where((t) => t.title.toLowerCase().contains(q.toLowerCase())).toList();
+        final steps = withSteps ? matchingSteps(all, q) : const <PlanPick>[];
         return AlertDialog(
           title: Text(title),
           content: SizedBox(
@@ -76,13 +100,13 @@ Future<Task?> pickOwner(BuildContext context, AppData data, {required String tit
             height: 420,
             child: Column(children: [
               TextField(
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search tasks'),
+                decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: withSteps ? 'Search tasks and steps' : 'Search tasks'),
                 onChanged: (v) => setState(() => q = v),
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: tasks.isEmpty
-                    ? const Center(child: Text('No open task matches.'))
+                child: tasks.isEmpty && steps.isEmpty
+                    ? Center(child: Text(withSteps ? 'No open task or step matches.' : 'No open task matches.'))
                     : ListView(children: [
                         for (final t in tasks)
                           ListTile(
@@ -96,8 +120,22 @@ Future<Task?> pickOwner(BuildContext context, AppData data, {required String tit
                             subtitle: Text([
                               if (plannedThatDay(t)) 'On the plan ${_times(t, day)}',
                               if (data.category(t.categoryId) case final cat?) cat.name,
+                              if (withSteps && t.steps.any((x) => !x.done)) '${t.steps.where((x) => !x.done).length} open steps',
                             ].join(' · ')),
-                            onTap: () => Navigator.pop(c, t),
+                            onTap: () => Navigator.pop(c, (task: t, step: null)),
+                          ),
+                        if (steps.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+                            child: Text('Steps', style: Theme.of(c).textTheme.labelMedium),
+                          ),
+                        for (final p in steps)
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.subdirectory_arrow_right),
+                            title: Text(p.step!.title),
+                            subtitle: Text('Step ${p.task.steps.indexOf(p.step!) + 1} of ${p.task.steps.length} · ${p.task.title}'),
+                            onTap: () => Navigator.pop(c, p),
                           ),
                       ]),
               ),
