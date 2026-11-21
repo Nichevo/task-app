@@ -760,6 +760,15 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ]),
         ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.fact_check_outlined),
+        title: const Text('Weekly review screen'),
+        subtitle: const Text('Last week, what slipped, what is ageing or stalled, and next week, one pile at a time. '
+            'Opens from the weekly review notification (Reminders) or the ⋮ menu'),
+        value: data.helperOn(Helper.weeklyReview),
+        onChanged: (v) => store.setHelper(Helper.weeklyReview, v),
+      ),
     ];
   }
 

@@ -1805,3 +1805,21 @@ name means its default). Built as updates A to G; mock-ups in the project files
 - Not built: best/likely/worst ranges and finish-date odds (optional, offered for later).
 - Tests: test/smart_helpers_d_test.dart; gantt_test and step_links_test turn the helper off
   where they test the old push-later-only rule.
+
+### 114 E: weekly review screen (version 1.13.4)
+
+- Piles (`lib/weekly_review.dart`): `lastWeek` (done, added, focus minutes, a few done titles),
+  `slipped` (open, due before today), `ageing` (no due date, ageing colour 2/3 of the way to
+  red or more, not snoozed), `stalled` (open steps, no step ticked for 14 days, task older than
+  that), `nextWeek` (from Monday when reviewing Friday to Sunday, else tomorrow; per day what
+  is due and its estimates, work meetings, free time from the Day plan layout; empty weekend
+  days left out). Habits are left out.
+- `WeeklyReviewPage`: one pile per page with a progress bar, empty piles skipped, each task
+  greyed with what happened once handled (undo in a snackbar). Actions: next working day, next
+  week (Monday), pick date (`AppStore.rollTask` keeps the time and moves that day's planned
+  times), delegate (Delegate box + waiting on), keep (marks it worked on today, so the colour
+  resets), drop, done; stalled tasks open. The last page sums up the review and, with Plan my
+  day on, opens next Monday's Day plan and runs it (`DayPlanPage.autoPlan`).
+- The weekly review notification opens the screen when the Weekly review screen helper is on
+  (otherwise the list on the coming week, as before). Also in the ⋮ menu.
+- Tests: test/smart_helpers_e_test.dart.

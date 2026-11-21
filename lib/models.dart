@@ -2593,7 +2593,10 @@ abstract final class Helper {
   /// on a bar, and Plan back from the due date.
   static const criticalPath = 'criticalPath';
 
-  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath];
+  /// Item 114 E: the weekly review screen (from its notification or the ⋮ menu).
+  static const weeklyReview = 'weeklyReview';
+
+  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview];
 
   /// Helpers that start switched off.
   static const offByDefault = <String>{};

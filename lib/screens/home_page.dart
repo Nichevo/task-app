@@ -21,6 +21,7 @@ import '../store.dart';
 import '../task_list.dart';
 import '../widgets/simple_cards.dart';
 import '../widgets/what_now_sheet.dart';
+import 'weekly_review_page.dart';
 import 'wrap_up_page.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
@@ -251,7 +252,20 @@ class HomePageState extends State<HomePage> {
   void openCalendar(DateTime? day) => _open(context, CalendarPage(store: store, initialDay: day));
 
   /// Item 101: the Day plan (the Calendar's Day mode).
-  void openDayPlan([DateTime? day]) => _open(context, CalendarPage(store: store, mode: 'day', initialDay: day));
+  void openDayPlan([DateTime? day, bool autoPlan = false]) =>
+      _open(context, CalendarPage(store: store, mode: 'day', initialDay: day, autoPlan: autoPlan));
+
+  /// Item 114 E: the weekly review screen (its notification, or the ⋮ menu).
+  void openWeeklyReview() => _open(
+      context,
+      WeeklyReviewPage(
+        store: store,
+        onOpenTask: (t) => openTask(t.id),
+        onPlanDay: (d) {
+          Navigator.of(context).pop();
+          openDayPlan(d, true);
+        },
+      ));
 
   /// Item 114 C: "What should I do now?" (top bar button and its widget).
   void openWhatNow() => showWhatNow(
@@ -756,6 +770,7 @@ class HomePageState extends State<HomePage> {
               'calendar' => openCalendar(null),
               'dayplan' => openDayPlan(),
               'wrap' => openWrapUp(),
+              'review' => openWeeklyReview(),
               'stats' => openStats(),
               'achievements' => openAchievements(),
               'habits' => openHabits(),
@@ -794,6 +809,7 @@ class HomePageState extends State<HomePage> {
               if (!icons.contains(TopIcon.dayPlan) && tool(ModeTool.dayPlan))
                 const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
               if (data.helperOn(Helper.wrapUp)) const PopupMenuItem(value: 'wrap', child: Text('Wrap up the day')),
+              if (data.helperOn(Helper.weeklyReview)) const PopupMenuItem(value: 'review', child: Text('Weekly review')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),

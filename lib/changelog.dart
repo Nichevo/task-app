@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.4', 'November 2026', [
+    'Weekly review screen: tap the weekly review notification (or pick Weekly review in the ⋮ menu) for one pile at a time. Last week (done, added, focus time), what slipped past its date, tasks without a date going red, tasks with steps where nothing has been ticked for two weeks, and next week day by day with meetings, what is due and free time ("too full" when the estimates don\'t fit).',
+    'Each task gets one-tap choices: the next working day, next week, pick a date, delegate (into the Delegate box with who it waits on), drop or done, all undoable. Ageing ones can be kept, which makes them fresh again.',
+    'The last page sums up what you changed and, with Plan my day on, plans next Monday for you. Turn the screen off in Settings, Smart helpers to go back to the old notification.',
+  ]),
   Release('1.13.3', 'November 2026', [
     'Critical path on the Gantt chart: tap the new route button to colour the chain of tasks (or, for an opened-out task, steps) that sets the finish date, and see the spare time of the rest hatched after their bars. A card at the bottom says when it all finishes against the due date and what is on the critical path.',
     'Tap a bar to say when it should happen: as soon as possible (straight after what it comes after, and earlier when that finishes early), as late as possible (right before what needs it), start on a date, or must finish by (worked back from its due date). Quick moves: a day earlier or later, shorter or longer. Moving a bar by hand pins it to that date.',

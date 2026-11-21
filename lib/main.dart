@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'home_widgets.dart';
 import 'location.dart';
-import 'models.dart' show MatrixBox, Task;
+import 'models.dart' show Helper, MatrixBox, Task;
 import 'widgets/actual_sheet.dart';
 import 'native.dart';
 import 'reminders.dart';
@@ -25,7 +25,7 @@ void main() {
   final ready = Future.wait([reminders.init(), store.load()]).then((_) {
     reminders.dir = store.dirPath;
     reminders.schedule(store.data);
-    if (reminders.startedFromReview) store.setQuickFilter(QuickFilter.week);
+    if (reminders.startedFromReview && !store.data.helperOn(Helper.weeklyReview)) store.setQuickFilter(QuickFilter.week);
   });
   runApp(TaskApp(store: store, widgets: widgets, reminders: reminders, ready: ready));
 }
@@ -75,6 +75,14 @@ class _TaskAppState extends State<TaskApp> {
           if (home.mounted) askActualTime(home.context, widget.store, t);
         }));
     widget.reminders?.onOpenWrapUp = () => _onHome((home) => home.openWrapUp());
+    // Item 114 E: the weekly review notification opens the review screen.
+    widget.reminders?.onOpenReview = () {
+      if (widget.store.data.helperOn(Helper.weeklyReview)) {
+        _onHome((home) => home.openWeeklyReview());
+      } else {
+        widget.store.setQuickFilter(QuickFilter.week);
+      }
+    };
     widget.reminders?.onOpenBrief = () => _onHome((home) => home.openDayPlan());
     widget.reminders?.onOpenTask = (id) => _onHome((home) => home.openTask(id));
     // Item 102: the focus timer's notification, and "Start focus" on a Day plan reminder.
@@ -90,6 +98,7 @@ class _TaskAppState extends State<TaskApp> {
             home.openFocusTimer();
           }
           if (r?.startedFromWrapUp ?? false) home.openWrapUp();
+          if ((r?.startedFromReview ?? false) && widget.store.data.helperOn(Helper.weeklyReview)) home.openWeeklyReview();
           if (r?.startedFromBrief ?? false) home.openDayPlan();
           final id = widget.reminders?.startedFromTask;
           if (id != null) home.openTask(id);

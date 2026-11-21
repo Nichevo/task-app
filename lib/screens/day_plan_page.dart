@@ -28,7 +28,11 @@ import 'work_import_page.dart';
 ///
 /// Also the Calendar page's Day mode: [onMode] then switches back to 'month' or 'week'.
 class DayPlanPage extends StatefulWidget {
-  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false});
+  const DayPlanPage(
+      {super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false, this.autoPlan = false});
+
+  /// Item 114 E: run Plan my day once it opens.
+  final bool autoPlan;
 
   final AppStore store;
   final DateTime? initialDay;
@@ -182,7 +186,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
     super.initState();
     // 1.12.8: opening the Day plan in a focus mode starts from the mode's own categories.
     modeChipTweaks.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToStart();
+      if (widget.autoPlan && mounted) _planMyDay(0);
+    });
     _loadEvents();
   }
 
