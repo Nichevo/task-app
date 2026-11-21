@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'day_plan.dart' show PlanMove;
 import 'daily_helpers.dart' show rollPlan;
+import 'auto_plan.dart' show PlannedPick;
 import 'dropbox.dart';
 import 'estimates.dart';
 import 'focus_timer.dart';
@@ -1561,6 +1562,27 @@ class AppStore extends ChangeNotifier {
     t.dayPlan = true;
     changed(task: t);
     return s;
+  }
+
+  /// Item 114 C: plans every suggestion of Plan my day; returns what was added, to take back.
+  List<(Task, TimeSlot)> planPicks(List<PlannedPick> picks) {
+    final out = <(Task, TimeSlot)>[];
+    for (final p in picks) {
+      final s = TimeSlot.create(p.start, p.pick.minutes, stepId: p.pick.step?.id);
+      p.pick.task.slots.add(s);
+      p.pick.task.dayPlan = true;
+      out.add((p.pick.task, s));
+    }
+    changed(order: true);
+    return out;
+  }
+
+  /// Item 114 C: the saved place the phone is at now (a fresh fix), or null.
+  Future<String?> placeHere() async {
+    if (location == null || places.isEmpty) return null;
+    final p = await location!.current();
+    if (p == null) return placeNow;
+    return placeAt(places, p.lat, p.lng)?.name;
   }
 
   /// Changes a planned time; [gap] -1 means the default.

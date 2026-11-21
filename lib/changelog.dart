@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.2', 'November 2026', [
+    'Plan my day: tap the ✨ button on the Day plan and the app fills your free time around meetings with the most important open tasks and steps (overdue first, then due soonest, the Do box, starred, In progress, then the oldest). It keeps lunch free and leaves some time spare. Nothing is saved until you tap Keep; Try again gives a different mix and Cancel takes it all back.',
+    'What should I do now? Tap the new target button at the top of the task list for one suggestion that fits the time before your next meeting, your focus mode and where you are, with Start focus, Open and Something else. Something planned for now always comes first.',
+    'A new Android home screen widget, Do now, shows the same suggestion with Focus, Open and Next buttons.',
+    'Both use how far off your estimates usually are, and both can be turned off or changed (time left free, lunch, using your location) in Settings, Smart helpers.',
+  ]),
   Release('1.13.1', 'November 2026', [
     'Learn from your estimates: when you tick off a task that has a "How long", the app asks how long it really took. The time from the focus timer and ticked Day plan blocks is picked already, so most answers are one tap. Settings, Smart helpers can ask only when nothing was timed, or never.',
     'Statistics has a new "How good are your estimates?" card: how much longer things take than you guess (overall and by category) and your biggest misses. Once about 10 tasks have both times, planning can allow for it.',

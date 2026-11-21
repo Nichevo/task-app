@@ -2572,7 +2572,13 @@ abstract final class Helper {
   /// Item 114 B: a notification at the end of the day to wrap it up, and the Wrap up screen.
   static const wrapUp = 'wrapUp';
 
-  static const all = [simpleView, learnEstimates, morningBrief, wrapUp];
+  /// Item 114 C: the ✨ Plan my day button on the Day plan.
+  static const planMyDay = 'planMyDay';
+
+  /// Item 114 C: the "What should I do now?" button and widget.
+  static const whatNow = 'whatNow';
+
+  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow];
 
   /// Helpers that start switched off.
   static const offByDefault = <String>{};

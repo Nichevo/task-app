@@ -143,6 +143,13 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_checklist" />
         </receiver>
+        <!-- Item 114 C. -->
+        <receiver android:name=".DoNowWidget" android:exported="true" android:label="Do now">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_do_now" />
+        </receiver>
         <receiver android:name=".StatsWidget" android:exported="true" android:label="Task stats">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

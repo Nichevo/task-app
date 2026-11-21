@@ -11,6 +11,7 @@ import '../inbox_files.dart';
 import '../input_parse.dart';
 import '../location.dart';
 import '../day_plan.dart' show describeLength;
+import '../auto_plan.dart' show PlanPrefs;
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -664,6 +665,70 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: (v) => _set(() => data.askActual = v ?? 'always'),
             ),
           ]),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.auto_awesome),
+        title: const Text('Plan my day'),
+        subtitle: const Text('A button on the Day plan that fills the free time between meetings with what matters most; '
+            'you check it before keeping it'),
+        value: data.helperOn(Helper.planMyDay),
+        onChanged: (v) => store.setHelper(Helper.planMyDay, v),
+      ),
+      if (data.helperOn(Helper.planMyDay))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Column(children: [
+            Row(children: [
+              Expanded(child: Text('Leave free', style: hint)),
+              DropdownButton<double>(
+                value: const [0.0, 0.1, 0.15, 0.2, 0.3].contains(data.planLeaveFree) ? data.planLeaveFree : 0.15,
+                items: [
+                  for (final f in const [0.0, 0.1, 0.15, 0.2, 0.3])
+                    DropdownMenuItem(value: f, child: Text(f == 0 ? 'Nothing' : '${(f * 100).round()}% of the free time')),
+                ],
+                onChanged: (v) => _set(() => data.planLeaveFree = v ?? 0.15),
+              ),
+            ]),
+            Row(children: [
+              Expanded(child: Text('Keep lunch free', style: hint)),
+              TextButton(
+                onPressed: () async {
+                  final t = await _pickTime(data.lunchStart ?? 12 * 60);
+                  if (t != null) _set(() => data.lunchStart = t.hour * 60 + t.minute);
+                },
+                child: Text(data.lunchStart == null
+                    ? 'No'
+                    : '${_time(data.lunchStart!)} to ${_time(data.lunchStart! + data.lunchMinutes)}'),
+              ),
+              if (data.lunchStart != null)
+                IconButton(
+                  tooltip: 'No lunch break',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => _set(() => data.lunchStart = null),
+                ),
+            ]),
+          ]),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.my_location_outlined),
+        title: const Text('What should I do now?'),
+        subtitle: const Text('A top bar button (and a widget) that picks one task or step for the time you have'),
+        value: data.helperOn(Helper.whatNow),
+        onChanged: (v) => store.setHelper(Helper.whatNow, v),
+      ),
+      if (data.helperOn(Helper.whatNow))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Use where I am'),
+            subtitle: const Text('Tasks at the saved place you\'re at go first; ones for somewhere else wait'),
+            value: data.nowUsesPlace,
+            onChanged: (v) => _set(() => data.nowUsesPlace = v),
+          ),
         ),
       daily(Helper.morningBrief, Icons.wb_sunny_outlined, 'Morning brief',
           'A notification each morning with the day\'s meetings, plan and what is due', data.briefAt, (v) => data.briefAt = v),

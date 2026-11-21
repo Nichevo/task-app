@@ -1762,3 +1762,23 @@ name means its default). Built as updates A to G; mock-ups in the project files
   and tomorrow's meetings, plans and due tasks with a button to its Day plan.
   `AppStore.rollTask` moves the due date (keeping the time) and that day's planned times.
 - Tests: test/smart_helpers_b_test.dart.
+
+### 114 C: Plan my day and What should I do now (version 1.13.2)
+
+- Ranking (`lib/auto_plan.dart`, `rankPicks`): overdue, due today, due within a week, the Do
+  box, starred, In progress, then age. Habits, snoozed, locked and delegated-and-waiting tasks
+  are left out. A task with steps is offered as its next open step that isn't waiting on
+  another (`nextStep`). Lengths are the plan length times `estimateFactor`, snapped.
+- Plan my day (`planDay`, the ✨ button on the Day plan): fills the day's free stretches (from
+  now on when it is today, without lunch) best first, each in the first stretch it fits, up to
+  85% of the free time by default. Already planned tasks and steps are skipped. The result is
+  shown with a teal border and Keep / Try again / Cancel; Try again shakes the order among
+  picks of similar weight. Options in `PlanPrefs` (time left free, lunch start and length).
+- What now (`whatNow`, `showWhatNow`): what is planned now comes first; otherwise picks that
+  fit before the next block, work meeting or phone event get a lift, quick wins when time is
+  short, and a matching saved place (from a fresh location fix, `AppStore.placeHere`) a large
+  lift while a different place counts against. The focus mode hides what it hides.
+- Do now widget (Android, `DoNowWidget.kt`): the top picks from `widgetJson` `doNow`, with
+  Focus, Open and Next (cycles the picks per widget). Deep link taskblocks://now opens the
+  sheet. iPad widget not built yet.
+- Tests: test/smart_helpers_c_test.dart.

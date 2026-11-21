@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -193,6 +192,9 @@ void main() {
 
     testWidgets('Settings has the switches and times', (tester) async {
       final s = AppStore();
+      tester.view.physicalSize = const Size(800, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(home: SettingsPage(store: s)));
       expect(find.text('Learn from my estimates'), findsOneWidget);
       expect(find.text('Morning brief'), findsOneWidget);

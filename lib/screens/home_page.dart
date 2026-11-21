@@ -20,6 +20,7 @@ import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
 import '../widgets/simple_cards.dart';
+import '../widgets/what_now_sheet.dart';
 import 'wrap_up_page.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
@@ -251,6 +252,14 @@ class HomePageState extends State<HomePage> {
 
   /// Item 101: the Day plan (the Calendar's Day mode).
   void openDayPlan([DateTime? day]) => _open(context, CalendarPage(store: store, mode: 'day', initialDay: day));
+
+  /// Item 114 C: "What should I do now?" (top bar button and its widget).
+  void openWhatNow() => showWhatNow(
+        context,
+        store,
+        onFocus: (t, step) => openFocusTimer(op: 'start', taskId: t.id, stepId: step?.id),
+        onOpen: (t) => openTask(t.id),
+      );
 
   /// Item 114 B: the Wrap up screen (from its notification or the ⋮ menu).
   void openWrapUp() => _open(
@@ -656,6 +665,8 @@ class HomePageState extends State<HomePage> {
     // Item 114: the simple card view button, unless Settings → Smart helpers turned it off.
     final simpleOn = data.helperOn(Helper.simpleView);
     final simple = simpleOn && store.simpleView && !_searching;
+    // Item 114 C: the "What should I do now?" button.
+    final nowOn = data.helperOn(Helper.whatNow);
     // Item 102: in a mode, its tools decide the icons; in Everything, Settings does. Icons that
     // don't fit beside the title move into the ⋮ menu.
     bool want(String icon, ModeTool tool) =>
@@ -668,7 +679,7 @@ class HomePageState extends State<HomePage> {
       if (want(TopIcon.dayPlan, ModeTool.dayPlan)) (TopIcon.dayPlan, ModeTool.dayPlan),
     ];
     // Room: the pane's width less the title (about 160 for the mode chip), the menu and search.
-    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0) - (simpleOn ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
+    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0) - (simpleOn ? 48 : 0) - (nowOn ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
     final icons = {for (final c in candidates.take(room)) c.$1};
     final showBoardIcon = icons.contains(TopIcon.board);
     final showMatrixIcon = icons.contains(TopIcon.matrix);
@@ -695,6 +706,8 @@ class HomePageState extends State<HomePage> {
               )
             : ModeTitle(store: store),
         actions: [
+          if (nowOn && !_searching)
+            IconButton(tooltip: 'What should I do now?', icon: const Icon(Icons.my_location_outlined), onPressed: openWhatNow),
           if (simpleOn && !_searching)
             IconButton(
               tooltip: simple ? 'Back to the full list' : 'Simple view',

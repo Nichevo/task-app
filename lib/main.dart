@@ -140,6 +140,8 @@ class _TaskAppState extends State<TaskApp> {
           home.openAchievements();
         case 'habits':
           home.openHabits();
+        case 'now':
+          home.openWhatNow(); // Item 114 C: the Do now widget.
         case 'dayplan':
           home.openDayPlan();
         case 'mode':
