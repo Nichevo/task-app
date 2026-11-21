@@ -20,6 +20,7 @@ import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
 import '../widgets/simple_cards.dart';
+import 'wrap_up_page.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
 import '../widgets/mode_chip.dart';
@@ -249,7 +250,18 @@ class HomePageState extends State<HomePage> {
   void openCalendar(DateTime? day) => _open(context, CalendarPage(store: store, initialDay: day));
 
   /// Item 101: the Day plan (the Calendar's Day mode).
-  void openDayPlan() => _open(context, CalendarPage(store: store, mode: 'day'));
+  void openDayPlan([DateTime? day]) => _open(context, CalendarPage(store: store, mode: 'day', initialDay: day));
+
+  /// Item 114 B: the Wrap up screen (from its notification or the ⋮ menu).
+  void openWrapUp() => _open(
+      context,
+      WrapUpPage(
+        store: store,
+        onOpenDay: (d) {
+          Navigator.of(context).pop();
+          openDayPlan(d);
+        },
+      ));
 
   void openStats() => _open(context, StatsPage(store: store));
 
@@ -730,6 +742,7 @@ class HomePageState extends State<HomePage> {
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'dayplan' => openDayPlan(),
+              'wrap' => openWrapUp(),
               'stats' => openStats(),
               'achievements' => openAchievements(),
               'habits' => openHabits(),
@@ -767,6 +780,7 @@ class HomePageState extends State<HomePage> {
                 const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
               if (!icons.contains(TopIcon.dayPlan) && tool(ModeTool.dayPlan))
                 const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
+              if (data.helperOn(Helper.wrapUp)) const PopupMenuItem(value: 'wrap', child: Text('Wrap up the day')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'daily_helpers.dart';
 import 'focus_timer.dart';
 import 'habits.dart';
 import 'models.dart';
@@ -121,6 +122,13 @@ class Reminders {
   VoidCallback? onOpenFocus;
   void Function(String taskId, String? stepId)? onStartFocus;
   bool startedFromFocus = false;
+
+  /// Item 114 B: the wrap up notification (opens the Wrap up screen) and the morning brief
+  /// (opens the Day plan) were tapped, while running or to start the app.
+  VoidCallback? onOpenWrapUp;
+  VoidCallback? onOpenBrief;
+  bool startedFromWrapUp = false;
+  bool startedFromBrief = false;
   (String, String?)? startedFocusOn;
 
   static Map? _payload(String? p) {
@@ -191,6 +199,14 @@ class Reminders {
           onOpenFocus?.call();
           return;
         }
+        if (r.actionId == null && p?['wrap'] == true) {
+          onOpenWrapUp?.call();
+          return;
+        }
+        if (r.actionId == null && p?['brief'] == true) {
+          onOpenBrief?.call();
+          return;
+        }
         if (r.actionId == null && _isReview(r.payload)) {
           onOpenReview?.call();
           return;
@@ -214,6 +230,8 @@ class Reminders {
       final r = launch!.notificationResponse;
       final p = _payload(r?.payload);
       startedFromFocus = r?.actionId == null && p?['focus'] == true;
+      startedFromWrapUp = r?.actionId == null && p?['wrap'] == true;
+      startedFromBrief = r?.actionId == null && p?['brief'] == true;
       if (r?.actionId == 'focus' && p?['task'] is String) startedFocusOn = (p!['task'] as String, p['step'] as String?);
     }
     await _plugin
@@ -520,12 +538,13 @@ class Reminders {
     _lastKey = key;
     try {
       await _plugin.cancelAllPendingNotifications();
-      for (final r in plan(data, now)) {
+      // Item 114 B: the morning brief and wrap up are set beside the task reminders.
+      for (final r in [...plan(data, now), ...dailyHelpers(data, now)]) {
         Future<void> set(AndroidScheduleMode mode) => _plugin.zonedSchedule(
               id: r.id,
               title: r.title,
               body: r.body,
-              payload: r.task == null ? null : payloadFor(r, dir),
+              payload: r.task == null ? r.payload : payloadFor(r, dir),
               // A UTC time is the same moment wherever the phone is.
               scheduledDate: tz.TZDateTime.from(r.when.toUtc(), tz.UTC),
               notificationDetails: switch (r.kind) {
@@ -535,6 +554,8 @@ class Reminders {
                 ReminderKind.summary => _summary(r.body),
                 ReminderKind.slot => _slot,
                 ReminderKind.focus => _focusEnd,
+                ReminderKind.brief => _daily('brief', 'Morning brief', 'The day ahead, each morning', r.body),
+                ReminderKind.wrapUp => _daily('wrapUp', 'Wrap up the day', 'What is left at the end of the day', r.body),
               },
               androidScheduleMode: mode,
             );
@@ -574,6 +595,49 @@ class Reminders {
     }
     return out;
   }
+
+  /// Item 114 B: ids of the morning brief and the wrap up, one per day for the next week.
+  static int briefId(int day) => 30 + day;
+  static int wrapId(int day) => 40 + day;
+
+  /// Item 114 B: the morning brief and the wrap up for the next 7 days, each worked out from the
+  /// tasks as they are now (they are set again on every change and each new day).
+  static List<PlannedReminder> dailyHelpers(AppData data, DateTime now) {
+    final out = <PlannedReminder>[];
+    final today = DateTime(now.year, now.month, now.day);
+    for (var i = 0; i < 7; i++) {
+      final day = DateTime(today.year, today.month, today.day + i);
+      if (data.helperOn(Helper.morningBrief)) {
+        final at = dailyTime(data, data.briefAt, day);
+        if (at != null && at.isAfter(now)) {
+          final (title, body) = briefText(data, at);
+          out.add(PlannedReminder(briefId(i), at, title, body, null, ReminderKind.brief,
+              payload: jsonEncode({'brief': true})));
+        }
+      }
+      if (data.helperOn(Helper.wrapUp)) {
+        final at = dailyTime(data, data.wrapAt, day, end: true);
+        if (at != null && at.isAfter(now)) {
+          final (title, body) = wrapText(data, at);
+          out.add(PlannedReminder(wrapId(i), at, title, body, null, ReminderKind.wrapUp,
+              payload: jsonEncode({'wrap': true})));
+        }
+      }
+    }
+    return out;
+  }
+
+  static NotificationDetails _daily(String channel, String name, String about, String body) => NotificationDetails(
+        iOS: const DarwinNotificationDetails(),
+        android: AndroidNotificationDetails(
+          channel,
+          name,
+          channelDescription: about,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          styleInformation: BigTextStyleInformation(body),
+        ),
+      );
 
   static NotificationDetails _summary(String body) => NotificationDetails(
         iOS: const DarwinNotificationDetails(),
@@ -729,11 +793,14 @@ class Reminders {
 
 }
 
-enum ReminderKind { due, dueRepeat, step, summary, slot, focus }
+enum ReminderKind { due, dueRepeat, step, summary, slot, focus, brief, wrapUp }
 
 /// One reminder to set: when, what it says and the task it opens (none for the daily summary).
 class PlannedReminder {
-  const PlannedReminder(this.id, this.when, this.title, this.body, this.task, this.kind, {this.step});
+  const PlannedReminder(this.id, this.when, this.title, this.body, this.task, this.kind, {this.step, this.payload});
+
+  /// Item 114 B: what a reminder without a task opens when tapped ({"brief": true}...).
+  final String? payload;
 
   final int id;
   final DateTime when;

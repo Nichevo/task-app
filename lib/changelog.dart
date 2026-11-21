@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.1', 'November 2026', [
+    'Learn from your estimates: when you tick off a task that has a "How long", the app asks how long it really took. The time from the focus timer and ticked Day plan blocks is picked already, so most answers are one tap. Settings, Smart helpers can ask only when nothing was timed, or never.',
+    'Statistics has a new "How good are your estimates?" card: how much longer things take than you guess (overall and by category) and your biggest misses. Once about 10 tasks have both times, planning can allow for it.',
+    'Morning brief: a notification each weekday at 7:30 with the day\'s meetings, what is planned and due, and anything overdue. Tap it to open the Day plan.',
+    'Wrap up the day: a notification at 17:30 with what is still open. Tap it (or pick "Wrap up the day" in the ⋮ menu) to move each one to tomorrow or another day, mark it worked on, done, or drop it, and see what tomorrow holds.',
+    'Both follow your focus mode schedule when you have one (only on days with a scheduled mode; the wrap up comes when the last one ends). Change the times and days, or turn them off, in Settings, Smart helpers.',
+  ]),
   Release('1.13.0', 'November 2026', [
     'Simple view: tap the new cards button at the top of the task list to see just big, plain task cards (name, due date, category) with their open steps as smaller cards under them. Nothing can be dragged or ticked there, so it is safe for a quick look. On an open Fold or the iPad it shows two columns. Tap the button again for the full list.',
     'Settings has a new Smart helpers section at the top. Each helper has its own switch, and turning one off hides it everywhere. Simple view is the first; more are coming in the next updates.',

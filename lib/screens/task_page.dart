@@ -940,7 +940,9 @@ class _TaskPageState extends State<TaskPage> {
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
-          subtitle: Text(task.estimate == null ? 'Not set' : 'About ${describeMinutes(task.estimate!)}'),
+          subtitle: Text(task.estimate == null
+              ? 'Not set'
+              : 'About ${describeMinutes(task.estimate!)}${task.actual == null ? '' : ' · took ${describeMinutes(task.actual!)}'}'),
           onTap: archived ? null : _pickEstimate,
           trailing: task.estimate == null || archived
               ? null

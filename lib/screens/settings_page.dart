@@ -572,6 +572,108 @@ class _SettingsPageState extends State<SettingsPage> {
   static String _time(int minutes) =>
       '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
+  /// Item 114 B: estimates, morning brief and wrap up.
+  List<Widget> _helperSettings() {
+    final hint = TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor);
+    String describe(DailyAt d, {bool end = false}) {
+      final scheduled = d.follow && data.modeSchedule.isNotEmpty;
+      if (scheduled) {
+        return end
+            ? 'At ${_time(d.at)} or when your scheduled focus modes end, on days that have one'
+            : 'At ${_time(d.at)} on days with a scheduled focus mode';
+      }
+      final days = d.days.length == 7
+          ? 'every day'
+          : d.days.length == 5 && DailyAt.weekdays.containsAll(d.days)
+              ? 'weekdays'
+              : (d.days.toList()..sort()).map((x) => _weekdays[x - 1].substring(0, 3)).join(', ');
+      return 'At ${_time(d.at)}, $days';
+    }
+
+    Widget daily(String name, IconData icon, String title, String about, DailyAt d, void Function(DailyAt) set,
+        {bool end = false}) {
+      final on = data.helperOn(name);
+      return Column(children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(icon),
+          title: Text(title),
+          subtitle: Text(on ? describe(d, end: end) : about),
+          value: on,
+          onChanged: (v) => store.setHelper(name, v),
+        ),
+        if (on)
+          Padding(
+            padding: const EdgeInsets.only(left: 56),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                ActionChip(
+                  avatar: const Icon(Icons.schedule, size: 18),
+                  label: Text(_time(d.at)),
+                  onPressed: () async {
+                    final t = await _pickTime(d.at);
+                    if (t != null) _set(() => set(DailyAt(at: t.hour * 60 + t.minute, days: d.days, follow: d.follow)));
+                  },
+                ),
+                if (!(d.follow && data.modeSchedule.isNotEmpty))
+                  for (var i = 1; i <= 7; i++)
+                    FilterChip(
+                      label: Text(_weekdays[i - 1].substring(0, 2)),
+                      selected: d.days.contains(i),
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (v) => _set(() => set(DailyAt(
+                          at: d.at, days: v ? {...d.days, i} : ({...d.days}..remove(i)), follow: d.follow))),
+                    ),
+              ]),
+              if (data.modeSchedule.isNotEmpty)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Follow my focus mode schedule'),
+                  value: d.follow,
+                  onChanged: (v) => _set(() => set(DailyAt(at: d.at, days: d.days, follow: v))),
+                ),
+            ]),
+          ),
+      ]);
+    }
+
+    return [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.timer_outlined),
+        title: const Text('Learn from my estimates'),
+        subtitle: const Text('Keeps how long tasks with a "How long" really took, and shows how good the guesses are '
+            'on the Statistics page'),
+        value: data.helperOn(Helper.learnEstimates),
+        onChanged: (v) => store.setHelper(Helper.learnEstimates, v),
+      ),
+      if (data.helperOn(Helper.learnEstimates))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Row(children: [
+            Expanded(child: Text('Ask how long it took', style: hint)),
+            DropdownButton<String>(
+              value: data.askActual,
+              items: const [
+                DropdownMenuItem(value: 'always', child: Text('Every time')),
+                DropdownMenuItem(value: 'unrecorded', child: Text('Only if nothing was timed')),
+                DropdownMenuItem(value: 'never', child: Text('Never (use the timed time)')),
+              ],
+              onChanged: (v) => _set(() => data.askActual = v ?? 'always'),
+            ),
+          ]),
+        ),
+      daily(Helper.morningBrief, Icons.wb_sunny_outlined, 'Morning brief',
+          'A notification each morning with the day\'s meetings, plan and what is due', data.briefAt, (v) => data.briefAt = v),
+      daily(Helper.wrapUp, Icons.nightlight_outlined, 'Wrap up the day',
+          'A notification at the end of the day to move on what is left (also in the ⋮ menu)', data.wrapAt,
+          (v) => data.wrapAt = v,
+          end: true),
+    ];
+  }
+
   /// Item 101: the Day plan.
   List<Widget> _dayPlanSettings() {
     final d = data.dayPlan;
@@ -743,6 +845,7 @@ class _SettingsPageState extends State<SettingsPage> {
               value: data.helperOn(Helper.simpleView),
               onChanged: (v) => store.setHelper(Helper.simpleView, v),
             ),
+            ..._helperSettings(),
             const Divider(height: 40),
             _heading('Colour speed'),
             Text('Tasks go from green to red in ${describeHours(speedSteps[idx])}.'),

@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 import 'home_widgets.dart';
 import 'location.dart';
-import 'models.dart' show MatrixBox;
+import 'models.dart' show MatrixBox, Task;
+import 'widgets/actual_sheet.dart';
 import 'native.dart';
 import 'reminders.dart';
 import 'secrets.dart';
@@ -48,6 +49,7 @@ class TaskApp extends StatefulWidget {
 class _TaskAppState extends State<TaskApp> {
   final _home = GlobalKey<HomePageState>();
   StreamSubscription<Uri?>? _clicks;
+  StreamSubscription<Task>? _actuals;
   late final AppLifecycleListener _lifecycle;
 
   @override
@@ -68,6 +70,12 @@ class _TaskAppState extends State<TaskApp> {
       onPause: widget.store.flush,
     );
     _takeShared();
+    // Item 114 B: how long a just-ticked task really took.
+    _actuals = widget.store.actualAsks.listen((t) => _onHome((home) {
+          if (home.mounted) askActualTime(home.context, widget.store, t);
+        }));
+    widget.reminders?.onOpenWrapUp = () => _onHome((home) => home.openWrapUp());
+    widget.reminders?.onOpenBrief = () => _onHome((home) => home.openDayPlan());
     widget.reminders?.onOpenTask = (id) => _onHome((home) => home.openTask(id));
     // Item 102: the focus timer's notification, and "Start focus" on a Day plan reminder.
     widget.reminders?.onOpenFocus = () => _onHome((home) => home.openFocusTimer());
@@ -81,6 +89,8 @@ class _TaskAppState extends State<TaskApp> {
           } else if (r?.startedFromFocus ?? false) {
             home.openFocusTimer();
           }
+          if (r?.startedFromWrapUp ?? false) home.openWrapUp();
+          if (r?.startedFromBrief ?? false) home.openDayPlan();
           final id = widget.reminders?.startedFromTask;
           if (id != null) home.openTask(id);
         }));
@@ -89,6 +99,7 @@ class _TaskAppState extends State<TaskApp> {
   @override
   void dispose() {
     _clicks?.cancel();
+    _actuals?.cancel();
     _lifecycle.dispose();
     super.dispose();
   }

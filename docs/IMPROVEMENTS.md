@@ -1736,3 +1736,29 @@ name means its default). Built as updates A to G; mock-ups in the project files
 - Test fix: test/day_plan_3_test.dart used Monday 16 November 2026, which has now passed (its
   planned times became missed and moved to the tray); it now uses a Monday a week ahead.
 - Tests: test/smart_helpers_a_test.dart.
+
+### 114 B: estimate vs actual, morning brief, wrap up (version 1.13.1)
+
+- Estimates (`lib/estimates.dart`): a task's estimate is its "How long" or a length in hours
+  under Takes (`estimateOf`). On ticking off, the recorded time (focus timer minutes or ticked
+  Day plan blocks, whichever is more) is saved as `Task.actual`, and the done record keeps
+  `est` and `act`. With the Learn from my estimates helper on, a sheet asks how long it really
+  took (`askActualTime`, through `AppStore.actualAsks` so any tick in the app can ask): every
+  time by default, as the owner wants as much data as possible; Settings can make it "only if
+  nothing was timed" or "never". Ticks from notifications and widgets never ask.
+- Statistics: "How good are your estimates?" (last 60 days): the overall ratio, by category,
+  the three biggest misses and "Allow for it when planning". `estimateFactor` is what Plan my
+  day and What now (update C) will use: the category's ratio from 5 tasks, else the overall
+  one from 10, kept between 0.5 and 3.
+- Morning brief and wrap up (`lib/daily_helpers.dart`, `Reminders.dailyHelpers`): one
+  notification each a day for the next week, worked out when the reminders are set (again on
+  every change and each day). Default 7:30 and 17:30 on weekdays; with a focus mode schedule
+  and "Follow my focus mode schedule" (on by default) only on days with a scheduled mode, the
+  wrap up when the day's last scheduled mode ends if that is later. Options in
+  `AppData.helperPrefs` (`HelperPrefs` extension).
+- Wrap up screen (`WrapUpPage`, from its notification or the ⋮ menu): today's done count and
+  focus time, each task due by today or planned today and unticked, with Tomorrow, Pick day,
+  Worked on it (ticks today as worked and carries it to tomorrow), Done and Drop (all undoable),
+  and tomorrow's meetings, plans and due tasks with a button to its Day plan.
+  `AppStore.rollTask` moves the due date (keeping the time) and that day's planned times.
+- Tests: test/smart_helpers_b_test.dart.

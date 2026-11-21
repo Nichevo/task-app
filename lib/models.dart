@@ -53,6 +53,7 @@ class Task {
     this.addedWhere,
     this.doneWhere,
     this.estimate,
+    this.actual,
     this.seriesId,
     this.place,
     this.placeLeave = false,
@@ -107,7 +108,7 @@ class Task {
   static const _known = {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
-    'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
+    'addedWhere', 'doneWhere', 'estimate', 'actual', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'takesMin', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
@@ -180,6 +181,10 @@ class Task {
 
   /// About how long it takes, in minutes; null if not given.
   int? estimate;
+
+  /// Item 114 B: how long it really took, in minutes, as confirmed when it was ticked off (or
+  /// the recorded time when nobody was asked); null before then.
+  int? actual;
 
   /// The first task of a repeating series; every repeat carries it so the series can be
   /// counted together. Null on the first one (its own id is the series).
@@ -439,6 +444,7 @@ class Task {
         if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
         if (estimate != null) 'estimate': estimate,
+        if (actual != null) 'actual': actual,
         if (seriesId != null) 'series': seriesId,
         if (place != null) 'place': place,
         if (placeLeave) 'placeLeave': true,
@@ -503,6 +509,7 @@ class Task {
         addedWhere: GeoPoint.tryParse(j['addedWhere']),
         doneWhere: GeoPoint.tryParse(j['doneWhere']),
         estimate: (j['estimate'] as num?)?.toInt(),
+        actual: (j['actual'] as num?)?.toInt(),
         seriesId: j['series'] as String?,
         place: j['place'] as String?,
         placeLeave: j['placeLeave'] as bool? ?? false,
@@ -1133,6 +1140,8 @@ class DoneRecord {
     this.stageMinutes,
     this.mode,
     this.outside = false,
+    this.estMinutes,
+    this.actMinutes,
     this.extra = const {},
   });
 
@@ -1140,7 +1149,29 @@ class DoneRecord {
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages', 'mode', 'outside'};
+  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages', 'mode', 'outside', 'est', 'act'};
+
+  /// Item 114 B: the estimate when it was ticked off and how long it really took (minutes).
+  final int? estMinutes;
+  final int? actMinutes;
+
+  DoneRecord withActual(int? minutes) => DoneRecord(
+        at: at,
+        tookMinutes: tookMinutes,
+        onTime: onTime,
+        categoryId: categoryId,
+        source: source,
+        title: title,
+        series: series,
+        lateMinutes: lateMinutes,
+        missed: missed,
+        stageMinutes: stageMinutes,
+        mode: mode,
+        outside: outside,
+        estMinutes: estMinutes,
+        actMinutes: minutes,
+        extra: extra,
+      );
 
   /// Item 102: the focus mode it was ticked off in ([everythingId] for none); null on older records.
   final String? mode;
@@ -1183,7 +1214,7 @@ class DoneRecord {
   /// The due time, when it had one and the record is new enough to know it.
   DateTime? get due => lateMinutes == null ? null : at.subtract(Duration(minutes: lateMinutes!));
 
-  factory DoneRecord.of(Task t, DateTime at, {String? mode, bool outside = false}) => DoneRecord(
+  factory DoneRecord.of(Task t, DateTime at, {String? mode, bool outside = false, int? est, int? act}) => DoneRecord(
         at: at,
         tookMinutes: at.difference(t.createdAt).inMinutes,
         onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
@@ -1196,6 +1227,8 @@ class DoneRecord {
         stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
         mode: mode,
         outside: outside,
+        estMinutes: est,
+        actMinutes: act,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1212,6 +1245,8 @@ class DoneRecord {
         if (stageMinutes != null) 'stages': stageMinutes,
         if (mode != null) 'mode': mode,
         if (outside) 'outside': true,
+        if (estMinutes != null) 'est': estMinutes,
+        if (actMinutes != null) 'act': actMinutes,
       };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
@@ -1229,6 +1264,8 @@ class DoneRecord {
             : null,
         mode: j['mode'] as String?,
         outside: j['outside'] as bool? ?? false,
+        estMinutes: (j['est'] as num?)?.toInt(),
+        actMinutes: (j['act'] as num?)?.toInt(),
         extra: unknownFields(j, _known),
       );
 }
@@ -1728,6 +1765,7 @@ class AppData {
     DayPlanSettings? dayPlan,
     Map<String, SkipRecord>? skips,
     Map<String, bool>? helpers,
+    Map<String, dynamic>? helperPrefs,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -1775,6 +1813,7 @@ class AppData {
         done = done ?? {},
         skips = skips ?? {},
         helpers = helpers ?? {},
+        helperPrefs = helperPrefs ?? {},
         stages = stages ?? KanbanStage.defaults(),
         eventCalendars = eventCalendars ?? {},
         dismissedEvents = dismissedEvents ?? {},
@@ -1894,6 +1933,9 @@ class AppData {
   /// Item 114: the Smart helpers switches in Settings, by [Helper] name. A name not here is at
   /// its default ([Helper.offByDefault] lists those that start off).
   final Map<String, bool> helpers;
+
+  /// Item 114: each helper's own options (times, days...), by name; see [HelperPrefs].
+  final Map<String, dynamic> helperPrefs;
 
   bool helperOn(String name) => helpers[name] ?? !Helper.offByDefault.contains(name);
 
@@ -2057,7 +2099,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips', 'helpers',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips', 'helpers', 'helperPrefs',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress', 'dayPlan',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -2096,6 +2138,7 @@ class AppData {
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
         'dayPlan': dayPlan.toJson(),
         if (helpers.isNotEmpty) 'helpers': helpers,
+        if (helperPrefs.isNotEmpty) 'helperPrefs': helperPrefs,
         if (lists && skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -2205,6 +2248,7 @@ class AppData {
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
         dayPlan: DayPlanSettings.fromJson(j['dayPlan']),
+        helperPrefs: j['helperPrefs'] is Map ? Map<String, dynamic>.from(j['helperPrefs'] as Map) : null,
         helpers: {
           for (final e in (j['helpers'] as Map? ?? {}).entries)
             if (e.value is bool) e.key as String: e.value as bool,
@@ -2421,6 +2465,7 @@ AppData mergeData(AppData a, AppData b) {
     dayPlan: settingsFrom.dayPlan,
     skips: skips,
     helpers: settingsFrom.helpers,
+    helperPrefs: settingsFrom.helperPrefs,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: _mergeById(settingsFrom.templates, olderSettings.templates, (c) => c.id, deleted),
     done: done,
@@ -2517,8 +2562,66 @@ abstract final class Helper {
   /// The simple card view button on the task list (item 114).
   static const simpleView = 'simpleView';
 
-  static const all = [simpleView];
+  /// Item 114 B: after ticking off a task with an estimate, ask how long it really took, and
+  /// show how good the estimates are on the Statistics page.
+  static const learnEstimates = 'learnEstimates';
+
+  /// Item 114 B: a notification each morning with the day ahead.
+  static const morningBrief = 'morningBrief';
+
+  /// Item 114 B: a notification at the end of the day to wrap it up, and the Wrap up screen.
+  static const wrapUp = 'wrapUp';
+
+  static const all = [simpleView, learnEstimates, morningBrief, wrapUp];
 
   /// Helpers that start switched off.
   static const offByDefault = <String>{};
+}
+
+/// Item 114 B: when a daily helper notification (morning brief, wrap up) comes.
+class DailyAt {
+  const DailyAt({required this.at, required this.days, required this.follow});
+
+  /// Minutes after midnight.
+  final int at;
+
+  /// Weekdays (1 = Monday) it comes on.
+  final Set<int> days;
+
+  /// Follow the focus mode schedule: only on days that have a scheduled mode, the brief at its
+  /// time and the wrap up when the day's last scheduled mode ends (at [at] when that is later).
+  final bool follow;
+
+  static const weekdays = {1, 2, 3, 4, 5};
+
+  Map<String, dynamic> toJson() => {'at': at, 'days': (days.toList()..sort()), 'follow': follow};
+
+  static DailyAt from(Object? j, int defaultAt) {
+    if (j is! Map) return DailyAt(at: defaultAt, days: weekdays, follow: true);
+    return DailyAt(
+      at: (j['at'] as num?)?.toInt() ?? defaultAt,
+      days: {for (final d in j['days'] as List? ?? weekdays.toList()) if (d is num) d.toInt()},
+      follow: j['follow'] as bool? ?? true,
+    );
+  }
+}
+
+/// Item 114: the options of the Smart helpers, kept in [AppData.helperPrefs].
+extension HelperPrefs on AppData {
+  /// Morning brief, 7:30 by default.
+  DailyAt get briefAt => DailyAt.from(helperPrefs['brief'], 7 * 60 + 30);
+  set briefAt(DailyAt v) => helperPrefs['brief'] = v.toJson();
+
+  /// Wrap up the day, 17:30 by default.
+  DailyAt get wrapAt => DailyAt.from(helperPrefs['wrap'], 17 * 60 + 30);
+  set wrapAt(DailyAt v) => helperPrefs['wrap'] = v.toJson();
+
+  /// Item 114 B: ask how long a task really took: 'always' (the owner's choice), 'unrecorded'
+  /// (only when nothing was recorded) or 'never' (keep the recorded time).
+  String get askActual => helperPrefs['askActual'] as String? ?? 'always';
+  set askActual(String v) => helperPrefs['askActual'] = v;
+
+  /// Item 114 B: let planning (Plan my day, What now) allow for how far off estimates usually are.
+  bool get allowForEstimates => helperPrefs['allowEst'] as bool? ?? true;
+  set allowForEstimates(bool v) => helperPrefs['allowEst'] = v;
 }

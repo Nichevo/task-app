@@ -9,7 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'day_plan.dart' show PlanMove;
+import 'daily_helpers.dart' show rollPlan;
 import 'dropbox.dart';
+import 'estimates.dart';
 import 'focus_timer.dart';
 import 'gantt.dart';
 import 'google.dart';
@@ -1185,9 +1187,21 @@ class AppStore extends ChangeNotifier {
     if (t.kanban && last != null && t.stageId != last.id) _move(t, last, MoveHow.done, at: now, locate: false);
     t.closedAt = now;
     data.archived.insert(0, t);
+    // Item 114 B: keep the estimate and the time recorded on it, for the estimates statistics.
+    final est = estimateOf(t, data);
+    final recorded = recordedMinutes(t);
+    if (est != null && recorded > 0) t.actual = recorded;
     data.done[t.id] = DoneRecord.of(t, now,
         mode: modeNow.mode?.id ?? everythingId,
-        outside: modeNow.mode?.showFor(data, t.categoryId) == CatShow.hide);
+        outside: modeNow.mode?.showFor(data, t.categoryId) == CatShow.hide,
+        est: est,
+        act: est == null ? null : t.actual);
+    if (est != null &&
+        at == null &&
+        data.helperOn(Helper.learnEstimates) &&
+        (data.askActual == 'always' || (data.askActual == 'unrecorded' && recorded == 0))) {
+      _actualAsks.add(t);
+    }
     _release(t.id, now);
     for (final other in data.active) {
       for (final s in other.steps.where((s) => s.taskId == t.id && !s.done)) {
@@ -1211,6 +1225,18 @@ class AppStore extends ChangeNotifier {
     // up later would get the wrong place.
     if (at == null || DateTime.now().difference(at).inMinutes < 2) _locate([t], done: true);
     return next;
+  }
+
+  /// Item 114 B: tasks just ticked off in the app whose real time should be asked for.
+  final _actualAsks = StreamController<Task>.broadcast();
+  Stream<Task> get actualAsks => _actualAsks.stream;
+
+  /// Item 114 B: how long [t] (ticked off) really took, in minutes.
+  void setActual(Task t, int minutes) {
+    t.actual = minutes;
+    final r = data.done[t.id];
+    if (r != null) data.done[t.id] = r.withActual(minutes);
+    changed(task: t);
   }
 
   /// Moves a repeating task on to its next due date without ticking it off: same task, checklist
@@ -2731,6 +2757,22 @@ class AppStore extends ChangeNotifier {
   void snooze(Task t, DateTime until) {
     t.snoozedUntil = until;
     changed(task: t);
+  }
+
+  /// Item 114 B (wrap up): moves what [t] had left on [from] to [to]: its due date when it was
+  /// due by then, and its unticked planned times that day. Returns how to undo it.
+  VoidCallback rollTask(Task t, DateTime from, DateTime to) {
+    final plan = rollPlan(t, from, to);
+    final oldDue = t.dueAt;
+    final oldStarts = {for (final s in plan.slots.keys) s: s.start};
+    if (plan.due != null) t.dueAt = plan.due;
+    plan.slots.forEach((s, at) => s.start = at);
+    changed(task: t);
+    return () {
+      t.dueAt = oldDue;
+      oldStarts.forEach((s, at) => s.start = at);
+      changed(task: t);
+    };
   }
 
   void setDue(Task t, DateTime? due) {
