@@ -434,7 +434,9 @@ void main() {
       // Planned today breaks through, which the widgets can't work out themselves.
       expect(task(planned).containsKey('hide'), isFalse);
       // The same data twice in a day: the widgets aren't redrawn for nothing.
-      expect(HomeWidgets.widgetJson(s.data, now), HomeWidgets.widgetJson(s.data, now.add(const Duration(seconds: 5))));
+      // (Leaving out the Do now widget's "free" time, which counts down by the minute.)
+      String same(DateTime at) => jsonEncode((jsonDecode(HomeWidgets.widgetJson(s.data, at)) as Map)..remove('doNow'));
+      expect(same(now), same(now.add(const Duration(seconds: 5))));
       // Switched off: the widgets are told not to follow the mode, but still get the modes
       // (item 108: the Focus mode widget, and widgets set to a mode of their own).
       s.data.modeWidgets = false;
