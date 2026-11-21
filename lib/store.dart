@@ -12,6 +12,7 @@ import 'day_plan.dart' show PlanMove;
 import 'daily_helpers.dart' show rollPlan;
 import 'auto_plan.dart' show PlannedPick;
 import 'dropbox.dart';
+import 'critical_path.dart';
 import 'estimates.dart';
 import 'focus_timer.dart';
 import 'gantt.dart';
@@ -946,6 +947,7 @@ class AppStore extends ChangeNotifier {
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
+    if (data.helperOn(Helper.criticalPath)) t.timing = data.newTiming.id;
     _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage, plan: plan, tags: tags);
     changed(order: true);
     _locate([t]);
@@ -1827,6 +1829,7 @@ class AppStore extends ChangeNotifier {
   /// Call after the task page changes a Gantt field (start, length, dates).
   void ganttChanged(Task t) {
     _notePlan(t);
+    keepTaskTimings();
     changed(task: t);
   }
 
@@ -1840,7 +1843,10 @@ class AppStore extends ChangeNotifier {
       if (bar != null) t.startAt = bar.start;
     }
     shiftDates(t, days);
+    // Item 114 D: a bar dragged by hand stays where it was put.
+    if (t.timing == Timing.asap.id || t.timing == Timing.alap.id) t.timing = Timing.fixed.id;
     changed(task: t);
+    keepTaskTimings();
     return pushPlan(t, data);
   }
 
@@ -1859,6 +1865,7 @@ class AppStore extends ChangeNotifier {
       t.dueAt = DateTime(day.year, day.month, day.day, old?.hour ?? 17, old?.minute ?? 0);
     }
     changed(task: t);
+    keepTaskTimings();
     return pushPlan(t, data);
   }
 
@@ -2810,6 +2817,7 @@ class AppStore extends ChangeNotifier {
     final typed = readTags ? takeStepTags(data, title) : null;
     final s = TaskStep.create(typed?.title ?? title);
     if (typed != null) s.tags.addAll(typed.tags);
+    if (data.helperOn(Helper.criticalPath)) s.timing = data.newTiming.id;
     t.steps.add(s);
     if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
     changed(task: t);
@@ -3017,6 +3025,11 @@ class AppStore extends ChangeNotifier {
   /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
   /// [minutes] (1.12.10): the length in hours, when it was given that way.
   void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? minutes, int? progress}) {
+    // Item 114 D: a start picked by hand stays put.
+    final was = s.startAt;
+    if (start != null && (was == null || daysBetween(was, start) != 0) && s.timing != null && s.timing != Timing.fixed.id) {
+      s.timing = Timing.fixed.id;
+    }
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
     s.takesMinutes = s.takesDays == null ? null : minutes;
@@ -3027,7 +3040,62 @@ class AppStore extends ChangeNotifier {
 
   /// Item 85: moves steps that come after others later where they would start too early, unless
   /// Settings, Gantt chart, "When a task moves later" says never. Returns how many moved.
-  int keepStepOrder(Task t) => data.ganttPush == GanttPush.never ? 0 : pushSteps(t, data);
+  /// Item 114 D: steps with a timing go where it says first (as soon or as late as possible).
+  int keepStepOrder(Task t) {
+    final timed = data.helperOn(Helper.criticalPath) ? applyStepTimings(t, data) : 0;
+    return timed + (data.ganttPush == GanttPush.never ? 0 : pushSteps(t, data));
+  }
+
+  /// Item 114 D: tasks on the chart with a timing go where it says. Returns the ones moved.
+  Set<Task> keepTaskTimings() {
+    if (!data.helperOn(Helper.criticalPath)) return const {};
+    final moved = applyTaskTimings(data);
+    for (final t in moved) {
+      changed(task: t);
+    }
+    return moved;
+  }
+
+  /// Item 114 D: sets when [t] (or its step [s]) should happen, and puts it (and what follows) there.
+  void setTiming(Task t, TaskStep? s, Timing? timing) {
+    if (s == null) {
+      t.timing = timing?.id;
+      if (timing == Timing.finishBy && t.dueAt == null) {
+        final bar = barFor(t, data);
+        if (bar != null) t.dueAt = DateTime(bar.end.year, bar.end.month, bar.end.day, 17);
+      }
+      if (timing == Timing.fixed && t.startAt == null) t.startAt = barFor(t, data)?.start;
+      keepTaskTimings();
+    } else {
+      s.timing = timing?.id;
+      if (timing == Timing.finishBy && s.dueAt == null) {
+        final bar = stepBar(t, s, data);
+        if (bar != null) s.dueAt = DateTime(bar.end.year, bar.end.month, bar.end.day, 17);
+      }
+      if (timing == Timing.fixed && s.startAt == null) s.startAt = stepBar(t, s, data)?.start;
+      keepStepOrder(t);
+    }
+    changed(task: t);
+  }
+
+  /// Item 114 D: Plan back from the due date: gives each open step of [t] the start in [starts]
+  /// (by step id) and its days of work in [days], keeping a due date's time.
+  void setStepDates(Task t, Map<String, DateTime> starts, Map<String, int> days) {
+    final weekends = weekendsFor(t, data);
+    for (final s in t.steps) {
+      final start = starts[s.id];
+      if (s.done || start == null) continue;
+      s.startAt = dayOf(start);
+      s.takesDays = days[s.id] ?? s.takesDays ?? 1;
+      s.takesMinutes = null;
+      final due = s.dueAt;
+      if (due != null) {
+        final end = workEnd(start, s.takesDays!, weekends: weekends);
+        s.dueAt = DateTime(end.year, end.month, end.day, due.hour, due.minute);
+      }
+    }
+    changed(task: t);
+  }
 
   /// Item 85: sets which steps [s] comes after (others of the same task), then keeps the order.
   int setStepAfter(Task t, TaskStep s, Iterable<String> ids) {

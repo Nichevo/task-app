@@ -1782,3 +1782,26 @@ name means its default). Built as updates A to G; mock-ups in the project files
   Focus, Open and Next (cycles the picks per widget). Deep link taskblocks://now opens the
   sheet. iPad widget not built yet.
 - Tests: test/smart_helpers_c_test.dart.
+
+### 114 D: critical path and Gantt timing (version 1.13.3)
+
+- Engine (`lib/critical_path.dart`): `criticalPath` over tasks (`taskItems`) or one task's steps
+  (`stepItems`): a forward pass from where the bars are (or, with `from`, as early as the links
+  allow), a backward pass from the finish or a due date (`anchor`), spare working days per item
+  and the tightest chain marked critical. Weekends follow the task's setting; task waits (lag)
+  count.
+- Timing (`Task.timing`, `TaskStep.timing`, json `timing`): asap, alap, fixed, finishBy.
+  `applyStepTimings` / `applyTaskTimings` run with the existing push (`keepStepOrder`,
+  `ganttChanged`, `moveOnGantt`, `resizeOnGantt`). Null keeps the old rule (own dates, pushed
+  later only), so existing tasks don't move. New tasks and steps get the Settings default
+  (as soon as possible). A start set by hand (drag, the task page, the step dialog, ±1 day)
+  turns as soon / as late as possible into fixed, so it stays put.
+- Gantt page: the Critical path button (critical bars in red-orange, spare time hatched after
+  each bar, a summary card with the finish against the due date); tapping a bar opens
+  `showTimingSheet` (the four timings, −1/+1 day, shorter/longer, open). With the helper off,
+  tapping a bar opens the task as before.
+- `PlanBackPage`: latest (or earliest) start of every open step from a finish date, with
+  "Start no later than", and `AppStore.setStepDates` to set them all.
+- Not built: best/likely/worst ranges and finish-date odds (optional, offered for later).
+- Tests: test/smart_helpers_d_test.dart; gantt_test and step_links_test turn the helper off
+  where they test the old push-later-only rule.

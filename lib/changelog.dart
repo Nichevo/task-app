@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.3', 'November 2026', [
+    'Critical path on the Gantt chart: tap the new route button to colour the chain of tasks (or, for an opened-out task, steps) that sets the finish date, and see the spare time of the rest hatched after their bars. A card at the bottom says when it all finishes against the due date and what is on the critical path.',
+    'Tap a bar to say when it should happen: as soon as possible (straight after what it comes after, and earlier when that finishes early), as late as possible (right before what needs it), start on a date, or must finish by (worked back from its due date). Quick moves: a day earlier or later, shorter or longer. Moving a bar by hand pins it to that date.',
+    'Plan back from the due date (task ⋮ menu, or the critical path card): from the finish date it works out the latest start of every step using your links and lengths, says when you must start, and sets all the dates in one tap. Switch to Earliest starts to see them from today instead.',
+    'New tasks and steps start as soon as possible; change that, or turn the whole thing off, in Settings, Smart helpers. Tasks you already have keep their dates as they are until you pick a timing for them.',
+  ]),
   Release('1.13.2', 'November 2026', [
     'Plan my day: tap the ✨ button on the Day plan and the app fills your free time around meetings with the most important open tasks and steps (overdue first, then due soonest, the Do box, starred, In progress, then the oldest). It keeps lunch free and leaves some time spare. Nothing is saved until you tap Keep; Try again gives a different mix and Cancel takes it all back.',
     'What should I do now? Tap the new target button at the top of the task list for one suggestion that fits the time before your next meeting, your focus mode and where you are, with Start focus, Open and Something else. Something planned for now always comes first.',

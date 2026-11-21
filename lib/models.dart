@@ -112,7 +112,7 @@ class Task {
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'takesMin', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
-    'where', 'driveBefore', 'driveAfter', 'tags',
+    'where', 'driveBefore', 'driveAfter', 'tags', 'timing',
   };
 
   final String id;
@@ -248,6 +248,10 @@ class Task {
 
   /// Item 72: a one-day marker, drawn as a diamond.
   bool milestone;
+
+  /// Item 114 D: when it should happen on the Gantt chart, a [Timing] id (null = as it always
+  /// has: its own dates, pushed later only).
+  String? timing;
 
   /// Item 72: 0 to 100 set by hand; null = worked out from the steps.
   int? progress;
@@ -386,6 +390,7 @@ class Task {
       ..takesMinutes = takesMinutes
       ..countWeekends = countWeekends
       ..milestone = milestone
+      ..timing = timing
       ..startAt = startAt == null || shift == null ? null : startAt!.add(shift);
     next.steps.addAll([
       for (final st in steps)
@@ -464,6 +469,7 @@ class Task {
         if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
         if (lagDays != null) 'lag': lagDays,
         if (milestone) 'milestone': true,
+        if (timing != null) 'timing': timing,
         if (progress != null) 'progress': progress,
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
@@ -553,6 +559,7 @@ class Task {
         ],
         extra: unknownFields(j, _known),
       )
+        ..timing = j['timing'] as String?
         ..where = TaskWhere.tryParse(j['where'])
         ..driveBefore = (j['driveBefore'] as num?)?.toInt()
         ..driveAfter = (j['driveAfter'] as num?)?.toInt();
@@ -959,7 +966,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep', 'tags',
+    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep', 'tags', 'timing',
   };
 
   final String id;
@@ -1026,6 +1033,9 @@ class TaskStep {
   /// those later moves this one later too (see pushSteps).
   final List<String> afterIds;
 
+  /// Item 114 D: when it should happen on the Gantt chart, as [Task.timing].
+  String? timing;
+
   /// Item 112: its own tags, like [Task.tags] (without the "#"). A step also counts as having
   /// its task's tags when filtering (see stepPassesTagFilter).
   final List<String> tags;
@@ -1069,6 +1079,7 @@ class TaskStep {
         if (takesMinutes != null) 'takesMin': takesMinutes,
         if (progress != null) 'progress': progress,
         if (afterIds.isNotEmpty) 'after': afterIds,
+        if (timing != null) 'timing': timing,
         if (tags.isNotEmpty) 'tags': tags,
       };
 
@@ -1093,7 +1104,7 @@ class TaskStep {
         afterIds: [for (final id in j['after'] as List? ?? []) id as String],
         tags: [for (final x in j['tags'] as List? ?? []) if (x is String && x.trim().isNotEmpty) x],
         extra: unknownFields(j, _known),
-      );
+      )..timing = j['timing'] as String?;
 }
 
 /// A saved checklist that can be added to any task.
@@ -2578,7 +2589,11 @@ abstract final class Helper {
   /// Item 114 C: the "What should I do now?" button and widget.
   static const whatNow = 'whatNow';
 
-  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow];
+  /// Item 114 D: the critical path button on the Gantt chart, the When should it happen? choices
+  /// on a bar, and Plan back from the due date.
+  static const criticalPath = 'criticalPath';
+
+  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath];
 
   /// Helpers that start switched off.
   static const offByDefault = <String>{};

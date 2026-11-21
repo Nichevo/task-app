@@ -12,6 +12,7 @@ import '../input_parse.dart';
 import '../location.dart';
 import '../day_plan.dart' show describeLength;
 import '../auto_plan.dart' show PlanPrefs;
+import '../critical_path.dart' show Timing, TimingPrefs;
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -736,6 +737,29 @@ class _SettingsPageState extends State<SettingsPage> {
           'A notification at the end of the day to move on what is left (also in the ⋮ menu)', data.wrapAt,
           (v) => data.wrapAt = v,
           end: true),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.route_outlined),
+        title: const Text('Critical path and timing'),
+        subtitle: const Text('On the Gantt chart: the critical path button, tap a bar to say when it should happen, '
+            'and Plan back from the due date'),
+        value: data.helperOn(Helper.criticalPath),
+        onChanged: (v) => store.setHelper(Helper.criticalPath, v),
+      ),
+      if (data.helperOn(Helper.criticalPath))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Row(children: [
+            Expanded(child: Text('New tasks and steps', style: hint)),
+            DropdownButton<Timing>(
+              value: data.newTiming,
+              items: [
+                for (final x in Timing.values) DropdownMenuItem(value: x, child: Text(x.label)),
+              ],
+              onChanged: (v) => _set(() => data.newTiming = v ?? Timing.asap),
+            ),
+          ]),
+        ),
     ];
   }
 

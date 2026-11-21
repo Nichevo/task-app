@@ -3,11 +3,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../critical_path.dart';
 import '../gantt.dart';
 import '../models.dart';
 import '../store.dart';
 import '../widgets/burn_down_chart.dart';
 import '../widgets/takes_dialog.dart';
+import '../widgets/timing_sheet.dart';
+import 'plan_back_page.dart';
 import 'task_page.dart';
 
 /// Item 72: the Gantt chart. Only tasks put on it show, as bars from start to expected end with
@@ -89,6 +92,12 @@ class _GanttPageState extends State<GanttPage> {
   bool _burnOpen = false;
   BurnUnit _burnUnit = BurnUnit.items;
   final _expanded = <String>{};
+
+  // Item 114 D: the critical path shown, across the tasks and within each opened-out task.
+  bool _cp = false;
+  CpResult? _taskCp;
+  final _stepCp = <String, CpResult?>{};
+  bool get _timingOn => data.helperOn(Helper.criticalPath);
 
   // A bar being dragged (after a long press): its task, how far, and whether its end is moving.
   String? _dragId;
@@ -274,10 +283,26 @@ class _GanttPageState extends State<GanttPage> {
         final dated = [for (final t in tasks) if (barFor(t, data) != null) t];
         final undated = [for (final t in tasks) if (barFor(t, data) == null && t.closedAt == null) t];
         final clashCount = dated.where((t) => clashes(t, data)).length;
+        _cp = _cp && _timingOn;
+        _taskCp = _cp ? tasksPath(dated, data) : null;
+        _stepCp.clear();
+        if (_cp) {
+          for (final t in dated) {
+            if (_expanded.contains(t.id) || t.id == _burnTaskId) _stepCp[t.id] = taskStepPath(t, data);
+          }
+        }
         return Scaffold(
           appBar: AppBar(
             title: const Text('Gantt chart'),
             actions: [
+              if (_timingOn)
+                IconButton(
+                  tooltip: 'Critical path',
+                  icon: const Icon(Icons.route_outlined),
+                  selectedIcon: const Icon(Icons.route),
+                  isSelected: _cp,
+                  onPressed: () => setState(() => _cp = !_cp),
+                ),
               IconButton(
                 tooltip: 'Fit what is shown',
                 icon: const Icon(Icons.fit_screen_outlined),
@@ -314,6 +339,7 @@ class _GanttPageState extends State<GanttPage> {
                     )
                   : _chart(dated, now),
             ),
+            if (_cp) _cpSummary(dated),
             _burnStrip(now),
             if (undated.isNotEmpty) _needsDates(undated),
           ]),
@@ -726,7 +752,12 @@ class _GanttPageState extends State<GanttPage> {
     if (r.step != null) {
       final s = r.step!;
       final sb = stepBar(t, s, data);
-      final open = t.closedAt != null ? null : () => editStepPlan(context, store, t, s);
+      final stepNode = _stepCp[t.id]?[s.id];
+      final open = t.closedAt != null
+          ? null
+          : _timingOn
+              ? () => showTimingSheet(context, store, t, step: s, node: stepNode, onOpen: () => editStepPlan(context, store, t, s))
+              : () => editStepPlan(context, store, t, s);
       if (sb == null) {
         return SizedBox(
           height: r.height,
@@ -734,8 +765,9 @@ class _GanttPageState extends State<GanttPage> {
           child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: open),
         );
       }
-      final stepColour = s.done ? scheme.outline : colour;
+      final stepColour = s.done ? scheme.outline : stepNode != null && stepNode.critical ? _critical : colour;
       final children = <Widget>[];
+      if (stepNode != null && !s.done && !stepIsPoint(s)) children.add(_spare(sb.end, stepNode, xOf, r.height / 2 - 7, 14));
       if (stepIsPoint(s)) {
         // A date only: a diamond on its day.
         children.add(Positioned(
@@ -802,8 +834,10 @@ class _GanttPageState extends State<GanttPage> {
     var w = bar.length * _dayW + (dragging && _dragEnd ? dragDays * _dayW : 0);
     w = max(w, _dayW);
     final done = t.closedAt != null;
-    final barColour = done ? scheme.outlineVariant : colour;
+    final node = _taskCp?[t.id];
+    final barColour = done ? scheme.outlineVariant : node != null && node.critical ? _critical : colour;
     final children = <Widget>[];
+    if (node != null && !done && !t.milestone && !dragging) children.add(_spare(bar.end, node, xOf, 10, 24));
 
     // Where it was first planned, faint behind a slipped bar.
     final ps = t.planStart, pd = t.planDue;
@@ -827,7 +861,7 @@ class _GanttPageState extends State<GanttPage> {
         left: left + _dayW / 2 - 10,
         top: 12,
         child: GestureDetector(
-          onTap: () => _open(t),
+          onTap: () => _tapBar(t, node),
           onLongPressStart: (_) => setState(() {
             _dragId = t.id;
             _dragDx = 0;
@@ -853,7 +887,7 @@ class _GanttPageState extends State<GanttPage> {
         width: w,
         height: 24,
         child: GestureDetector(
-          onTap: () => _open(t),
+          onTap: () => _tapBar(t, node),
           onLongPressStart: (_) => setState(() {
             _dragId = t.id;
             _dragDx = 0;
@@ -971,6 +1005,96 @@ class _GanttPageState extends State<GanttPage> {
     return SizedBox(height: r.height, width: width, child: Stack(clipBehavior: Clip.none, children: children));
   }
 
+  static const _critical = Color(0xFFC8401A);
+
+  /// Item 114 D: tapping a bar: when should it happen (with the critical path helper on).
+  void _tapBar(Task t, CpNode? node) {
+    if (!_timingOn || t.closedAt != null) return _open(t);
+    showTimingSheet(context, store, t, node: node, onOpen: () => _open(t), afterMove: (plan) => _afterMove(t, plan));
+  }
+
+  /// The spare time after a bar: how far it can slip without moving the finish, hatched.
+  Widget _spare(DateTime end, CpNode n, double Function(DateTime) xOf, double top, double height) {
+    final days = daysBetween(end, n.lf);
+    if (n.slack <= 0 || days <= 0) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    final w = days * _dayW;
+    return Positioned(
+      left: xOf(end) + _dayW,
+      top: top,
+      width: w,
+      height: height,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _HatchPainter(scheme.outline.withValues(alpha: 0.5)),
+          child: w < 56
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('${n.slack} d spare', style: TextStyle(fontSize: 10.5, color: scheme.onSurfaceVariant)),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  /// Item 114 D: when it all finishes, against the due date, and what sets that.
+  Widget _cpSummary(List<Task> dated) {
+    final theme = Theme.of(context);
+    final id = _burnTaskId;
+    final task = id == null ? null : dated.where((t) => t.id == id).firstOrNull;
+    final r = task != null ? _stepCp[task.id] ?? taskStepPath(task, data) : _taskCp;
+    final fmt = DateFormat('EEE d MMM');
+    Widget card(List<Widget> children) => Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: const Border(left: BorderSide(color: _critical, width: 4)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: children),
+        );
+    if (r == null) {
+      return card([const Text('Nothing open with dates to work out a critical path.')]);
+    }
+    final due = task?.dueAt ?? (r.anchor != r.finish ? r.anchor : null);
+    final gap = due == null ? null : workGap(r.finish, dayOf(due), weekends: r.weekends);
+    final path = r.path;
+    final spare = [for (final n in r.order) if (!n.item.done && !n.critical && n.slack > 0) n];
+    return card([
+      Text(
+        [
+          'Finishes ${fmt.format(r.finish)}',
+          if (gap != null)
+            gap >= 0 ? '$gap working day${gap == 1 ? '' : 's'} before the due date' : '${-gap} working day${gap == -1 ? '' : 's'} late',
+        ].join(' · '),
+        style: theme.textTheme.titleSmall?.copyWith(color: gap != null && gap < 0 ? theme.colorScheme.error : null),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        [
+          if (path.isNotEmpty) 'Critical path: ${path.map((n) => n.item.title).join(' → ')}. Anything on it that runs late moves the finish.',
+          if (spare.isNotEmpty) '${spare.take(3).map((n) => n.item.title).join(', ')} can slip a little without hurting.',
+        ].join(' '),
+        style: theme.textTheme.bodySmall,
+      ),
+      if (task != null && task.steps.isNotEmpty && task.closedAt == null)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: const Icon(Icons.sports_score_outlined, size: 18),
+            label: const Text('Plan back from the due date'),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlanBackPage(store: store, task: task))),
+          ),
+        ),
+    ]);
+  }
+
   Future<void> _endDrag(Task t) async {
     final days = (_dragDx / _dayW).round();
     final end = _dragEnd;
@@ -1013,6 +1137,30 @@ class _GanttPageState extends State<GanttPage> {
 }
 
 /// Weekend shading, week lines and today's line.
+/// Item 114 D: diagonal lines in a dashed box, for spare time.
+class _HatchPainter extends CustomPainter {
+  _HatchPainter(this.colour);
+  final Color colour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = colour
+      ..strokeWidth = 1;
+    final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(5));
+    canvas.save();
+    canvas.clipRRect(r);
+    for (var x = -size.height; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), p);
+    }
+    canvas.restore();
+    canvas.drawRRect(r, p..style = PaintingStyle.stroke);
+  }
+
+  @override
+  bool shouldRepaint(_HatchPainter old) => old.colour != colour;
+}
+
 class _GridPainter extends CustomPainter {
   _GridPainter(this.first, this.days, this.dayW, this.now, this.scheme);
 
