@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wk_head"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="2dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="1dp"
+    android:textAllCaps="true"
+    android:textColor="#FF006A6A"
+    android:textSize="10sp"
+    android:textStyle="bold" />

@@ -39,4 +39,15 @@
     <string name="widget_burn_down_desc">Burn-down: work left on the Gantt chart against the plan, for one category</string>
     <string name="widget_calendar_desc">Calendar: this month with dots on busy days, and what\'s coming up in the next two weeks</string>
     <string name="widget_cal_empty">Nothing due in the next two weeks</string>
+    <string name="widget_this_week">This week</string>
+    <string name="widget_week_empty">Nothing on this week</string>
+    <string name="widget_day_empty">Nothing on this day</string>
+    <string name="widget_prev_month">Previous month</string>
+    <string name="widget_next_month">Next month</string>
+    <string name="widget_week_month_desc">Month and week: this month with dots on busy days, the week\'s tasks, steps and events, and two clocks</string>
+    <string name="widget_busy_month_desc">Busy month and week: the month shaded by how full each day is, the week\'s list, and two clocks</string>
+    <string name="widget_week_board_desc">Week board: the week as 7 columns of tasks and events, the month a tap away, and two clocks</string>
+    <string name="widget_busy_board_desc">Busy week board: 7 columns with each day shaded by how full it is, and two clocks</string>
+    <string name="widget_week_load_desc">Week load: one row per day with how full it is and what is on, and two clocks</string>
+    <string name="widget_week_day_desc">Week by day: 7 shaded day tiles, tap one to see and tick off that day, and two clocks</string>
 </resources>

@@ -1478,6 +1478,648 @@ struct FocusTimerWidget: Widget {
   }
 }
 
+// MARK: - 16-21. Week and month widgets with two clocks (item 115)
+
+/** Something on a day in the week widgets: a task, a dated step, a work meeting or an iPad event. */
+struct WeekItem: Identifiable {
+  let day: String
+  let id: String
+  let step: String?
+  let title: String
+  let task: String?
+  let at: Date?
+  let end: Date?
+  /** "task", "step", "meet" (work meeting) or "event" (iPad calendar). */
+  let kind: String
+  let minutes: Int
+  let over: Bool
+  var isEvent: Bool { kind == "meet" || kind == "event" }
+  var key: String { "\(day)/\(id)/\(step ?? "")/\(at?.timeIntervalSince1970 ?? 0)" }
+}
+
+/** The week as one widget sees it: what its focus mode hides is left out, iPad events added. */
+struct WeekModel {
+  var days: [String] = []
+  var items: [WeekItem] = []
+  var busy: [String: Int] = [:]
+  var workday = 480
+  var clocksOn = true
+  var home = ""
+  var zone = "Asia/Shanghai"
+  var city = "Jingzhou"
+
+  func on(_ day: String) -> [WeekItem] { items.filter { $0.day == day } }
+  func minutes(_ day: String) -> Int { busy[day] ?? 0 }
+  func level(_ day: String) -> Int { WeekKit.level(minutes(day), workday) }
+
+  init() {}
+
+  init(_ snap: Snapshot, now: Date) {
+    let w = snap.week
+    let today = W.key(now)
+    let start = Calendar.current.startOfDay(for: now)
+    days = (w["days"] as? [String]) ?? []
+    if days.isEmpty { days = (0..<7).map { W.key(start.addingTimeInterval(Double($0) * W.day + 3600 * 12)) } }
+    for o in (w["items"] as? [[String: Any]]) ?? [] {
+      let kind = (o["kind"] as? String) ?? ""
+      let id = (o["id"] as? String) ?? ""
+      let step = o["step"] as? String
+      if kind == "task" || kind == "step" {
+        guard let t = snap.tasks.first(where: { $0.id == id }) else { continue }
+        if let step, t.steps.first(where: { $0.id == step })?.done == true { continue }
+      }
+      let sent = (o["day"] as? String) ?? today
+      var day = sent
+      // Overdue things stay on today when the day changes before the app is opened.
+      if day < today && (kind == "task" || kind == "step") { day = today }
+      if day < today && !days.contains(day) { continue }
+      items.append(
+        WeekItem(
+          day: day, id: id, step: step, title: (o["title"] as? String) ?? "", task: o["task"] as? String,
+          at: WeekKit.date(o["at"]), end: WeekKit.date(o["end"]), kind: kind,
+          minutes: (o["min"] as? NSNumber)?.intValue ?? 0, over: ((o["over"] as? Bool) ?? false) || sent < today))
+    }
+    for (k, v) in (w["busy"] as? [String: Any]) ?? [:] { busy[k] = (v as? NSNumber)?.intValue ?? 0 }
+    if let first = days.first.flatMap(WeekKit.parse), let last = days.last.flatMap(WeekKit.parse) {
+      for e in Events.between(first, last.addingTimeInterval(W.day)) {
+        items.append(
+          WeekItem(
+            day: W.key(e.start), id: "ev:" + e.id, step: nil, title: e.title, task: nil, at: e.allDay ? nil : e.start,
+            end: e.allDay ? nil : e.end, kind: "event", minutes: 0, over: false))
+      }
+    }
+    // iPad events count as busy too (the app only knows tasks and work meetings).
+    let monthFrom = WeekKit.monthStart(0, now: now).addingTimeInterval(-7 * W.day)
+    for e in Events.between(monthFrom, monthFrom.addingTimeInterval(84 * W.day)) where !e.allDay {
+      busy[W.key(e.start), default: 0] += max(0, Int(e.end.timeIntervalSince(e.start) / 60))
+    }
+    items.sort {
+      if $0.day != $1.day { return $0.day < $1.day }
+      if $0.over != $1.over { return $0.over }
+      return ($0.at ?? .distantFuture) < ($1.at ?? .distantFuture)
+    }
+    workday = (w["workday"] as? NSNumber)?.intValue ?? 480
+    let c = (w["clocks"] as? [String: Any]) ?? [:]
+    clocksOn = (c["on"] as? Bool) ?? true
+    home = (c["home"] as? String) ?? ""
+    if home.isEmpty {
+      home = TimeZone.current.identifier.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? "Here"
+    }
+    if let z = c["zone"] as? String, !z.isEmpty { zone = z }
+    if let n = c["city"] as? String, !n.isEmpty { city = n }
+  }
+}
+
+enum WeekKit {
+  /** Free to full: the same greens as on Android and the mock-ups. */
+  static let heat: [Color] = ([0xFFEEF2F2, 0xFFCFE9DC, 0xFF93D3B2, 0xFF4FAE83, 0xFF1F7A55] as [Int64]).map { argb($0) }
+  static let event = argb(0xFFE3EBF7)
+  static let teal = argb(0xFF006A6A)
+
+  static func level(_ minutes: Int, _ workday: Int) -> Int {
+    if minutes <= 0 { return 0 }
+    let f = Double(minutes) / Double(max(60, workday))
+    return f < 0.25 ? 1 : f < 0.55 ? 2 : f < 0.85 ? 3 : 4
+  }
+
+  static func ink(_ level: Int) -> Color { level >= 3 ? .white : Color.black.opacity(0.85) }
+
+  static func date(_ v: Any?) -> Date? { (v as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) } }
+
+  static func parse(_ k: String) -> Date? { W.keyFormat.date(from: k) }
+
+  static var cal: Calendar {
+    var c = Calendar.current
+    c.firstWeekday = 2
+    return c
+  }
+
+  /** The first of this month moved by [offset] months. */
+  static func monthStart(_ offset: Int, now: Date) -> Date {
+    let first = cal.dateInterval(of: .month, for: now)?.start ?? now
+    return cal.date(byAdding: .month, value: offset, to: first) ?? first
+  }
+
+  static func hours(_ minutes: Int) -> String {
+    if minutes <= 0 { return "" }
+    if minutes < 60 { return "\(minutes)m" }
+    let h = Double(minutes) / 60
+    return h == h.rounded() ? "\(Int(h)) h" : String(format: "%.1f h", h)
+  }
+
+  static func time(_ d: Date, zone: TimeZone? = nil) -> String {
+    let f = DateFormatter()
+    f.timeStyle = .short
+    f.dateStyle = .none
+    if let zone { f.timeZone = zone }
+    return f.string(from: d).replacingOccurrences(of: ":00 ", with: " ").lowercased()
+  }
+
+  /** "Today · Sun 22" or "Mon 23". */
+  static func dayLabel(_ k: String, now: Date, long: Bool = false) -> String {
+    guard let d = parse(k) else { return k }
+    let name = d.formatted(.dateTime.weekday(long ? .wide : .abbreviated).day())
+    return k == W.key(now) ? "Today · \(name)" : name
+  }
+
+  static func colour(_ snap: Snapshot, _ i: WeekItem, now: Date) -> Color {
+    if i.isEvent { return event }
+    guard let t = snap.task(i.id) else { return argb(0xFFBFE99A) }
+    return W.colour(snap, t, now: now)
+  }
+
+  static func subtitle(_ i: WeekItem) -> String {
+    if i.over { return "overdue" }
+    if let at = i.at { return time(at) }
+    if i.kind == "step" { return i.task ?? "step" }
+    return ""
+  }
+
+  static func monthOffset(_ kind: String) -> Int { Snapshot.defaults?.integer(forKey: "wmoff_" + kind) ?? 0 }
+
+  /** The day picked on a J widget: back to today once the pick is from an earlier day. */
+  static func picked(_ kind: String, days: [String], now: Date) -> String {
+    let d = Snapshot.defaults
+    let today = W.key(now)
+    if let k = d?.string(forKey: "wjday_" + kind), days.contains(k), d?.string(forKey: "wjday_at_" + kind) == today { return k }
+    return days.first { $0 >= today } ?? days.first ?? today
+  }
+}
+
+/** Redraws each minute while the clocks show (for the next two hours), else hourly. */
+struct WeekProvider: AppIntentTimelineProvider {
+  func placeholder(in context: Context) -> SnapEntry<WeekIntent> {
+    SnapEntry(date: Date(), snap: Snapshot(), config: WeekIntent())
+  }
+
+  func load(_ c: WeekIntent) -> Snapshot { Snapshot.load().pinned(c.focusMode?.id) }
+
+  func snapshot(for configuration: WeekIntent, in context: Context) async -> SnapEntry<WeekIntent> {
+    SnapEntry(date: Date(), snap: load(configuration), config: configuration)
+  }
+
+  func timeline(for configuration: WeekIntent, in context: Context) async -> Timeline<SnapEntry<WeekIntent>> {
+    let snap = load(configuration)
+    let now = Date()
+    let clocks = ((snap.week["clocks"] as? [String: Any])?["on"] as? Bool) ?? true
+    var times = W.redrawTimes(snap, now: now, hours: clocks ? 2 : 6)
+    if clocks {
+      let minute = Calendar.current.dateInterval(of: .minute, for: now)?.start ?? now
+      times += (1...120).map { minute.addingTimeInterval(Double($0) * 60) }
+      times = Array(Set(times)).sorted()
+    }
+    // Midnight too, so today moves on.
+    let midnight = Calendar.current.startOfDay(for: now).addingTimeInterval(W.day + 1)
+    if !clocks && midnight < now.addingTimeInterval(6 * 3600) { times = (times + [midnight]).sorted() }
+    return Timeline(entries: times.map { SnapEntry(date: $0, snap: snap.at($0), config: configuration) }, policy: .atEnd)
+  }
+}
+
+/** The clock strip: this iPad's time and the second city's, nothing else. */
+struct ClockStrip: View {
+  let model: WeekModel
+  let now: Date
+
+  var body: some View {
+    if model.clocksOn {
+      HStack(spacing: 6) {
+        Text(model.home).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        Text(WeekKit.time(now)).font(.caption.weight(.semibold)).monospacedDigit()
+        Spacer(minLength: 4)
+        Text(model.city).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        Text(WeekKit.time(now, zone: TimeZone(identifier: model.zone) ?? .current)).font(.caption.weight(.semibold))
+          .monospacedDigit()
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 2)
+      .background(Color.secondary.opacity(0.12), in: Capsule())
+    }
+  }
+}
+
+/** A month: dots on busy days (A), or shaded by how busy each day is (G, H); the week ringed. */
+struct WeekMonthGrid: View {
+  let model: WeekModel
+  let now: Date
+  let offset: Int
+  let heat: Bool
+  var big = false
+
+  var body: some View {
+    let cal = WeekKit.cal
+    let first = WeekKit.monthStart(offset, now: now)
+    let lead = (cal.component(.weekday, from: first) + 5) % 7
+    let start = cal.date(byAdding: .day, value: -lead, to: first) ?? first
+    let month = cal.component(.month, from: first)
+    let today = W.key(now)
+    let rows = (lead + (cal.range(of: .day, in: .month, for: first)?.count ?? 30) + 6) / 7
+    VStack(spacing: big ? 3 : 1) {
+      HStack(spacing: 0) {
+        ForEach(Array(["M", "T", "W", "T", "F", "S", "S"].enumerated()), id: \.offset) { _, d in
+          Text(d).font(.system(size: big ? 11 : 8)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+        }
+      }
+      ForEach(0..<rows, id: \.self) { r in
+        HStack(spacing: heat ? 1 : 0) {
+          ForEach(0..<7, id: \.self) { c in
+            let d = cal.date(byAdding: .day, value: r * 7 + c, to: start) ?? start
+            cell(d, inMonth: cal.component(.month, from: d) == month, today: today)
+          }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func cell(_ d: Date, inMonth: Bool, today: String) -> some View {
+    let k = W.key(d)
+    let lvl = model.level(k)
+    let isToday = k == today
+    let inWeek = model.days.contains(k)
+    let n = Text("\(Calendar.current.component(.day, from: d))")
+      .font(.system(size: big ? 12 : 9, weight: isToday ? .bold : .regular))
+    Link(destination: W.link("day", ["d": k])) {
+      Group {
+        if heat {
+          n.foregroundStyle(inMonth ? WeekKit.ink(lvl) : Color.secondary)
+            .frame(maxWidth: .infinity, minHeight: big ? 20 : 13)
+            .background(inMonth ? WeekKit.heat[lvl] : Color.clear, in: RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(isToday ? Color.red : .clear, lineWidth: 1.5))
+        } else {
+          VStack(spacing: 0) {
+            n.foregroundStyle(isToday ? Color.white : inMonth ? Color.primary : Color.secondary.opacity(0.6))
+              .frame(width: big ? 20 : 14, height: big ? 16 : 11)
+              .background(isToday ? WeekKit.teal : Color.clear, in: RoundedRectangle(cornerRadius: 3))
+            Circle().fill(lvl > 0 && inMonth ? WeekKit.heat[max(3, lvl)] : Color.clear).frame(width: 3, height: 3)
+          }
+          .frame(maxWidth: .infinity)
+          .background(inWeek && !isToday ? WeekKit.teal.opacity(0.08) : Color.clear)
+        }
+      }
+    }
+  }
+}
+
+/** A line in a week list: tick box, title, time or "overdue". */
+struct WeekRow: View {
+  let snap: Snapshot
+  let item: WeekItem
+  let now: Date
+
+  var body: some View {
+    HStack(spacing: 4) {
+      if item.isEvent {
+        Image(systemName: "calendar").font(.system(size: 9)).foregroundStyle(.secondary).frame(width: 14)
+      } else if let s = item.step {
+        Button(intent: TickStepAction(task: item.id, step: s)) {
+          Image(systemName: "square").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 14)
+        }
+        .buttonStyle(.plain)
+      } else {
+        Button(intent: TickTaskAction(id: item.id)) {
+          Image(systemName: "circle").font(.system(size: 10)).foregroundStyle(.secondary).frame(width: 14)
+        }
+        .buttonStyle(.plain)
+      }
+      Link(destination: item.isEvent ? W.link("day", ["d": item.day]) : W.open(item.id)) {
+        HStack(spacing: 4) {
+          Text(item.title).font(.system(size: 11)).lineLimit(1)
+          Spacer(minLength: 2)
+          Text(WeekKit.subtitle(item)).font(.system(size: 9)).lineLimit(1)
+            .foregroundStyle(item.over ? Color.red : Color.black.opacity(0.6))
+        }
+        .foregroundStyle(Color.black.opacity(0.85))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1.5)
+        .background(WeekKit.colour(snap, item, now: now), in: RoundedRectangle(cornerRadius: 4))
+      }
+    }
+  }
+}
+
+/** The week as day headings with their items, up to [rows] lines. */
+struct WeekList: View {
+  let snap: Snapshot
+  let model: WeekModel
+  let now: Date
+  let rows: Int
+
+  var body: some View {
+    let lines: [(String, WeekItem?)] = model.days.flatMap { d -> [(String, WeekItem?)] in
+      let on = model.on(d)
+      return on.isEmpty ? [] : [(d, nil)] + on.map { (d, $0) }
+    }
+    VStack(alignment: .leading, spacing: 2) {
+      if !snap.hasData {
+        EmptyNote(text: openAppFirst)
+      } else if lines.isEmpty {
+        EmptyNote(text: "Nothing on this week")
+      }
+      ForEach(Array(lines.prefix(rows).enumerated()), id: \.offset) { _, l in
+        if let i = l.1 {
+          WeekRow(snap: snap, item: i, now: now)
+        } else {
+          Text(WeekKit.dayLabel(l.0, now: now)).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            .padding(.top, 1)
+        }
+      }
+      if lines.count > rows {
+        Text("\(lines.count - rows) more").font(.system(size: 9)).foregroundStyle(.secondary)
+      }
+    }
+  }
+}
+
+/** A and G: the month on the left, the week's list on the right. */
+struct WeekMonthView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: SnapEntry<WeekIntent>
+  let kind: String
+  let heat: Bool
+
+  var body: some View {
+    let now = entry.date
+    let model = WeekModel(entry.snap, now: now)
+    let off = WeekKit.monthOffset(kind)
+    let big = family != .systemMedium
+    VStack(alignment: .leading, spacing: 4) {
+      ClockStrip(model: model, now: now)
+      HStack(alignment: .top, spacing: 8) {
+        VStack(spacing: 2) {
+          HStack(spacing: 4) {
+            Button(intent: WeekOpAction(kind: kind, op: "prev")) { Image(systemName: "chevron.left").font(.caption2) }
+              .buttonStyle(.plain)
+            Button(intent: WeekOpAction(kind: kind, op: "today")) {
+              Text(WeekKit.monthStart(off, now: now).formatted(off == 0 ? Date.FormatStyle.dateTime.month(.wide) : Date.FormatStyle.dateTime.month(.abbreviated).year()))
+                .font(.caption.weight(.semibold)).lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            Button(intent: WeekOpAction(kind: kind, op: "next")) { Image(systemName: "chevron.right").font(.caption2) }
+              .buttonStyle(.plain)
+          }
+          WeekMonthGrid(model: model, now: now, offset: off, heat: heat, big: big)
+        }
+        .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 2) {
+          HStack {
+            Link(destination: W.link("day")) { Text("This week").font(.caption.weight(.semibold)) }
+            Spacer(minLength: 0)
+            Link(destination: W.link("add")) { Image(systemName: "plus.circle.fill").foregroundStyle(.tint) }
+          }
+          WeekList(snap: entry.snap, model: model, now: now, rows: big ? 16 : 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+      }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+}
+
+/** B and H: the week as 7 columns; the month is a tap away. */
+struct WeekBoardView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: SnapEntry<WeekIntent>
+  let kind: String
+  let heat: Bool
+
+  var body: some View {
+    let now = entry.date
+    let snap = entry.snap
+    let model = WeekModel(snap, now: now)
+    let month = Snapshot.defaults?.bool(forKey: "wbmonth_" + kind) ?? false
+    let big = family != .systemMedium
+    let title: String = {
+      if month { return now.formatted(.dateTime.month(.wide).year()) }
+      guard let a = model.days.first.flatMap(WeekKit.parse), let b = model.days.last.flatMap(WeekKit.parse) else { return "" }
+      return a.formatted(.dateTime.day()) + " – " + b.formatted(.dateTime.day().month(.wide))
+    }()
+    VStack(alignment: .leading, spacing: 4) {
+      ClockStrip(model: model, now: now)
+      HStack(spacing: 6) {
+        Link(destination: W.link("day")) { Text(title).font(.caption.weight(.semibold)).lineLimit(1) }
+        Spacer(minLength: 0)
+        Button(intent: WeekOpAction(kind: kind, op: "toggle")) {
+          Text(month ? "▤ week" : "▦ month").font(.caption2)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(Color.secondary.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        Link(destination: W.link("add")) { Image(systemName: "plus.circle.fill").foregroundStyle(.tint) }
+      }
+      if month {
+        WeekMonthGrid(model: model, now: now, offset: 0, heat: heat, big: big)
+      } else {
+        HStack(alignment: .top, spacing: 2) {
+          ForEach(model.days, id: \.self) { d in column(d, model: model, snap: snap, now: now, rows: big ? 9 : 3) }
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+
+  @ViewBuilder
+  private func column(_ d: String, model: WeekModel, snap: Snapshot, now: Date, rows: Int) -> some View {
+    let lvl = model.level(d)
+    let isToday = d == W.key(now)
+    let date = WeekKit.parse(d) ?? now
+    let on = model.on(d)
+    VStack(spacing: 2) {
+      Link(destination: W.link("day", ["d": d])) {
+        VStack(spacing: 0) {
+          Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.system(size: 8))
+          Text(date.formatted(.dateTime.day())).font(.system(size: 11, weight: .bold))
+          if heat { Text(WeekKit.hours(model.minutes(d)).isEmpty ? " " : WeekKit.hours(model.minutes(d))).font(.system(size: 7)) }
+        }
+        .foregroundStyle(isToday ? Color.white : heat ? WeekKit.ink(lvl) : Color.primary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 1)
+        .background(isToday ? WeekKit.teal : heat ? WeekKit.heat[lvl] : Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+      }
+      ForEach(on.prefix(rows), id: \.key) { i in
+        Link(destination: i.isEvent ? W.link("day", ["d": d]) : W.open(i.id)) {
+          Text(i.title).font(.system(size: 8)).lineLimit(2).multilineTextAlignment(.leading)
+            .foregroundStyle(Color.black.opacity(0.85))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 2).padding(.vertical, 1)
+            .background(WeekKit.colour(snap, i, now: now), in: RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 3).stroke(i.over ? Color.red : .clear, lineWidth: 1))
+        }
+      }
+      if on.count > rows {
+        Link(destination: W.link("day", ["d": d])) { Text("+\(on.count - rows)").font(.system(size: 8)).foregroundStyle(.secondary) }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .top)
+  }
+}
+
+/** I: one row per day: how full it is and what is on. */
+struct WeekLoadView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: SnapEntry<WeekIntent>
+
+  var body: some View {
+    let now = entry.date
+    let snap = entry.snap
+    let model = WeekModel(snap, now: now)
+    let big = family != .systemMedium
+    VStack(alignment: .leading, spacing: big ? 6 : 2) {
+      ClockStrip(model: model, now: now)
+      HStack {
+        Link(destination: W.link("day")) { Text("Week load").font(.caption.weight(.semibold)) }
+        Spacer(minLength: 0)
+        Link(destination: W.link("add")) { Image(systemName: "plus.circle.fill").foregroundStyle(.tint) }
+      }
+      ForEach(model.days, id: \.self) { d in
+        let mins = model.minutes(d)
+        let on = model.on(d)
+        Link(destination: W.link("day", ["d": d])) {
+          HStack(spacing: 5) {
+            Text((WeekKit.parse(d) ?? now).formatted(.dateTime.weekday(.abbreviated).day()))
+              .font(.system(size: 9, weight: d == W.key(now) ? .bold : .regular))
+              .foregroundStyle(d == W.key(now) ? WeekKit.teal : Color.primary)
+              .frame(width: 40, alignment: .leading)
+            GeometryReader { g in
+              let f = min(1, Double(mins) / Double(max(60, model.workday)))
+              ZStack(alignment: .leading) {
+                Capsule().fill(WeekKit.heat[0])
+                if f > 0 { Capsule().fill(WeekKit.heat[max(1, model.level(d))]).frame(width: max(g.size.height, g.size.width * f)) }
+              }
+            }
+            .frame(width: big ? 90 : 56, height: 7)
+            Text(WeekKit.hours(mins)).font(.system(size: 8)).foregroundStyle(.secondary).frame(width: 26, alignment: .leading)
+            ForEach(on.prefix(big ? 3 : 2), id: \.key) { i in
+              Text(i.title).font(.system(size: 8)).lineLimit(1)
+                .foregroundStyle(Color.black.opacity(0.85))
+                .padding(.horizontal, 3).padding(.vertical, 0.5)
+                .background(WeekKit.colour(snap, i, now: now), in: RoundedRectangle(cornerRadius: 3))
+            }
+            if on.count > (big ? 3 : 2) { Text("+\(on.count - (big ? 3 : 2))").font(.system(size: 8)).foregroundStyle(.secondary) }
+            Spacer(minLength: 0)
+          }
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+}
+
+/** J: 7 shaded day tiles; tap one to list that day below, with tick boxes. */
+struct WeekDayView: View {
+  @Environment(\.widgetFamily) var family
+  let entry: SnapEntry<WeekIntent>
+  let kind: String
+
+  var body: some View {
+    let now = entry.date
+    let snap = entry.snap
+    let model = WeekModel(snap, now: now)
+    let day = WeekKit.picked(kind, days: model.days, now: now)
+    let mins = model.minutes(day)
+    let free = max(0, model.workday - mins)
+    let head = WeekKit.dayLabel(day, now: now, long: true)
+    let big = family != .systemMedium
+    let on = model.on(day)
+    let rows = big ? 12 : 3
+    VStack(alignment: .leading, spacing: 4) {
+      ClockStrip(model: model, now: now)
+      HStack(spacing: 3) {
+        ForEach(model.days, id: \.self) { d in
+          let lvl = model.level(d)
+          let date = WeekKit.parse(d) ?? now
+          Button(intent: WeekOpAction(kind: kind, op: "pick", arg: d)) {
+            VStack(spacing: 0) {
+              Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.system(size: 8))
+              Text(date.formatted(.dateTime.day())).font(.system(size: 13, weight: .bold))
+              Text(WeekKit.hours(model.minutes(d)).isEmpty ? " " : WeekKit.hours(model.minutes(d))).font(.system(size: 7))
+            }
+            .foregroundStyle(d == day ? Color.white : WeekKit.ink(lvl))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
+            .background(d == day ? WeekKit.teal : WeekKit.heat[lvl], in: RoundedRectangle(cornerRadius: 5))
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      HStack {
+        Link(destination: W.link("day", ["d": day])) {
+          Text(mins > 0 ? "\(head) · \(WeekKit.hours(mins)) booked, \(WeekKit.hours(free).isEmpty ? "no time" : WeekKit.hours(free)) free" : head)
+            .font(.caption2.weight(.semibold)).lineLimit(1)
+        }
+        Spacer(minLength: 0)
+        Link(destination: W.link("add")) { Image(systemName: "plus.circle.fill").foregroundStyle(.tint) }
+      }
+      if !snap.hasData {
+        EmptyNote(text: openAppFirst)
+      } else if on.isEmpty {
+        EmptyNote(text: "Nothing on this day")
+      }
+      ForEach(on.prefix(rows), id: \.key) { WeekRow(snap: snap, item: $0, now: now) }
+      if on.count > rows { Text("\(on.count - rows) more").font(.system(size: 9)).foregroundStyle(.secondary) }
+      Spacer(minLength: 0)
+    }
+    .widgetCard()
+  }
+}
+
+private func weekConfig<V: View>(_ kind: String, _ name: String, _ what: String, _ view: @escaping (SnapEntry<WeekIntent>) -> V)
+  -> some WidgetConfiguration
+{
+  AppIntentConfiguration(kind: kind, intent: WeekIntent.self, provider: WeekProvider()) { view($0) }
+    .configurationDisplayName(name)
+    .description(what)
+    .supportedFamilies([.systemMedium, .systemLarge])
+}
+
+struct WeekMonthWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("WeekMonth", "Month + week", "The month with dots on busy days, this week's tasks and events, and two clocks.") {
+      WeekMonthView(entry: $0, kind: "WeekMonth", heat: false)
+    }
+  }
+}
+
+struct BusyMonthWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("BusyMonth", "Busy month + week", "The month shaded by how busy each day is, this week's list, and two clocks.") {
+      WeekMonthView(entry: $0, kind: "BusyMonth", heat: true)
+    }
+  }
+}
+
+struct WeekBoardWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("WeekBoard", "Week board", "The week as seven columns of tasks and events, the month a tap away, and two clocks.") {
+      WeekBoardView(entry: $0, kind: "WeekBoard", heat: false)
+    }
+  }
+}
+
+struct BusyBoardWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("BusyBoard", "Busy week board", "The week as seven columns, each day shaded by how busy it is, and two clocks.") {
+      WeekBoardView(entry: $0, kind: "BusyBoard", heat: true)
+    }
+  }
+}
+
+struct WeekLoadWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("WeekLoad", "Week load", "One row per day: how full it is and what's on, with two clocks.") { WeekLoadView(entry: $0) }
+  }
+}
+
+struct WeekDayWidget: Widget {
+  var body: some WidgetConfiguration {
+    weekConfig("WeekDay", "Week by day", "Seven day tiles shaded by how busy; tap one to see and tick that day's tasks. Two clocks.") {
+      WeekDayView(entry: $0, kind: "WeekDay")
+    }
+  }
+}
+
 // MARK: - All of them
 
 @main
@@ -1498,5 +2140,11 @@ struct TaskBlocksWidgets: WidgetBundle {
     DayPlanWidget()
     ModeWidget()
     FocusTimerWidget()
+    WeekMonthWidget()
+    BusyMonthWidget()
+    WeekBoardWidget()
+    BusyBoardWidget()
+    WeekLoadWidget()
+    WeekDayWidget()
   }
 }

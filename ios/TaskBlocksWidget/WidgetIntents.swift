@@ -246,3 +246,11 @@ struct FocusTimerIntent: WidgetConfigurationIntent, ModeChoosing {
   @Parameter(title: "Focus mode") var focusMode: ModeEntity?
   init() {}
 }
+
+/** Item 115: the week and month widgets' one choice. */
+struct WeekIntent: WidgetConfigurationIntent, ModeChoosing {
+  static var title: LocalizedStringResource { "Week" }
+  // Empty = follow the focus mode that is on.
+  @Parameter(title: "Focus mode") var focusMode: ModeEntity?
+  init() {}
+}

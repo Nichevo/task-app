@@ -15,6 +15,7 @@ import '../auto_plan.dart' show PlanPrefs;
 import '../critical_path.dart' show Timing, TimingPrefs;
 import '../ai_breakdown.dart' show AiPrefs;
 import '../smart_lists.dart' show SmartListPrefs;
+import '../week_widgets.dart';
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -892,6 +893,89 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// Item 115: the week and month widgets and their two clocks.
+  List<Widget> _weekWidgetSettings() {
+    final hint = Theme.of(context).textTheme.bodySmall;
+    final zone = clockCities.where((c) => c.zone == data.clockZone).firstOrNull;
+    return [
+      _heading('Week widgets and clocks'),
+      Text('For the Month + week, Busy month + week, Week board, Busy week board, Week load and Week by day '
+          'widgets. Each widget follows a focus mode, chosen when you place it (long-press it to change).', style: hint),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Show two clocks'),
+        subtitle: const Text('Your time and a second city\'s, along the top'),
+        value: data.clocksOn,
+        onChanged: (v) => _set(() => data.clocksOn = v),
+      ),
+      if (data.clocksOn) ...[
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Your clock is called'),
+          subtitle: Text(data.clockHome.isEmpty ? 'Your phone\'s time zone city (e.g. Auckland)' : data.clockHome),
+          onTap: () async {
+            final v = await askText(context, 'Name for your clock (empty = time zone city)', initial: data.clockHome);
+            if (v != null) _set(() => data.clockHome = v);
+          },
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Second clock is called'),
+          subtitle: Text(data.clockCity),
+          onTap: () async {
+            final v = await askText(context, 'Name for the second clock', initial: data.clockCity);
+            if (v != null && v.trim().isNotEmpty) _set(() => data.clockCity = v);
+          },
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Second clock\'s time zone'),
+          subtitle: Text(zone == null ? data.clockZone : '${zone.area} (${zone.zone})'),
+          onTap: () async {
+            final picked = await showDialog<ClockCity>(
+              context: context,
+              builder: (c) => SimpleDialog(
+                title: const Text('Time zone'),
+                children: [
+                  for (final z in clockCities)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(c, z),
+                      child: Text('${z.area}${z.zone == data.clockZone ? '  ✓' : ''}'),
+                    ),
+                ],
+              ),
+            );
+            if (picked == null) return;
+            _set(() {
+              // Keep a name of your own; otherwise take the zone's city.
+              final own = !clockCities.any((z) => z.name == data.clockCity);
+              data.clockZone = picked.zone;
+              if (!own) data.clockCity = picked.name;
+            });
+          },
+        ),
+      ],
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Which week'),
+        trailing: DropdownButton<String>(
+          value: data.weekShown,
+          items: const [
+            DropdownMenuItem(value: 'next7', child: Text('Next 7 days')),
+            DropdownMenuItem(value: 'monday', child: Text('Monday to Sunday')),
+          ],
+          onChanged: (v) => _set(() => data.weekShown = v ?? 'next7'),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Leave out Saturday and Sunday'),
+        value: data.weekNoWeekend,
+        onChanged: (v) => _set(() => data.weekNoWeekend = v),
+      ),
+    ];
+  }
+
   /// Item 101: the Day plan.
   List<Widget> _dayPlanSettings() {
     final d = data.dayPlan;
@@ -1207,6 +1291,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const Divider(height: 40),
             ..._dayPlanSettings(),
+            const Divider(height: 40),
+            ..._weekWidgetSettings(),
             const Divider(height: 40),
             _heading('Top bar icons'),
             const Text('Icons at the top of the task list on this device. Anything switched off is still in the ⋮ menu.'),

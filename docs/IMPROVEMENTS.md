@@ -1883,3 +1883,23 @@ name means its default). Built as updates A to G; mock-ups in the project files
   list (from the mock-up).
 - The "Tasks ▾" title now shortens instead of overflowing when the ☰ button takes room.
 - Tests: test/smart_lists_test.dart.
+
+### 115: week and month widgets with two clocks (version 1.13.8)
+
+Picked from the 4x2 mock-ups (A, B, G, H, I, J; /mnt/project-files/task-app/widget-4x2/).
+
+- `lib/week_widgets.dart`: `WeekWidgetPrefs` (clocksOn, clockHome, clockZone default
+  Asia/Shanghai, clockCity default Jingzhou, weekShown next7/monday, weekNoWeekend) in
+  `helperPrefs` so they sync; `weekWidgetData` (days, items: tasks, dated steps and work
+  meetings, overdue on today; busy minutes per day; workday) shared as `week` in widget_data.
+  The second clock shows only the time, as asked.
+- Settings: "Week widgets and clocks" (`_weekWidgetSettings`, city picker `clockCities`).
+- Android (`WeekWidgets.kt`): WeekMonthWidget (A), BusyMonthWidget (G), WeekBoardWidget (B),
+  BusyBoardWidget (H), WeekLoadWidget (I), WeekDayWidget (J); clocks are TextClocks with the
+  second set to the zone; month arrows, board week/month toggle and day pick via
+  `WeekWidgetReceiver`; phone calendar events added and counted as busy; per-widget focus mode
+  via `Snapshot.forWidget` and the config screen. Picker previews in drawable-nodpi.
+- iPad (`WidgetKinds.swift`): the same six kinds (`WeekIntent` with a Focus mode choice,
+  `WeekProvider` redrawing each minute for the clocks, `WeekOpAction` for the arrows, toggle and
+  day pick, per widget kind), iPad calendar events via `Events.between`.
+- Tests: test/week_widgets_test.dart.

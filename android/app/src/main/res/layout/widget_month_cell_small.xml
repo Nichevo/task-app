@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115: a smaller month cell for the 4x2 week widgets (dot, or a shaded square for how busy). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cell_root"
+    android:layout_width="match_parent"
+    android:layout_height="18dp"
+    android:padding="1dp">
+
+    <ImageView
+        android:id="@+id/cell_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_cell_bg" />
+
+    <TextView
+        android:id="@+id/cell_day"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textColor="#DD000000"
+        android:textSize="9sp" />
+
+    <ImageView
+        android:id="@+id/cell_dot"
+        android:layout_width="4dp"
+        android:layout_height="4dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:contentDescription="@null"
+        android:src="@drawable/widget_dot" />
+</FrameLayout>

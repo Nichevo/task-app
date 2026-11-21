@@ -158,6 +158,8 @@ struct Snapshot {
   var planFree: [(start: Date, end: Date)] = []
   /** Item 111: work meetings read from a photo of Outlook (id, title, start, end). */
   var work: [(id: String, title: String, start: Date, end: Date)] = []
+  /** Item 115: the week and month widgets' data as the app shared it (lib/week_widgets.dart). */
+  var week: [String: Any] = [:]
 
   /** The same tasks as they stand at [date]: snoozes that have ended by then show again. */
   func at(_ date: Date) -> Snapshot {
@@ -442,6 +444,7 @@ struct Snapshot {
       guard let at = date(o["at"]) else { return nil }
       return (str(o["id"]), str(o["title"]), at, date(o["end"]) ?? at)
     }
+    s.week = (root["week"] as? [String: Any]) ?? [:]
     s.planFree = ((root["planFree"] as? [[NSNumber]]) ?? []).compactMap { a in
       guard a.count == 2 else { return nil }
       return (Date(timeIntervalSince1970: a[0].doubleValue / 1000), Date(timeIntervalSince1970: a[1].doubleValue / 1000))
@@ -594,6 +597,16 @@ enum Events {
     let store = EKEventStore()
     let start = Calendar.current.startOfDay(for: now)
     let pred = store.predicateForEvents(withStart: start, end: start.addingTimeInterval(W.day), calendars: nil)
+    return store.events(matching: pred).map {
+      ($0.eventIdentifier ?? UUID().uuidString, $0.title ?? "(No title)", $0.startDate, $0.endDate, $0.isAllDay)
+    }
+  }
+
+  /** Item 115: the iPad's calendar events from [from] to [to]. */
+  static func between(_ from: Date, _ to: Date) -> [(id: String, title: String, start: Date, end: Date, allDay: Bool)] {
+    guard EKEventStore.authorizationStatus(for: .event) == .fullAccess, to > from else { return [] }
+    let store = EKEventStore()
+    let pred = store.predicateForEvents(withStart: from, end: to, calendars: nil)
     return store.events(matching: pred).map {
       ($0.eventIdentifier ?? UUID().uuidString, $0.title ?? "(No title)", $0.startDate, $0.endDate, $0.isAllDay)
     }

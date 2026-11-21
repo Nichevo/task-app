@@ -201,6 +201,44 @@ struct ModePickAction: AppIntent {
   }
 }
 
+/**
+ Item 115: a tap the week widgets handle themselves: flip the month (prev, next, today), swap the
+ board between week and month (toggle), or pick a day (pick). Kept per widget kind, as WidgetKit
+ doesn't say which copy of a widget was tapped.
+ */
+struct WeekOpAction: AppIntent {
+  static var title: LocalizedStringResource { "Week widget" }
+  @Parameter(title: "Widget") var kind: String
+  @Parameter(title: "Op") var op: String
+  @Parameter(title: "Day") var arg: String
+
+  init() {}
+  init(kind: String, op: String, arg: String = "") {
+    self.kind = kind
+    self.op = op
+    self.arg = arg
+  }
+
+  func perform() async throws -> some IntentResult {
+    guard let d = Snapshot.defaults else { return .result() }
+    switch op {
+    case "prev", "next":
+      d.set(d.integer(forKey: "wmoff_" + kind) + (op == "prev" ? -1 : 1), forKey: "wmoff_" + kind)
+    case "today":
+      d.set(0, forKey: "wmoff_" + kind)
+    case "toggle":
+      d.set(!d.bool(forKey: "wbmonth_" + kind), forKey: "wbmonth_" + kind)
+    case "pick":
+      d.set(arg, forKey: "wjday_" + kind)
+      d.set(W.key(Date()), forKey: "wjday_at_" + kind)
+    default:
+      break
+    }
+    WidgetCenter.shared.reloadTimelines(ofKind: kind)
+    return .result()
+  }
+}
+
 enum FocusOps {
   /** The app's notification id for the end of a round or break (Reminders.focusEndId). */
   static let endId = -950_000_001
