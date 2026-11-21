@@ -769,6 +769,12 @@ object WidgetData {
           ModeWidget::class.java, // Item 102.
           FocusTimerWidget::class.java, // Item 102, part 4.
           DoNowWidget::class.java, // Item 114 C.
+          WeekMonthWidget::class.java, // Item 115.
+          BusyMonthWidget::class.java, // Item 115.
+          WeekBoardWidget::class.java, // Item 115.
+          BusyBoardWidget::class.java, // Item 115.
+          WeekLoadWidget::class.java, // Item 115.
+          WeekDayWidget::class.java, // Item 115.
       )
 
   fun refreshAll(c: Context) {

@@ -15,6 +15,7 @@ import 'models.dart';
 import 'widgets/task_colors.dart' show ageColor;
 import 'modes.dart';
 import 'stats.dart';
+import 'week_widgets.dart' show weekWidgetData;
 
 typedef WidgetMove = ({String task, String? step, String stage, DateTime at});
 
@@ -78,6 +79,12 @@ class HomeWidgets {
     'app.taskblocks.ModeWidget', // Item 102.
     'app.taskblocks.FocusTimerWidget', // Item 102, part 4.
     'app.taskblocks.DoNowWidget', // Item 114 C.
+    'app.taskblocks.WeekMonthWidget', // Item 115.
+    'app.taskblocks.BusyMonthWidget', // Item 115.
+    'app.taskblocks.WeekBoardWidget', // Item 115.
+    'app.taskblocks.BusyBoardWidget', // Item 115.
+    'app.taskblocks.WeekLoadWidget', // Item 115.
+    'app.taskblocks.WeekDayWidget', // Item 115.
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -147,6 +154,8 @@ class HomeWidgets {
       if (data.focusSettings.dnd) 'focusDnd': true,
       // Item 114 C: the Do now widget's picks, worked out when anything changes.
       if (data.helperOn(Helper.whatNow)) 'doNow': doNowData(data, now),
+      // Item 115: the week and month widgets with two clocks.
+      'week': weekWidgetData(data, now),
       'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,

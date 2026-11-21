@@ -144,6 +144,44 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_checklist" />
         </receiver>
+        <!-- Item 115: week and month widgets with two clocks. -->
+        <receiver android:name=".WeekMonthWidget" android:exported="true" android:label="Month + week">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week_month_info" />
+        </receiver>
+        <receiver android:name=".BusyMonthWidget" android:exported="true" android:label="Busy month + week">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_busy_month_info" />
+        </receiver>
+        <receiver android:name=".WeekBoardWidget" android:exported="true" android:label="Week board">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week_board_info" />
+        </receiver>
+        <receiver android:name=".BusyBoardWidget" android:exported="true" android:label="Busy week board">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_busy_board_info" />
+        </receiver>
+        <receiver android:name=".WeekLoadWidget" android:exported="true" android:label="Week load">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week_load_info" />
+        </receiver>
+        <receiver android:name=".WeekDayWidget" android:exported="true" android:label="Week by day">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_week_day_info" />
+        </receiver>
+        <receiver android:name=".WeekWidgetReceiver" android:exported="false" />
         <!-- Item 114 C. -->
         <receiver android:name=".DoNowWidget" android:exported="true" android:label="Do now">
             <intent-filter>
@@ -239,6 +277,22 @@
             android:permission="android.permission.BIND_REMOTEVIEWS" />
         <service
             android:name=".MonthService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WeekMonthService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WeekListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WeekBoardService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service
+            android:name=".WeekLoadService"
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
         <service

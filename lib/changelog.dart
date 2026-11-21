@@ -9,6 +9,11 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.8', 'November 2026', [
+    'Six new 4x2 week widgets, each with two clocks along the top (your time and Jingzhou\'s): Month + week (dots on busy days), Busy month + week (the month shaded by how full each day is), Week board and Busy week board (seven columns, the month a tap away), Week load (a bar per day for how full it is) and Week by day (tap a day tile to list and tick that day).',
+    'They show tasks, dated steps, work meetings and your phone or iPad calendar events. Each one follows the focus mode you pick for it, like the list widgets, and the picker shows a clear picture of each one.',
+    'Settings, Week widgets and clocks: turn the clocks off, rename either clock, pick the second clock\'s time zone (Jingzhou, China, to start with), show the next 7 days or Monday to Sunday, and leave out the weekend.',
+  ]),
   Release('1.13.7', 'November 2026', [
     'My lists: save any mix of filters as a list with a name and an emoji: category, tag, matrix box, starred, when it is due, how long it takes, behind, waiting on someone and place. Open them from the new ☰ menu, which also has the Day plan, board, matrix and Gantt chart.',
     'A list narrows the main list, the board and the matrix until you clear its chip. Pick a date chip or tags and tap "Save as list" to keep that mix. Lists can open straight on the board or matrix, and sync to your other devices.',

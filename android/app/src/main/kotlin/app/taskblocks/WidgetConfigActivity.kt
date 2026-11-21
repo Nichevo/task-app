@@ -44,7 +44,8 @@ class WidgetConfigActivity : Activity() {
       provider.endsWith("BurnDownWidget") -> pickBurn(snap)
       provider.endsWith("TodayWidget") || provider.endsWith("DayPlanWidget") || provider.endsWith("StatsWidget") ||
           provider.endsWith("MonthWidget") ||
-          provider.endsWith("CalendarWidget") ->
+          provider.endsWith("CalendarWidget") ||
+          provider.substringAfterLast('.') in weekWidgets ->
           pickLook(showRows = false)
       else -> pickFilter(snap, showRows = !provider.endsWith("CompactWidget") && !provider.endsWith("FocusWidget"))
     }
@@ -254,11 +255,16 @@ class WidgetConfigActivity : Activity() {
   }
 
   companion object {
+    /** Item 115: the week widgets ask only how they look, then the focus mode. */
+    val weekWidgets = setOf("WeekMonthWidget", "BusyMonthWidget", "WeekBoardWidget", "BusyBoardWidget", "WeekLoadWidget", "WeekDayWidget")
+
     /** Item 108: widgets that list tasks, so can have a focus mode of their own. */
     val modeWidgets =
         setOf(
             "TaskListWidget", "CompactWidget", "TodayWidget", "FocusWidget", "CalendarWidget", "DayPlanWidget",
             "BoardSummaryWidget", "StageListWidget", "NowDoingWidget", "BoardStepsWidget", "MatrixWidget",
-            "WorkedTodayWidget", "FocusTimerWidget")
+            "WorkedTodayWidget", "FocusTimerWidget",
+            // Item 115.
+            "WeekMonthWidget", "BusyMonthWidget", "WeekBoardWidget", "BusyBoardWidget", "WeekLoadWidget", "WeekDayWidget")
   }
 }

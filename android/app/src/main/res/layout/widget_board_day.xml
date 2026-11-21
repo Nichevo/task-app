@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115 B/H: a day at the top of a column. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bd_root"
+    android:layout_width="match_parent"
+    android:layout_height="40dp"
+    android:gravity="center"
+    android:orientation="vertical">
+    <TextView android:id="@+id/bd_name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#99000000" android:textSize="9sp" />
+    <TextView android:id="@+id/bd_num" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#DD000000" android:textSize="14sp" android:textStyle="bold" />
+    <TextView android:id="@+id/bd_sub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#99000000" android:textSize="8sp" />
+</LinearLayout>

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115 A and G: the month on the left (dots, or shaded by how busy), the week's tasks and events on the right. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wm_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <include layout="@layout/widget_clock_strip" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal">
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="0.42" android:orientation="vertical">
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="20dp" android:gravity="center_vertical" android:orientation="horizontal">
+                <TextView android:id="@+id/wm_title" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:maxLines="1" android:paddingStart="2dp" android:textColor="#DD000000" android:textSize="13sp" android:textStyle="bold" />
+                <ImageView android:id="@+id/wm_prev" android:layout_width="20dp" android:layout_height="20dp" android:contentDescription="@string/widget_prev_month" android:padding="3dp" android:src="@drawable/ic_widget_prev" />
+                <ImageView android:id="@+id/wm_next" android:layout_width="20dp" android:layout_height="20dp" android:contentDescription="@string/widget_next_month" android:padding="3dp" android:src="@drawable/ic_widget_next" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <TextView android:id="@+id/wm_d1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="M" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="T" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="W" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d4" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="T" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d5" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="F" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d6" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="S" android:textColor="#99000000" android:textSize="9sp" />
+            <TextView android:id="@+id/wm_d7" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:text="S" android:textColor="#99000000" android:textSize="9sp" />
+            </LinearLayout>
+
+            <GridView android:id="@+id/wm_grid" android:layout_width="match_parent" android:layout_height="match_parent" android:horizontalSpacing="0dp" android:numColumns="7" android:stretchMode="columnWidth" android:verticalSpacing="0dp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginStart="8dp" android:layout_weight="0.58" android:orientation="vertical">
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="20dp" android:gravity="center_vertical" android:orientation="horizontal">
+                <TextView android:id="@+id/wm_week" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:gravity="center_vertical" android:maxLines="1" android:text="@string/widget_this_week" android:textColor="#DD000000" android:textSize="13sp" android:textStyle="bold" />
+                <ImageView android:id="@+id/wm_add" android:layout_width="24dp" android:layout_height="20dp" android:contentDescription="@string/widget_add" android:padding="2dp" android:src="@drawable/ic_widget_add" />
+            </LinearLayout>
+
+            <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent">
+                <ListView android:id="@+id/wm_list" android:layout_width="match_parent" android:layout_height="match_parent" android:divider="@null" android:dividerHeight="0dp" />
+                <TextView android:id="@+id/wm_empty" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="@string/widget_week_empty" android:textColor="#99000000" android:textSize="12sp" />
+            </FrameLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

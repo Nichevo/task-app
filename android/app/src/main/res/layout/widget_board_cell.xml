@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115 B/H: a task, step or event in a day's column. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bc_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="20dp"
+    android:orientation="vertical"
+    android:paddingStart="3dp"
+    android:paddingTop="2dp"
+    android:paddingEnd="2dp"
+    android:paddingBottom="2dp">
+    <TextView android:id="@+id/bc_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="2" android:textColor="#DD000000" android:textSize="9sp" android:textStyle="bold" />
+    <TextView android:id="@+id/bc_sub" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1" android:textColor="#AA000000" android:textSize="8sp" />
+</LinearLayout>

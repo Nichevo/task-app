@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115: the two clocks along the top of the week widgets (this phone's time and a second city's). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/clk_root"
+    android:layout_width="match_parent"
+    android:layout_height="24dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/widget_clock_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp">
+
+    <TextView
+        android:id="@+id/clk_home"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textColor="#99000000"
+        android:textSize="11sp" />
+
+    <TextClock
+        android:id="@+id/clk_home_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="h:mm a"
+        android:format24Hour="HH:mm"
+        android:paddingStart="5dp"
+        android:textColor="#DD000000"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/clk_city"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textColor="#99000000"
+        android:textSize="11sp" />
+
+    <TextClock
+        android:id="@+id/clk_city_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="h:mm a"
+        android:format24Hour="HH:mm"
+        android:paddingStart="5dp"
+        android:textColor="#DD000000"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+</LinearLayout>

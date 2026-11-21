@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 115 I: a day: its name, how full it is, and what is on. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/lr_root"
+    android:layout_width="match_parent"
+    android:layout_height="22dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+    <TextView android:id="@+id/lr_day" android:layout_width="48dp" android:layout_height="wrap_content" android:maxLines="1" android:textColor="#AA000000" android:textSize="10sp" android:textStyle="bold" />
+    <ImageView android:id="@+id/lr_bar" android:layout_width="48dp" android:layout_height="8dp" android:contentDescription="@null" android:scaleType="fitXY" />
+    <TextView android:id="@+id/lr_items" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:textColor="#DD000000" android:textSize="10sp" />
+</LinearLayout>
