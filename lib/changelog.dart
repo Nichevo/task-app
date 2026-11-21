@@ -9,6 +9,9 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.9', 'November 2026', [
+    'Fixed: the new week widgets said "Can\'t load widget" on Android.',
+  ]),
   Release('1.13.8', 'November 2026', [
     'Six new 4x2 week widgets, each with two clocks along the top (your time and Jingzhou\'s): Month + week (dots on busy days), Busy month + week (the month shaded by how full each day is), Week board and Busy week board (seven columns, the month a tap away), Week load (a bar per day for how full it is) and Week by day (tap a day tile to list and tick that day).',
     'They show tasks, dated steps, work meetings and your phone or iPad calendar events. Each one follows the focus mode you pick for it, like the list widgets, and the picker shows a clear picture of each one.',

@@ -30,7 +30,8 @@
         android:textSize="13sp"
         android:textStyle="bold" />
 
-    <View
+    <!-- A plain View can't be drawn in a widget (Android shows "Can't load widget"). -->
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="1dp"
         android:layout_weight="1" />
