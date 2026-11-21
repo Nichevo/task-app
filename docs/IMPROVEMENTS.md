@@ -1701,3 +1701,38 @@ sat on top of it.
   its task, and plan just that step.
 - Tests: test/card_pace_test.dart (big text on a Fold-sized board, every shading),
   test/work_meetings_test.dart (step linked, moves, unlinked), test/day_plan_edit_test.dart.
+
+## 114. Smart helpers (next-level batch)
+
+Picked by the owner on 2026-11-19 from the "next level" ideas: Plan my day, What should I do now
+(button and widget), estimate vs actual, weekly review screen, AI step breakdown (Claude or a
+local Ollama), morning brief, project templates and smarter repeats, wrap up the day, saved smart
+lists, a security tidy-up, critical path and Gantt timing, and a simple card view. Every one has
+its own switch under Settings → Smart helpers (`AppData.helpers`, `Helper` names; a missing
+name means its default). Built as updates A to G; mock-ups in the project files
+(task-app/next-level/).
+
+### 114 A: security tidy-up, Smart helpers settings, simple view (version 1.13.0)
+
+- Simple view (`lib/widgets/simple_cards.dart`): a top bar button on the task list swaps the
+  list for big plain cards (name, due date or "Overdue · was due …", category, steps done) with
+  the open steps as smaller cards under each task. No drag, tick, swipe or add box; tapping does
+  nothing. Follows the list's sort, grouping, filters, tags and focus mode. Two columns from
+  640 points wide (open Fold, iPad). On or off per device (`simpleView` in
+  device_settings.json); adding from a widget or a share leaves it.
+- Settings → Smart helpers at the top, with the Simple view switch (hides the button).
+- Review item A-067: Dropbox and Google refresh tokens and the Google client secret are kept
+  in the system secure store (`lib/secrets.dart`, flutter_secure_storage: Android Keystore,
+  Keychain, Windows Credential Manager). On first start they are moved out of
+  device_settings.json; where the secure store can't be used they stay in the file as before.
+  The Dropbox device settings backup no longer carries the Google client secret. Android
+  `allowBackup` is off (Keystore keys can't be restored, and Dropbox is the backup).
+- Review item A-068: the build workflow has `permissions: contents: read`, actions pinned to
+  commit hashes, and checkout without kept credentials.
+- Review item A-069: packages brought up to date within their version ranges
+  (`flutter pub upgrade`).
+- Review item A-066 (the signing key copy in the project files) is left as it is for now, at
+  the owner's request.
+- Test fix: test/day_plan_3_test.dart used Monday 16 November 2026, which has now passed (its
+  planned times became missed and moved to the tray); it now uses a Monday a week ahead.
+- Tests: test/smart_helpers_a_test.dart.

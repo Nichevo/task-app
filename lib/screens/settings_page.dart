@@ -732,6 +732,18 @@ class _SettingsPageState extends State<SettingsPage> {
         return Scaffold(
           appBar: AppBar(title: const Text('Settings')),
           body: ListView(padding: const EdgeInsets.all(16), children: [
+            // Item 114: one switch per helper; off hides it everywhere and keeps what it had.
+            _heading('Smart helpers'),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.view_agenda_outlined),
+              title: const Text('Simple view'),
+              subtitle: const Text('A button on the task list that shows just big task cards with their steps '
+                  'under them, for reading only (no dragging or ticking)'),
+              value: data.helperOn(Helper.simpleView),
+              onChanged: (v) => store.setHelper(Helper.simpleView, v),
+            ),
+            const Divider(height: 40),
             _heading('Colour speed'),
             Text('Tasks go from green to red in ${describeHours(speedSteps[idx])}.'),
             Slider(

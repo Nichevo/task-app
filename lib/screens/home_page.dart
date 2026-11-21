@@ -19,6 +19,7 @@ import '../native.dart';
 import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
+import '../widgets/simple_cards.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
 import '../widgets/mode_chip.dart';
@@ -235,6 +236,13 @@ class HomePageState extends State<HomePage> {
   /// and [categoryId] already chosen.
   void focusAdd({String? text, String? categoryId, String? source}) {
     _select(null);
+    // Item 114: the simple view has no add box, so adding (a widget, a share) leaves it.
+    if (store.simpleView) {
+      store.setSimpleView(false);
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _addBar.currentState?.focus(text: text, categoryId: categoryId, source: source));
+      return;
+    }
     _addBar.currentState?.focus(text: text, categoryId: categoryId, source: source);
   }
 
@@ -633,6 +641,9 @@ class HomePageState extends State<HomePage> {
                 !(data.kanbanHideFromList && t.kanban))
             .length;
     final showSearchIcon = store.topIconShown(TopIcon.search);
+    // Item 114: the simple card view button, unless Settings → Smart helpers turned it off.
+    final simpleOn = data.helperOn(Helper.simpleView);
+    final simple = simpleOn && store.simpleView && !_searching;
     // Item 102: in a mode, its tools decide the icons; in Everything, Settings does. Icons that
     // don't fit beside the title move into the ⋮ menu.
     bool want(String icon, ModeTool tool) =>
@@ -645,7 +656,7 @@ class HomePageState extends State<HomePage> {
       if (want(TopIcon.dayPlan, ModeTool.dayPlan)) (TopIcon.dayPlan, ModeTool.dayPlan),
     ];
     // Room: the pane's width less the title (about 160 for the mode chip), the menu and search.
-    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
+    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0) - (simpleOn ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
     final icons = {for (final c in candidates.take(room)) c.$1};
     final showBoardIcon = icons.contains(TopIcon.board);
     final showMatrixIcon = icons.contains(TopIcon.matrix);
@@ -672,6 +683,14 @@ class HomePageState extends State<HomePage> {
               )
             : ModeTitle(store: store),
         actions: [
+          if (simpleOn && !_searching)
+            IconButton(
+              tooltip: simple ? 'Back to the full list' : 'Simple view',
+              isSelected: simple,
+              icon: const Icon(Icons.view_agenda_outlined),
+              selectedIcon: const Icon(Icons.view_list),
+              onPressed: () => store.setSimpleView(!store.simpleView),
+            ),
           if (_searching)
             IconButton(
               tooltip: 'Search everything (steps, emails, archive)',
@@ -847,9 +866,9 @@ class HomePageState extends State<HomePage> {
           ),
         if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty) && !_searching)
           _filterChips(),
-        if (data.habits.isNotEmpty && !_searching && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
-        if (breaking.isNotEmpty) _stillNeedsYou(breaking, now),
-        if (estimate != null)
+        if (data.habits.isNotEmpty && !_searching && !simple && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
+        if (breaking.isNotEmpty && !simple) _stillNeedsYou(breaking, now),
+        if (estimate != null && !simple)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
             child: Align(
@@ -858,6 +877,20 @@ class HomePageState extends State<HomePage> {
                   style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
             ),
           ),
+        if (simple)
+          Expanded(
+            child: SimpleCards(
+              data: data,
+              entries: [
+                for (final r in rows)
+                  switch (r) {
+                    _Header h => SimpleHeading(h.name),
+                    _TaskRow t => SimpleTask(t.task),
+                  },
+              ],
+            ),
+          )
+        else
         Expanded(
           child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0 && resting <= 0 && !modeNow.peek
               ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
@@ -873,7 +906,7 @@ class HomePageState extends State<HomePage> {
                   },
                 ),
         ),
-        _AddBar(key: _addBar, store: store),
+        if (!simple) _AddBar(key: _addBar, store: store),
       ]),
     );
   }

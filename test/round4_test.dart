@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -191,7 +192,9 @@ void main() {
 
   group('40 about', () {
     test('changelog is newest first and matches pubspec', () {
-      expect(releases.first.version, '1.12.19');
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      final version = RegExp(r'^version: ([0-9.]+)', multiLine: true).firstMatch(pubspec)!.group(1);
+      expect(releases.first.version, version);
     });
   });
 }

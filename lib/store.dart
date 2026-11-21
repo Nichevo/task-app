@@ -22,6 +22,7 @@ import 'modes.dart';
 import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
+import 'secrets.dart';
 import 'tags.dart';
 import 'task_list.dart';
 import 'work_meetings.dart';
@@ -58,7 +59,7 @@ enum OwnSteps {
 }
 
 class AppStore extends ChangeNotifier {
-  AppStore({this.reminders, this.widgets, this.location}) {
+  AppStore({this.reminders, this.widgets, this.location, this.secrets}) {
     // 1.12.5: the Day plan's driving estimates start from a saved place called Home.
     savedPlaces = places;
   }
@@ -73,6 +74,10 @@ class AppStore extends ChangeNotifier {
 
   /// Location fixes for tasks; null in tests.
   final LocationRecorder? location;
+
+  /// Item 114: where sign-ins are kept (the system's secure store); null in tests, which keep
+  /// them in device_settings.json as before.
+  final Secrets? secrets;
 
   /// Save where tasks are added and ticked off (device-only: each phone allows location itself).
   bool recordLocation = false;
@@ -108,6 +113,23 @@ class AppStore extends ChangeNotifier {
   /// Kanban board on this device (item 56): every task's steps unfolded, and the lanes view.
   bool boardShowSteps = false;
   bool boardLanes = false;
+
+  /// Item 114: the task list shows as the simple card view on this device.
+  bool simpleView = false;
+
+  void setSimpleView(bool on) {
+    simpleView = on;
+    notifyListeners();
+    unawaited(saveDeviceSettings());
+  }
+
+  /// Item 114: a Smart helpers switch in Settings ([Helper] names).
+  void setHelper(String name, bool on) {
+    data.helpers[name] = on;
+    if (name == Helper.simpleView && !on && simpleView) simpleView = false;
+    changed(settings: true);
+    unawaited(saveDeviceSettings());
+  }
 
   /// Item 74: top bar icons switched off on this device ([TopIcon] names).
   final Set<String> hiddenTopIcons = {};
@@ -164,6 +186,11 @@ class AppStore extends ChangeNotifier {
         ].join(' ');
       }
     }
+    // Item 114: sign-ins from the secure store win; ones still in the file (from before 1.13.0)
+    // are moved there by the save below.
+    final fileHadSecrets = s != null && Secrets.names.any((n) => s![n] != null);
+    final sec = await secrets?.readAll();
+    if (sec != null && sec.isNotEmpty) s = {...?s, ...sec};
     if (s case final s?) {
       dropboxAppKey = s['dropboxAppKey'] as String? ?? '';
       final refresh = s['dropboxRefreshToken'] as String?;
@@ -186,6 +213,7 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      simpleView = s['simpleView'] as bool? ?? false;
       calendarMode = s['calendarMode'] as String? ?? 'month';
       dayPlanTwoDays = s['dayPlanTwoDays'] as bool? ?? false;
       hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
@@ -207,7 +235,7 @@ class AppStore extends ChangeNotifier {
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
     // Review fix: this install's key in the mode log, kept from the first start on.
     modeDevice = deviceKey;
-    if (s?['deviceKey'] is! String) unawaited(saveDeviceSettings());
+    if (s?['deviceKey'] is! String || (fileHadSecrets && sec != null)) unawaited(saveDeviceSettings());
     refreshMode(applyStart: false);
     // Item 102: a focus timer left running moves on to where it would be now.
     if (focusNow != null && !tickFocus()) _focusChanged();
@@ -381,16 +409,24 @@ class AppStore extends ChangeNotifier {
     if (dir == null) return Future.value();
     return _settingsWriting = _settingsWriting.catchError((_) {}).then((_) async {
       final tmp = File('${dir.path}/device_settings.json.tmp');
-      await tmp.writeAsString(_deviceSettingsText(), flush: true);
+      // Item 114: sign-ins go to the secure store; only if that fails do they stay in the file.
+      final safe = await secrets?.writeAll(_secretValues()) ?? false;
+      await tmp.writeAsString(_deviceSettingsText(withSecrets: !safe), flush: true);
       await tmp.rename('${dir.path}/device_settings.json');
     });
   }
 
   Future<void> _settingsWriting = Future.value();
 
-  String _deviceSettingsText() => jsonEncode({
+  Map<String, String?> _secretValues() => {
+        Secrets.dropboxRefresh: dropbox?.refreshToken,
+        Secrets.googleRefresh: google?.refreshToken,
+        Secrets.googleSecret: googleClientSecret,
+      };
+
+  String _deviceSettingsText({bool withSecrets = true}) => jsonEncode({
       'dropboxAppKey': dropboxAppKey,
-      'dropboxRefreshToken': dropbox?.refreshToken,
+      if (withSecrets) 'dropboxRefreshToken': dropbox?.refreshToken,
       'eventPromptAt': eventPromptAt?.toIso8601String(),
       'recordLocation': recordLocation,
       'quickFilter': quickFilter.name,
@@ -402,6 +438,7 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (simpleView) 'simpleView': true,
       if (calendarMode != 'month') 'calendarMode': calendarMode,
       if (dayPlanTwoDays) 'dayPlanTwoDays': true,
       if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
@@ -412,8 +449,8 @@ class AppStore extends ChangeNotifier {
       if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       ..._panelJson(),
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
-      if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
-      if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
+      if (withSecrets && googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
+      if (withSecrets && google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
       if (google?.email != null) 'googleEmail': google!.email,
     });
 
@@ -660,8 +697,8 @@ class AppStore extends ChangeNotifier {
         'matrixFilter': matrixFilter.name,
         if (matrixCategory != null) 'matrixCategory': matrixCategory,
         'tagFilter': tagFilter.toList(),
+        // Item 114: the Google client secret stays on the device (it goes in the secure store).
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
-        if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
         if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
         ..._panelJson(),
       };

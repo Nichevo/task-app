@@ -9,6 +9,13 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.0', 'November 2026', [
+    'Simple view: tap the new cards button at the top of the task list to see just big, plain task cards (name, due date, category) with their open steps as smaller cards under them. Nothing can be dragged or ticked there, so it is safe for a quick look. On an open Fold or the iPad it shows two columns. Tap the button again for the full list.',
+    'Settings has a new Smart helpers section at the top. Each helper has its own switch, and turning one off hides it everywhere. Simple view is the first; more are coming in the next updates.',
+    'Safer sign-ins: Dropbox and Google sign-ins are now kept in your device\'s secure storage instead of the app\'s own files. They move over by themselves, so you stay signed in.',
+    'The settings backup in Dropbox no longer includes the Google client secret. On a new device, enter it once when you sign in to Google.',
+    'Android no longer copies the app\'s files to its own cloud backup (your tasks are already backed up in Dropbox).',
+  ]),
   Release('1.12.19', 'November 2026', [
     'Work meetings from a photo: the times are now read properly from the hour labels down the left, instead of every meeting landing at 23:55. Stray numbers (a keyboard key under the screen) no longer throw them off.',
     'The Windows taskbar and anything below it (its clock, date and "ENG") are no longer read as meetings, and notes like "WFH" at the top of a day are all-day notes again.',

@@ -7,6 +7,7 @@ import 'location.dart';
 import 'models.dart' show MatrixBox;
 import 'native.dart';
 import 'reminders.dart';
+import 'secrets.dart';
 import 'screens/home_page.dart';
 import 'store.dart';
 import 'task_list.dart';
@@ -15,7 +16,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final reminders = Reminders();
   final widgets = HomeWidgets();
-  final store = AppStore(reminders: reminders, widgets: widgets, location: LocationRecorder());
+  final store = AppStore(reminders: reminders, widgets: widgets, location: LocationRecorder(), secrets: Secrets());
   reminders.onAction = store.applyPending;
   // Tapping the weekly review opens the list on the coming week.
   reminders.onOpenReview = () => store.setQuickFilter(QuickFilter.week);

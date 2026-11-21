@@ -1727,6 +1727,7 @@ class AppData {
     this.ganttStartOnProgress = true,
     DayPlanSettings? dayPlan,
     Map<String, SkipRecord>? skips,
+    Map<String, bool>? helpers,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -1773,6 +1774,7 @@ class AppData {
         templates = templates ?? [],
         done = done ?? {},
         skips = skips ?? {},
+        helpers = helpers ?? {},
         stages = stages ?? KanbanStage.defaults(),
         eventCalendars = eventCalendars ?? {},
         dismissedEvents = dismissedEvents ?? {},
@@ -1888,6 +1890,12 @@ class AppData {
 
   /// Repeating tasks moved on without being done, by [SkipRecord.key], for the statistics.
   final Map<String, SkipRecord> skips;
+
+  /// Item 114: the Smart helpers switches in Settings, by [Helper] name. A name not here is at
+  /// its default ([Helper.offByDefault] lists those that start off).
+  final Map<String, bool> helpers;
+
+  bool helperOn(String name) => helpers[name] ?? !Helper.offByDefault.contains(name);
 
   /// Default extra reminder before the due time, in minutes (0 = only at the due time).
   int defaultRemindBefore;
@@ -2049,7 +2057,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips', 'helpers',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress', 'dayPlan',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -2087,6 +2095,7 @@ class AppData {
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
         'dayPlan': dayPlan.toJson(),
+        if (helpers.isNotEmpty) 'helpers': helpers,
         if (lists && skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -2196,6 +2205,10 @@ class AppData {
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
         dayPlan: DayPlanSettings.fromJson(j['dayPlan']),
+        helpers: {
+          for (final e in (j['helpers'] as Map? ?? {}).entries)
+            if (e.value is bool) e.key as String: e.value as bool,
+        },
         skips: {
           for (final e in (j['skips'] as Map? ?? {}).entries)
             e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
@@ -2407,6 +2420,7 @@ AppData mergeData(AppData a, AppData b) {
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
     dayPlan: settingsFrom.dayPlan,
     skips: skips,
+    helpers: settingsFrom.helpers,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: _mergeById(settingsFrom.templates, olderSettings.templates, (c) => c.id, deleted),
     done: done,
@@ -2495,4 +2509,16 @@ enum MatrixBox {
   final bool important;
 
   static MatrixBox? byId(String? id) => values.where((b) => b.id == id).firstOrNull;
+}
+
+/// Item 114: the features under Settings → Smart helpers, each with its own switch. Turning one
+/// off hides it everywhere (buttons, menus, notifications); turning it back on keeps what it had.
+abstract final class Helper {
+  /// The simple card view button on the task list (item 114).
+  static const simpleView = 'simpleView';
+
+  static const all = [simpleView];
+
+  /// Helpers that start switched off.
+  static const offByDefault = <String>{};
 }
