@@ -36,7 +36,7 @@ void main() {
         ..dueAt = DateTime(2026, 11, 27, 9)
         ..note = 'Use last month\'s');
       t.steps.add(TaskStep.create('Send'));
-      final next = t.nextRepeat(DateTime(2026, 11, 30, 18));
+      final next = t.nextRepeat(DateTime(2026, 11, 30, 18))!;
       expect(next.dueAt, DateTime(2026, 12, 30, 17));
       expect(next.steps.first.dueAt, DateTime(2026, 12, 27, 9));
       expect(next.steps.first.note, 'Use last month\'s');

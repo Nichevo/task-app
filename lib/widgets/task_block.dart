@@ -509,7 +509,7 @@ List<CardChip> cardChips(Task t, DateTime now,
     var text = 'Repeats ${d.isEmpty ? '' : d[0].toLowerCase()}${d.length > 1 ? d.substring(1) : ''}';
     if (!archived && !r.fromCompletion && t.dueAt != null) {
       final next = r.nextDue(due: t.dueAt, completedAt: t.dueAt!.isAfter(now) ? t.dueAt! : now);
-      text += ', next ${DateFormat(next.year == now.year ? 'd MMM' : 'd MMM yyyy').format(next)}';
+      text += r.allows(next) ? ', next ${DateFormat(next.year == now.year ? 'd MMM' : 'd MMM yyyy').format(next)}' : ', this is the last one';
     }
     out.add(CardChip(text));
   }

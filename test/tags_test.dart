@@ -110,7 +110,7 @@ void main() {
       final t = s.addTask('Weekly review', due: DateTime(2026, 11, 20, 9))..repeat = Repeat(unit: RepeatUnit.week);
       s.addTag(t, 'review');
       s.addTag(t, 'planning');
-      expect(t.nextRepeat(DateTime(2026, 11, 20)).tags, ['review', 'planning']);
+      expect(t.nextRepeat(DateTime(2026, 11, 20))!.tags, ['review', 'planning']);
       expect(matchesSearch(t, '#planning', s.data), isTrue);
       final csv = buildCsv(s.data);
       final d = AppData();

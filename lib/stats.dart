@@ -118,7 +118,7 @@ class Stats {
       final r = t.repeat;
       if (r == null || r.fromCompletion) continue;
       var next = r.nextDue(due: due, completedAt: due);
-      for (var i = 0; i < 40 && next.isBefore(end); i++) {
+      for (var i = 0; i < 40 && next.isBefore(end) && r.allows(next, i + 1); i++) {
         add(next, true);
         next = r.nextDue(due: next, completedAt: next);
       }

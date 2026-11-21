@@ -91,7 +91,7 @@ void main() {
       s.addTag(t, 'travel');
       final st = s.addStep(t, 'Book hotel');
       s.addStepTag(t, st, 'admin');
-      expect(t.nextRepeat(DateTime(2026, 12, 1)).steps.single.tags, ['admin']);
+      expect(t.nextRepeat(DateTime(2026, 12, 1))!.steps.single.tags, ['admin']);
       final linked = s.stepToTask(t, st);
       expect(linked.tags, ['travel', 'admin']);
     });

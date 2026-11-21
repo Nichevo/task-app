@@ -14,7 +14,7 @@ void main() {
     final back = Task.fromJson(jsonDecode(jsonEncode(t.toJson())));
     expect(back.place, 'Home');
     expect(back.placeLeave, isTrue);
-    final next = t.nextRepeat(DateTime.now());
+    final next = t.nextRepeat(DateTime.now())!;
     expect(next.place, 'Home');
     expect(next.placeLeave, isTrue);
     expect(Task.fromJson(Task.create('x').toJson()).place, isNull);

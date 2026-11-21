@@ -302,7 +302,12 @@ class _TaskPageState extends State<TaskPage> {
     } else if (choice == 'save') {
       final name = await askText(context, 'Template name', initial: task.title);
       if (name != null && name.trim().isNotEmpty) {
-        widget.store.saveTemplate(name, [for (final s in task.steps) s.title]);
+        if (data.helperOn(Helper.projectTemplates)) {
+          // Item 114 F: with each step's length, links and timing.
+          widget.store.templateFromTask(task, name.trim());
+        } else {
+          widget.store.saveTemplate(name, [for (final s in task.steps) s.title]);
+        }
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved template "${name.trim()}"')));
       }
     } else if (choice == 'new') {
@@ -427,7 +432,7 @@ class _TaskPageState extends State<TaskPage> {
   Future<void> _editRepeat() async {
     final r = await showDialog<Repeat>(
       context: context,
-      builder: (_) => RepeatDialog(initial: task.repeat),
+      builder: (_) => RepeatDialog(initial: task.repeat, due: task.dueAt),
     );
     if (r != null) _update(() => task.repeat = r);
   }

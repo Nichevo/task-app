@@ -57,7 +57,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final r = t.repeat;
       if (r == null || r.fromCompletion) continue;
       var next = r.nextDue(due: due, completedAt: due);
-      for (var i = 0; i < 60 && next.isBefore(to); i++) {
+      for (var i = 0; i < 60 && next.isBefore(to) && r.allows(next, i + 1); i++) {
         if (!next.isBefore(from)) add(next, t, true);
         next = r.nextDue(due: next, completedAt: next);
       }

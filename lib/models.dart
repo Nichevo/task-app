@@ -363,13 +363,16 @@ class Task {
   }
 
   /// A fresh copy for the next time a repeating task comes round.
-  Task nextRepeat(DateTime completedAt) {
+  Task? nextRepeat(DateTime completedAt) {
     final r = repeat!;
+    // Item 114 F: a series with an end stops there.
+    final nextDue = r.nextDue(due: dueAt, completedAt: completedAt);
+    if (!r.allows(nextDue)) return null;
     final next = Task.create(title)
       ..notes = notes
       ..categoryId = categoryId
       ..starred = starred
-      ..repeat = r
+      ..repeat = r.left == null ? r : r.copyWith(left: r.left! - 1)
       ..remindBefore = remindBefore
       ..estimate = estimate
       ..place = place
@@ -379,7 +382,7 @@ class Task {
       ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
     next.tags.addAll(tags);
-    next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
+    next.dueAt = nextDue;
     // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
     // from the task's due date; without one to measure from they are left off.
     final shift = dueAt == null || next.dueAt == null ? null : next.dueAt!.difference(dueAt!);
@@ -1107,31 +1110,113 @@ class TaskStep {
       )..timing = j['timing'] as String?;
 }
 
-/// A saved checklist that can be added to any task.
+/// Item 114 F: one step of a project template: its length, when it starts against the new
+/// task's date, and which earlier steps (by place in the list) it comes after.
+class TemplateStep {
+  TemplateStep({required this.title, this.days, this.minutes, this.offset, List<int>? after}) : after = after ?? [];
+
+  String title;
+
+  /// Days of work (null: not set).
+  int? days;
+
+  /// A length in minutes, when given in hours (then [days] is the working days they fill).
+  int? minutes;
+
+  /// Days from the task's date to the step's start (negative: before; null: not timed).
+  int? offset;
+
+  /// Places (0-based) of the steps it comes after.
+  final List<int> after;
+
+  bool get timed => offset != null || days != null || minutes != null || after.isNotEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        if (days != null) 'days': days,
+        if (minutes != null) 'min': minutes,
+        if (offset != null) 'offset': offset,
+        if (after.isNotEmpty) 'after': after,
+      };
+
+  factory TemplateStep.fromJson(Map<String, dynamic> j) => TemplateStep(
+        title: j['title'] as String? ?? '',
+        days: (j['days'] as num?)?.toInt(),
+        minutes: (j['min'] as num?)?.toInt(),
+        offset: (j['offset'] as num?)?.toInt(),
+        after: [for (final x in j['after'] as List? ?? []) (x as num).toInt()],
+      );
+}
+
+/// A saved checklist that can be added to any task. Item 114 F: a project template also has
+/// timed steps ([items]), a category, tags and a name for its date ("departure date").
 class ChecklistTemplate {
-  ChecklistTemplate({required this.id, required this.name, List<String>? steps, Map<String, dynamic>? extra})
+  ChecklistTemplate(
+      {required this.id,
+      required this.name,
+      List<String>? steps,
+      List<TemplateStep>? items,
+      this.categoryId,
+      List<String>? tags,
+      this.dateLabel,
+      Map<String, dynamic>? extra})
       : steps = steps ?? [],
+        items = items ?? [],
+        tags = tags ?? [],
         extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'name', 'steps'};
+  static const _known = {'id', 'name', 'steps', 'items', 'category', 'tags', 'dateLabel'};
 
   final String id;
   String name;
+
+  /// The step titles (all a plain checklist template has; older versions read only these).
   final List<String> steps;
+
+  /// Item 114 F: the steps with their timing, in the same order as [steps] (empty for a plain
+  /// checklist).
+  final List<TemplateStep> items;
+  String? categoryId;
+  final List<String> tags;
+
+  /// What its date is called ("departure date"); null: "due date".
+  String? dateLabel;
+
+  /// Has timed steps (a project).
+  bool get project => items.any((i) => i.timed);
+
+  /// The steps with their timing, falling back to plain titles when [items] is out of step.
+  List<TemplateStep> get stepSpecs {
+    final ok = items.length == steps.length && [for (var i = 0; i < steps.length; i++) items[i].title == steps[i]].every((x) => x);
+    return ok ? items : [for (final s in steps) TemplateStep(title: s)];
+  }
 
   factory ChecklistTemplate.create(String name, List<String> steps) => ChecklistTemplate(
       id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim(), steps: steps);
 
-  Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, 'steps': steps};
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'id': id,
+        'name': name,
+        'steps': steps,
+        if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],
+        if (categoryId != null) 'category': categoryId,
+        if (tags.isNotEmpty) 'tags': tags,
+        if (dateLabel != null) 'dateLabel': dateLabel,
+      };
 
   factory ChecklistTemplate.fromJson(Map<String, dynamic> j) => ChecklistTemplate(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         steps: [for (final s in j['steps'] as List? ?? []) s as String],
+        items: [for (final i in j['items'] as List? ?? []) TemplateStep.fromJson(Map<String, dynamic>.from(i as Map))],
+        categoryId: j['category'] as String?,
+        tags: [for (final t in j['tags'] as List? ?? []) t as String],
+        dateLabel: j['dateLabel'] as String?,
         extra: unknownFields(j, _known),
       );
 }
@@ -1574,7 +1659,86 @@ class Repeat {
     this.every = 1,
     this.weekdays = const {},
     this.fromCompletion = false,
+    this.nth,
+    this.nthWeekday,
+    this.lastWorkday = false,
+    this.skipWeekends = false,
+    this.until,
+    this.left,
   });
+
+  /// Item 114 F: monthly (or yearly) on the [nth] [nthWeekday] of the month (1 to 4, or -1 for
+  /// the last), e.g. the last Friday.
+  final int? nth;
+  final int? nthWeekday;
+
+  /// Item 114 F: monthly on the last working day (Monday to Friday) of the month.
+  final bool lastWorkday;
+
+  /// Item 114 F: a date that falls on a weekend moves to the Monday after.
+  final bool skipWeekends;
+
+  /// Item 114 F: no repeats after this day.
+  final DateTime? until;
+
+  /// Item 114 F: how many more times it comes round after this one (null: no end).
+  final int? left;
+
+  Repeat copyWith({int? left}) => Repeat(
+        unit: unit,
+        every: every,
+        weekdays: weekdays,
+        fromCompletion: fromCompletion,
+        nth: nth,
+        nthWeekday: nthWeekday,
+        lastWorkday: lastWorkday,
+        skipWeekends: skipWeekends,
+        until: until,
+        left: left,
+      );
+
+  /// Whether the [k]th repeat after this one (1 = the next), due [next], still comes round.
+  bool allows(DateTime next, [int k = 1]) {
+    final l = left, u = until;
+    if (l != null && k > l) return false;
+    if (u != null && DateTime(next.year, next.month, next.day).isAfter(DateTime(u.year, u.month, u.day))) return false;
+    return true;
+  }
+
+  bool get _byMonthRule => (unit == RepeatUnit.month || unit == RepeatUnit.year) && (lastWorkday || (nth != null && nthWeekday != null));
+
+  /// The day the month rule picks in [year]/[month], at [like]'s time of day.
+  DateTime _ruleDay(int year, int month, DateTime like) {
+    if (lastWorkday) {
+      var d = DateTime(year, month + 1, 0, like.hour, like.minute);
+      while (d.weekday > DateTime.friday) {
+        d = DateTime(d.year, d.month, d.day - 1, d.hour, d.minute);
+      }
+      return d;
+    }
+    final wd = nthWeekday!;
+    if (nth! < 0) {
+      var d = DateTime(year, month + 1, 0, like.hour, like.minute);
+      while (d.weekday != wd) {
+        d = DateTime(d.year, d.month, d.day - 1, d.hour, d.minute);
+      }
+      return d;
+    }
+    var d = DateTime(year, month, 1, like.hour, like.minute);
+    while (d.weekday != wd) {
+      d = DateTime(d.year, d.month, d.day + 1, d.hour, d.minute);
+    }
+    return DateTime(d.year, d.month, d.day + 7 * (nth! - 1), d.hour, d.minute);
+  }
+
+  DateTime _workday(DateTime d) {
+    if (!skipWeekends) return d;
+    var x = d;
+    while (x.weekday > DateTime.friday) {
+      x = DateTime(x.year, x.month, x.day + 1, x.hour, x.minute);
+    }
+    return x;
+  }
 
   final RepeatUnit unit;
 
@@ -1595,16 +1759,27 @@ class Repeat {
       final base = due == null
           ? completedAt
           : DateTime(completedAt.year, completedAt.month, completedAt.day, due.hour, due.minute);
-      return _step(base);
+      return _workday(_step(base));
     }
     var next = _step(due);
-    while (!next.isAfter(completedAt)) {
+    while (!_workday(next).isAfter(completedAt)) {
       next = _step(next);
     }
-    return next;
+    return _workday(next);
   }
 
   DateTime _step(DateTime d) {
+    if (_byMonthRule) {
+      // Item 114 F: counted in whole months from the start of [d]'s month.
+      final first = _addMonths(DateTime(d.year, d.month, 1, d.hour, d.minute), unit == RepeatUnit.year ? 12 * every : every);
+      var x = _ruleDay(first.year, first.month, d);
+      // A weekend-moved date can land in the next month: step from the rule day it came from.
+      if (!x.isAfter(d)) {
+        final again = _addMonths(first, unit == RepeatUnit.year ? 12 * every : every);
+        x = _ruleDay(again.year, again.month, d);
+      }
+      return x;
+    }
     switch (unit) {
       case RepeatUnit.day:
         return DateTime(d.year, d.month, d.day + every, d.hour, d.minute);
@@ -1650,8 +1825,25 @@ class Repeat {
       RepeatUnit.month => n == 1 ? 'Every month' : 'Every $n months',
       RepeatUnit.year => n == 1 ? 'Every year' : 'Every $n years',
     };
-    return fromCompletion ? '$base after done' : base;
+    final rule = !_byMonthRule
+        ? ''
+        : lastWorkday
+            ? ' on the last working day'
+            : ' on the ${nthName(nth!)} ${_fullDays[nthWeekday! - 1]}';
+    final ends = [
+      if (skipWeekends) 'weekends moved to Monday',
+      if (left != null) left == 0 ? 'last time' : '$left more time${left == 1 ? '' : 's'}',
+      if (until != null) 'until ${until!.day} ${_months[until!.month - 1]} ${until!.year}',
+    ];
+    final text = '$base$rule${fromCompletion ? ' after done' : ''}';
+    return ends.isEmpty ? text : '$text (${ends.join(', ')})';
   }
+
+  /// "first", "second", "third", "fourth", "last".
+  static String nthName(int n) => switch (n) { 1 => 'first', 2 => 'second', 3 => 'third', 4 => 'fourth', _ => 'last' };
+
+  static const _fullDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -1662,6 +1854,12 @@ class Repeat {
         'every': every,
         if (weekdays.isNotEmpty) 'weekdays': (weekdays.toList()..sort()),
         if (fromCompletion) 'fromCompletion': true,
+        if (nth != null) 'nth': nth,
+        if (nthWeekday != null) 'nthDay': nthWeekday,
+        if (lastWorkday) 'lastWorkday': true,
+        if (skipWeekends) 'skipWeekends': true,
+        if (until != null) 'until': until!.toIso8601String(),
+        if (left != null) 'left': left,
       };
 
   factory Repeat.fromJson(Map<String, dynamic> j) => Repeat(
@@ -1669,6 +1867,12 @@ class Repeat {
         every: (j['every'] as num?)?.toInt() ?? 1,
         weekdays: {for (final d in j['weekdays'] as List? ?? []) (d as num).toInt()},
         fromCompletion: j['fromCompletion'] as bool? ?? false,
+        nth: (j['nth'] as num?)?.toInt(),
+        nthWeekday: (j['nthDay'] as num?)?.toInt(),
+        lastWorkday: j['lastWorkday'] as bool? ?? false,
+        skipWeekends: j['skipWeekends'] as bool? ?? false,
+        until: DateTime.tryParse(j['until'] as String? ?? ''),
+        left: (j['left'] as num?)?.toInt(),
       );
 }
 
@@ -2596,7 +2800,10 @@ abstract final class Helper {
   /// Item 114 E: the weekly review screen (from its notification or the ⋮ menu).
   static const weeklyReview = 'weeklyReview';
 
-  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview];
+  /// Item 114 F: project templates (timed steps, New from template).
+  static const projectTemplates = 'projectTemplates';
+
+  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview, projectTemplates];
 
   /// Helpers that start switched off.
   static const offByDefault = <String>{};

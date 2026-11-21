@@ -1823,3 +1823,22 @@ name means its default). Built as updates A to G; mock-ups in the project files
 - The weekly review notification opens the screen when the Weekly review screen helper is on
   (otherwise the list on the coming week, as before). Also in the ⋮ menu.
 - Tests: test/smart_helpers_e_test.dart.
+
+### 114 F: project templates and smarter repeats (version 1.13.5)
+
+- Templates (`ChecklistTemplate.items`, `TemplateStep`: days, minutes, offset in days from the
+  task's date, after = earlier steps by place; plus category, tags and `dateLabel`). `steps`
+  (titles) is still written, so older versions read a plain checklist. `stepSpecs` falls back
+  to plain titles if the two lists ever disagree; `updateTemplate` keeps timing by title.
+- `AppStore.newFromTemplate` (due at 17:00 on the date, category, tags, dated and linked steps,
+  on the Gantt chart; timed steps are fixed to their date), `applyTemplate` on a task with a
+  due date does the same, `templateFromTask` saves lengths, links and offsets from the due
+  date. `TemplatePage` edits it; `newFromTemplate` (sheet) asks for the name and date.
+- Starter templates (`lib/templates.dart`): demand forecast, safety stock and reorder points,
+  late supplier delivery prediction, quick analysis request; each step after the one before.
+- Repeats (`Repeat`): `nth` + `nthWeekday` (1 to 4 or -1 = last), `lastWorkday`,
+  `skipWeekends` (only the returned date moves; the schedule steps from the rule), `until`,
+  `left` (times after this one; the next copy gets one less; `Task.nextRepeat` returns null
+  at the end and no copy is made). Skip counts one off. The calendar and statistics stop
+  projecting at the end. Public holidays are not known to the app, so only weekends move.
+- Tests: test/smart_helpers_f_test.dart.

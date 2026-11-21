@@ -21,6 +21,7 @@ import '../store.dart';
 import '../task_list.dart';
 import '../widgets/simple_cards.dart';
 import '../widgets/what_now_sheet.dart';
+import 'template_page.dart';
 import 'weekly_review_page.dart';
 import 'wrap_up_page.dart';
 import '../widgets/plan_time_sheet.dart';
@@ -254,6 +255,38 @@ class HomePageState extends State<HomePage> {
   /// Item 101: the Day plan (the Calendar's Day mode).
   void openDayPlan([DateTime? day, bool autoPlan = false]) =>
       _open(context, CalendarPage(store: store, mode: 'day', initialDay: day, autoPlan: autoPlan));
+
+  /// Item 114 F: pick a template, then name it and give its date.
+  Future<void> openNewFromTemplate() async {
+    final data = store.data;
+    final choice = await showDialog<Object>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('New from template'),
+        children: [
+          for (final t in data.templates)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, t),
+              child: Text('${t.name} (${t.steps.length} step${t.steps.length == 1 ? '' : 's'})'),
+            ),
+          if (data.templates.isEmpty)
+            const Padding(padding: EdgeInsets.fromLTRB(24, 8, 24, 8), child: Text('No templates yet.')),
+          const Divider(),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'starters'), child: const Text('Add the supply-chain starter templates')),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'starters') {
+      final n = store.addStarterTemplates();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(n == 0 ? 'The starter templates are already there' : 'Added $n starter template${n == 1 ? '' : 's'}')));
+      if (n > 0) return openNewFromTemplate();
+      return;
+    }
+    final t = await newFromTemplate(context, store, choice as ChecklistTemplate);
+    if (t != null && mounted) openTask(t.id);
+  }
 
   /// Item 114 E: the weekly review screen (its notification, or the ⋮ menu).
   void openWeeklyReview() => _open(
@@ -771,6 +804,7 @@ class HomePageState extends State<HomePage> {
               'dayplan' => openDayPlan(),
               'wrap' => openWrapUp(),
               'review' => openWeeklyReview(),
+              'template' => openNewFromTemplate(),
               'stats' => openStats(),
               'achievements' => openAchievements(),
               'habits' => openHabits(),
@@ -810,6 +844,7 @@ class HomePageState extends State<HomePage> {
                 const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
               if (data.helperOn(Helper.wrapUp)) const PopupMenuItem(value: 'wrap', child: Text('Wrap up the day')),
               if (data.helperOn(Helper.weeklyReview)) const PopupMenuItem(value: 'review', child: Text('Weekly review')),
+              if (data.helperOn(Helper.projectTemplates)) const PopupMenuItem(value: 'template', child: Text('New from template…')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),

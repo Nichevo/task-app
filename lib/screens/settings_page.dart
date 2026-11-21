@@ -26,6 +26,7 @@ import 'places_page.dart';
 import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
 import 'modes_page.dart';
+import 'template_page.dart' show TemplatePage;
 import 'work_import_page.dart' show importWorkMeetings;
 import '../tags.dart';
 import '../widgets/tag_widgets.dart';
@@ -769,6 +770,15 @@ class _SettingsPageState extends State<SettingsPage> {
         value: data.helperOn(Helper.weeklyReview),
         onChanged: (v) => store.setHelper(Helper.weeklyReview, v),
       ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.view_timeline_outlined),
+        title: const Text('Project templates'),
+        subtitle: Text('Templates with timed steps and links; New from template in the ⋮ menu · '
+            '${data.templates.length} template${data.templates.length == 1 ? '' : 's'}'),
+        value: data.helperOn(Helper.projectTemplates),
+        onChanged: (v) => store.setHelper(Helper.projectTemplates, v),
+      ),
     ];
   }
 
@@ -1267,13 +1277,31 @@ class _SettingsPageState extends State<SettingsPage> {
             if (data.templates.isEmpty)
               const Text('Save a task\'s checklist as a template from the Templates button on the task, '
                   'then add it to any task in one tap.'),
+            if (data.helperOn(Helper.projectTemplates))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Add the supply-chain starter templates'),
+                  onPressed: () {
+                    final n = store.addStarterTemplates();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(n == 0 ? 'They are already there' : 'Added $n starter template${n == 1 ? '' : 's'}')));
+                  },
+                ),
+              ),
             for (final t in data.templates)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.checklist),
+                leading: Icon(t.project ? Icons.view_timeline_outlined : Icons.checklist),
                 title: Text(t.name),
                 subtitle: Text(t.steps.join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
                 onTap: () async {
+                  if (data.helperOn(Helper.projectTemplates)) {
+                    // Item 114 F: each step's length, timing and links.
+                    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TemplatePage(store: store, template: t)));
+                    return;
+                  }
                   final lines = await askLines(context, t.name, initial: t.steps);
                   if (lines != null) store.updateTemplate(t, steps: lines);
                 },

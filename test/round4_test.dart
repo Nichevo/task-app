@@ -52,9 +52,9 @@ void main() {
       final t = Task.create('Bins')
         ..repeat = const Repeat(unit: RepeatUnit.week)
         ..estimate = 10;
-      final next = t.nextRepeat(now);
+      final next = t.nextRepeat(now)!;
       expect(next.series, t.id);
-      expect(next.nextRepeat(now).series, t.id);
+      expect(next.nextRepeat(now)!.series, t.id);
       expect(next.estimate, 10);
 
       final a = SkipRecord(taskId: 'x', series: 'x', at: now, due: now);

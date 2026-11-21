@@ -27,6 +27,7 @@ import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
 import 'secrets.dart';
+import 'templates.dart';
 import 'tags.dart';
 import 'task_list.dart';
 import 'work_meetings.dart';
@@ -1217,11 +1218,11 @@ class AppStore extends ChangeNotifier {
     if (t.repeat != null) {
       next = t.nextRepeat(now);
       // The next one goes back on the board at the start.
-      if (t.kanban && data.stages.isNotEmpty) {
+      if (next != null && t.kanban && data.stages.isNotEmpty) {
         _move(next, data.stages.first, MoveHow.repeat, at: now, locate: false);
         if (next.stepsOnBoard) _stepsOn(next, MoveHow.repeat, at: now);
       }
-      data.active.insert(index.clamp(0, data.active.length), next);
+      if (next != null) data.active.insert(index.clamp(0, data.active.length), next);
     }
     changed(task: t, order: true);
     // Only when ticked off just now: a tick made earlier on a widget or notification and picked
@@ -1251,7 +1252,11 @@ class AppStore extends ChangeNotifier {
     final oldMoves = {for (final st in t.steps) st.id: st.moves.length};
     final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue, missed: missedCycles(t, now));
     data.skips[record.key] = record;
+    final oldRepeat = t.repeat;
     t.dueAt = t.repeat!.nextDue(due: oldDue, completedAt: now);
+    // Item 114 F: a skipped time counts towards "after N times".
+    final left = t.repeat!.left;
+    if (left != null) t.repeat = t.repeat!.copyWith(left: left > 0 ? left - 1 : 0);
     t.snoozedUntil = null;
     final first = data.stages.firstOrNull;
     for (final st in t.steps) {
@@ -1264,6 +1269,7 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
     return () {
       data.skips.remove(record.key);
+      t.repeat = oldRepeat;
       t.dueAt = oldDue;
       t.snoozedUntil = oldSnooze;
       for (final st in t.steps) {
@@ -3266,16 +3272,132 @@ class AppStore extends ChangeNotifier {
   }
 
   void applyTemplate(Task t, ChecklistTemplate tpl) {
-    t.steps.addAll([for (final s in tpl.steps) TaskStep.create(s)]);
+    if (data.helperOn(Helper.projectTemplates) && tpl.project) {
+      // Item 114 F: timed steps, dated from the task's due date when it has one.
+      t.steps.addAll(_templateSteps(tpl, t.dueAt, weekendsFor(t, data)));
+      if (t.dueAt != null && !t.gantt) setOnGantt(t, true);
+      keepStepOrder(t);
+    } else {
+      t.steps.addAll([for (final s in tpl.steps) TaskStep.create(s)]);
+    }
     changed(task: t);
+  }
+
+  /// Item 114 F: the steps of [tpl] as new steps, each [TemplateStep.offset] days from [date]
+  /// (undated without one), with their lengths and links.
+  List<TaskStep> _templateSteps(ChecklistTemplate tpl, DateTime? date, bool weekends) {
+    final specs = tpl.stepSpecs;
+    final out = [for (final sp in specs) TaskStep.create(sp.title)];
+    for (var i = 0; i < specs.length; i++) {
+      final sp = specs[i], st = out[i];
+      if (data.helperOn(Helper.criticalPath)) st.timing = data.newTiming.id;
+      if (sp.minutes != null) {
+        st.takesMinutes = sp.minutes;
+        st.takesDays = sp.days ?? daysForMinutes(sp.minutes!, data);
+      } else {
+        st.takesDays = sp.days;
+      }
+      if (date != null && sp.offset != null) {
+        final d = DateTime(date.year, date.month, date.day + sp.offset!);
+        st.startAt = d;
+        // A timed step keeps the date it was given.
+        if (st.timing != null) st.timing = Timing.fixed.id;
+      }
+      for (final j in sp.after) {
+        if (j >= 0 && j < out.length && j != i) st.afterIds.add(out[j].id);
+      }
+    }
+    return out;
+  }
+
+  /// Item 114 F: a new task from [tpl]: its category and tags, due on [date], with the timed
+  /// steps placed around that date (on the Gantt chart when it has dates).
+  Task newFromTemplate(ChecklistTemplate tpl, {required String title, DateTime? date}) {
+    final due = date == null ? null : DateTime(date.year, date.month, date.day, date.hour == 0 && date.minute == 0 ? 17 : date.hour, date.minute);
+    final t = addTask(title, due: due, categoryId: data.category(tpl.categoryId) == null ? null : tpl.categoryId, tags: tpl.tags);
+    t.steps.addAll(_templateSteps(tpl, due, weekendsFor(t, data)));
+    if (due != null && tpl.project) setOnGantt(t, true);
+    keepStepOrder(t);
+    changed(task: t);
+    return t;
+  }
+
+  /// Item 114 F: a project template from [t]: its steps with their lengths, links and when each
+  /// starts against the task's due date.
+  ChecklistTemplate templateFromTask(Task t, String name) {
+    final tpl = ChecklistTemplate.create(name, [for (final s in t.steps) s.title.trim()]);
+    final due = t.dueAt == null ? null : dayOf(t.dueAt!);
+    final index = {for (var i = 0; i < t.steps.length; i++) t.steps[i].id: i};
+    tpl.items.addAll([
+      for (final s in t.steps)
+        TemplateStep(
+          title: s.title.trim(),
+          days: s.takesMinutes == null ? s.takesDays : null,
+          minutes: s.takesMinutes,
+          offset: () {
+            final bar = stepBar(t, s, data);
+            return due == null || bar == null || stepIsPoint(s) ? null : daysBetween(due, bar.start);
+          }(),
+          after: [for (final id in s.afterIds) ?index[id]],
+        ),
+    ]);
+    tpl.categoryId = t.categoryId;
+    tpl.tags.addAll(t.tags);
+    data.templates.add(tpl);
+    changed(settings: true);
+    return tpl;
+  }
+
+  /// Item 114 F: call after editing a template's fields on its page.
+  void templateChanged(ChecklistTemplate tpl) {
+    tpl.steps
+      ..clear()
+      ..addAll([for (final i in tpl.items) i.title]);
+    changed(settings: true);
+  }
+
+  /// Item 114 F: adds the supply-chain starter templates that aren't there yet (by name).
+  /// Returns how many were added.
+  int addStarterTemplates() {
+    var n = 0;
+    for (final tpl in starterTemplates()) {
+      if (data.templates.any((t) => t.name.toLowerCase() == tpl.name.toLowerCase())) continue;
+      data.templates.add(tpl);
+      n++;
+    }
+    if (n > 0) changed(settings: true);
+    return n;
   }
 
   void updateTemplate(ChecklistTemplate tpl, {String? name, List<String>? steps}) {
     if (name != null) tpl.name = name.trim();
     if (steps != null) {
+      final lines = [for (final s in steps) s.trim()].where((s) => s.isNotEmpty).toList();
+      if (tpl.items.isNotEmpty) {
+        // Item 114 F: keep each step's timing by its title; links follow the steps they name.
+        final old = tpl.stepSpecs;
+        final byTitle = {for (final i in old) i.title: i};
+        final newIndex = {for (var i = 0; i < lines.length; i++) lines[i]: i};
+        final items = [
+          for (final l in lines)
+            TemplateStep(
+              title: l,
+              days: byTitle[l]?.days,
+              minutes: byTitle[l]?.minutes,
+              offset: byTitle[l]?.offset,
+              after: [
+                for (final j in byTitle[l]?.after ?? const <int>[])
+                  if (j < old.length) ?newIndex[old[j].title],
+              ],
+            ),
+        ];
+        tpl.items
+          ..clear()
+          ..addAll(items);
+      }
       tpl.steps
         ..clear()
-        ..addAll([for (final s in steps) s.trim()].where((s) => s.isNotEmpty));
+        ..addAll(lines);
     }
     changed(settings: true);
   }

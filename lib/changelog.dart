@@ -9,6 +9,12 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.5', 'November 2026', [
+    'Project templates: a template\'s steps can now each have a length, a start a set time before or after the task\'s date ("8 weeks before the departure date") and steps they come after. Pick "New from template…" in the ⋮ menu, give a name and the date, and the task arrives with every step dated and linked, on the Gantt chart ready to go. Edit templates in Settings; "Save this checklist as a template" now keeps each step\'s timing.',
+    'Four starter templates for supply-chain analysis: demand forecast, safety stock and reorder points, late supplier delivery prediction and a quick analysis request. Add them from New from template or Settings.',
+    'Smarter repeats: monthly on, say, the last Friday or the second Tuesday, or the last working day; move a date that lands on a weekend to the Monday; and end the repeat on a date or after a number of times. Skipping one counts as one of the times.',
+    'Project templates can be turned off in Settings, Smart helpers (templates then work as plain checklists, as before).',
+  ]),
   Release('1.13.4', 'November 2026', [
     'Weekly review screen: tap the weekly review notification (or pick Weekly review in the ⋮ menu) for one pile at a time. Last week (done, added, focus time), what slipped past its date, tasks without a date going red, tasks with steps where nothing has been ticked for two weeks, and next week day by day with meetings, what is due and free time ("too full" when the estimates don\'t fit).',
     'Each task gets one-tap choices: the next working day, next week, pick a date, delegate (into the Delegate box with who it waits on), drop or done, all undoable. Ageing ones can be kept, which makes them fresh again.',
