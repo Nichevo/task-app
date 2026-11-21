@@ -38,8 +38,8 @@ void main() {
 
   test('tasks, dated steps and work meetings land on their days; overdue goes to today', () {
     final s = AppStore();
-    final gas = s.addTask('Gas bill').dueAt = DateTime(2026, 11, 22, 10);
-    s.addTask('Plumber')..dueAt = DateTime(2026, 11, 19);
+    final gas = s.addTask('Gas bill')..dueAt = DateTime(2026, 11, 22, 10);
+    s.addTask('Plumber').dueAt = DateTime(2026, 11, 19);
     final fc = s.addTask('Demand forecast');
     fc.steps.add(TaskStep.create('Fit the model')..dueAt = DateTime(2026, 11, 23));
     fc.steps.add(TaskStep.create('Done one')
