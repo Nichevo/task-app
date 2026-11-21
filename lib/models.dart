@@ -53,6 +53,7 @@ class Task {
     this.addedWhere,
     this.doneWhere,
     this.estimate,
+    this.actual,
     this.seriesId,
     this.place,
     this.placeLeave = false,
@@ -107,11 +108,11 @@ class Task {
   static const _known = {
     'id', 'title', 'notes', 'createdAt', 'dueAt', 'closedAt', 'updatedAt', 'categoryId', 'starred',
     'snoozedUntil', 'afterTaskId', 'readyAt', 'repeat', 'remindBefore', 'steps', 'eventId', 'source',
-    'addedWhere', 'doneWhere', 'estimate', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
+    'addedWhere', 'doneWhere', 'estimate', 'actual', 'series', 'place', 'placeLeave', 'kanban', 'stage', 'moves',
     'stepsBoard', 'emails', 'ref', 'box', 'waiting', 'splitFrom', 'gantt', 'start', 'takes', 'takesMin', 'weekends',
     'alsoAfter', 'lag', 'milestone', 'progress', 'planStart', 'planDue', 'worked', 'wAt',
     'habit', 'hGoal', 'hTimes', 'hDays', 'hFree', 'hRemind', 'hPauses', 'dayPlan', 'slots', 'always', 'focus',
-    'where', 'driveBefore', 'driveAfter', 'tags',
+    'where', 'driveBefore', 'driveAfter', 'tags', 'timing',
   };
 
   final String id;
@@ -181,6 +182,10 @@ class Task {
   /// About how long it takes, in minutes; null if not given.
   int? estimate;
 
+  /// Item 114 B: how long it really took, in minutes, as confirmed when it was ticked off (or
+  /// the recorded time when nobody was asked); null before then.
+  int? actual;
+
   /// The first task of a repeating series; every repeat carries it so the series can be
   /// counted together. Null on the first one (its own id is the series).
   String? seriesId;
@@ -243,6 +248,10 @@ class Task {
 
   /// Item 72: a one-day marker, drawn as a diamond.
   bool milestone;
+
+  /// Item 114 D: when it should happen on the Gantt chart, a [Timing] id (null = as it always
+  /// has: its own dates, pushed later only).
+  String? timing;
 
   /// Item 72: 0 to 100 set by hand; null = worked out from the steps.
   int? progress;
@@ -354,13 +363,16 @@ class Task {
   }
 
   /// A fresh copy for the next time a repeating task comes round.
-  Task nextRepeat(DateTime completedAt) {
+  Task? nextRepeat(DateTime completedAt) {
     final r = repeat!;
+    // Item 114 F: a series with an end stops there.
+    final nextDue = r.nextDue(due: dueAt, completedAt: completedAt);
+    if (!r.allows(nextDue)) return null;
     final next = Task.create(title)
       ..notes = notes
       ..categoryId = categoryId
       ..starred = starred
-      ..repeat = r
+      ..repeat = r.left == null ? r : r.copyWith(left: r.left! - 1)
       ..remindBefore = remindBefore
       ..estimate = estimate
       ..place = place
@@ -370,7 +382,7 @@ class Task {
       ..matrixBox = matrixBox
       ..source = TaskSource.repeat;
     next.tags.addAll(tags);
-    next.dueAt = r.nextDue(due: dueAt, completedAt: completedAt);
+    next.dueAt = nextDue;
     // Each repeat starts with the checklist unticked. Step dates (item 61) keep their distance
     // from the task's due date; without one to measure from they are left off.
     final shift = dueAt == null || next.dueAt == null ? null : next.dueAt!.difference(dueAt!);
@@ -381,6 +393,7 @@ class Task {
       ..takesMinutes = takesMinutes
       ..countWeekends = countWeekends
       ..milestone = milestone
+      ..timing = timing
       ..startAt = startAt == null || shift == null ? null : startAt!.add(shift);
     next.steps.addAll([
       for (final st in steps)
@@ -439,6 +452,7 @@ class Task {
         if (addedWhere != null) 'addedWhere': addedWhere!.toJson(),
         if (doneWhere != null) 'doneWhere': doneWhere!.toJson(),
         if (estimate != null) 'estimate': estimate,
+        if (actual != null) 'actual': actual,
         if (seriesId != null) 'series': seriesId,
         if (place != null) 'place': place,
         if (placeLeave) 'placeLeave': true,
@@ -458,6 +472,7 @@ class Task {
         if (alsoAfter.isNotEmpty) 'alsoAfter': alsoAfter,
         if (lagDays != null) 'lag': lagDays,
         if (milestone) 'milestone': true,
+        if (timing != null) 'timing': timing,
         if (progress != null) 'progress': progress,
         if (planStart != null) 'planStart': planStart!.toIso8601String(),
         if (planDue != null) 'planDue': planDue!.toIso8601String(),
@@ -503,6 +518,7 @@ class Task {
         addedWhere: GeoPoint.tryParse(j['addedWhere']),
         doneWhere: GeoPoint.tryParse(j['doneWhere']),
         estimate: (j['estimate'] as num?)?.toInt(),
+        actual: (j['actual'] as num?)?.toInt(),
         seriesId: j['series'] as String?,
         place: j['place'] as String?,
         placeLeave: j['placeLeave'] as bool? ?? false,
@@ -546,6 +562,7 @@ class Task {
         ],
         extra: unknownFields(j, _known),
       )
+        ..timing = j['timing'] as String?
         ..where = TaskWhere.tryParse(j['where'])
         ..driveBefore = (j['driveBefore'] as num?)?.toInt()
         ..driveAfter = (j['driveAfter'] as num?)?.toInt();
@@ -952,7 +969,7 @@ class TaskStep {
 
   static const _known = {
     'id', 'title', 'done', 'doneAt', 'carried', 'taskId', 'stage', 'moves', 'due', 'remind', 'note', 'event',
-    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep', 'tags',
+    'start', 'takes', 'takesMin', 'progress', 'after', 'linkStep', 'tags', 'timing',
   };
 
   final String id;
@@ -1019,6 +1036,9 @@ class TaskStep {
   /// those later moves this one later too (see pushSteps).
   final List<String> afterIds;
 
+  /// Item 114 D: when it should happen on the Gantt chart, as [Task.timing].
+  String? timing;
+
   /// Item 112: its own tags, like [Task.tags] (without the "#"). A step also counts as having
   /// its task's tags when filtering (see stepPassesTagFilter).
   final List<String> tags;
@@ -1062,6 +1082,7 @@ class TaskStep {
         if (takesMinutes != null) 'takesMin': takesMinutes,
         if (progress != null) 'progress': progress,
         if (afterIds.isNotEmpty) 'after': afterIds,
+        if (timing != null) 'timing': timing,
         if (tags.isNotEmpty) 'tags': tags,
       };
 
@@ -1086,34 +1107,116 @@ class TaskStep {
         afterIds: [for (final id in j['after'] as List? ?? []) id as String],
         tags: [for (final x in j['tags'] as List? ?? []) if (x is String && x.trim().isNotEmpty) x],
         extra: unknownFields(j, _known),
+      )..timing = j['timing'] as String?;
+}
+
+/// Item 114 F: one step of a project template: its length, when it starts against the new
+/// task's date, and which earlier steps (by place in the list) it comes after.
+class TemplateStep {
+  TemplateStep({required this.title, this.days, this.minutes, this.offset, List<int>? after}) : after = after ?? [];
+
+  String title;
+
+  /// Days of work (null: not set).
+  int? days;
+
+  /// A length in minutes, when given in hours (then [days] is the working days they fill).
+  int? minutes;
+
+  /// Days from the task's date to the step's start (negative: before; null: not timed).
+  int? offset;
+
+  /// Places (0-based) of the steps it comes after.
+  final List<int> after;
+
+  bool get timed => offset != null || days != null || minutes != null || after.isNotEmpty;
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        if (days != null) 'days': days,
+        if (minutes != null) 'min': minutes,
+        if (offset != null) 'offset': offset,
+        if (after.isNotEmpty) 'after': after,
+      };
+
+  factory TemplateStep.fromJson(Map<String, dynamic> j) => TemplateStep(
+        title: j['title'] as String? ?? '',
+        days: (j['days'] as num?)?.toInt(),
+        minutes: (j['min'] as num?)?.toInt(),
+        offset: (j['offset'] as num?)?.toInt(),
+        after: [for (final x in j['after'] as List? ?? []) (x as num).toInt()],
       );
 }
 
-/// A saved checklist that can be added to any task.
+/// A saved checklist that can be added to any task. Item 114 F: a project template also has
+/// timed steps ([items]), a category, tags and a name for its date ("departure date").
 class ChecklistTemplate {
-  ChecklistTemplate({required this.id, required this.name, List<String>? steps, Map<String, dynamic>? extra})
+  ChecklistTemplate(
+      {required this.id,
+      required this.name,
+      List<String>? steps,
+      List<TemplateStep>? items,
+      this.categoryId,
+      List<String>? tags,
+      this.dateLabel,
+      Map<String, dynamic>? extra})
       : steps = steps ?? [],
+        items = items ?? [],
+        tags = tags ?? [],
         extra = extra ?? {};
 
   /// Item 62: fields written by a newer version of the app that this one doesn't know. Kept
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'id', 'name', 'steps'};
+  static const _known = {'id', 'name', 'steps', 'items', 'category', 'tags', 'dateLabel'};
 
   final String id;
   String name;
+
+  /// The step titles (all a plain checklist template has; older versions read only these).
   final List<String> steps;
+
+  /// Item 114 F: the steps with their timing, in the same order as [steps] (empty for a plain
+  /// checklist).
+  final List<TemplateStep> items;
+  String? categoryId;
+  final List<String> tags;
+
+  /// What its date is called ("departure date"); null: "due date".
+  String? dateLabel;
+
+  /// Has timed steps (a project).
+  bool get project => items.any((i) => i.timed);
+
+  /// The steps with their timing, falling back to plain titles when [items] is out of step.
+  List<TemplateStep> get stepSpecs {
+    final ok = items.length == steps.length && [for (var i = 0; i < steps.length; i++) items[i].title == steps[i]].every((x) => x);
+    return ok ? items : [for (final s in steps) TemplateStep(title: s)];
+  }
 
   factory ChecklistTemplate.create(String name, List<String> steps) => ChecklistTemplate(
       id: 'tpl${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 20)}', name: name.trim(), steps: steps);
 
-  Map<String, dynamic> toJson() => {...extra, 'id': id, 'name': name, 'steps': steps};
+  Map<String, dynamic> toJson() => {
+        ...extra,
+        'id': id,
+        'name': name,
+        'steps': steps,
+        if (items.isNotEmpty) 'items': [for (final i in items) i.toJson()],
+        if (categoryId != null) 'category': categoryId,
+        if (tags.isNotEmpty) 'tags': tags,
+        if (dateLabel != null) 'dateLabel': dateLabel,
+      };
 
   factory ChecklistTemplate.fromJson(Map<String, dynamic> j) => ChecklistTemplate(
         id: j['id'] as String,
         name: j['name'] as String? ?? '',
         steps: [for (final s in j['steps'] as List? ?? []) s as String],
+        items: [for (final i in j['items'] as List? ?? []) TemplateStep.fromJson(Map<String, dynamic>.from(i as Map))],
+        categoryId: j['category'] as String?,
+        tags: [for (final t in j['tags'] as List? ?? []) t as String],
+        dateLabel: j['dateLabel'] as String?,
         extra: unknownFields(j, _known),
       );
 }
@@ -1133,6 +1236,8 @@ class DoneRecord {
     this.stageMinutes,
     this.mode,
     this.outside = false,
+    this.estMinutes,
+    this.actMinutes,
     this.extra = const {},
   });
 
@@ -1140,7 +1245,29 @@ class DoneRecord {
   /// and written back unchanged, so an older device never drops newer data when it syncs.
   final Map<String, dynamic> extra;
 
-  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages', 'mode', 'outside'};
+  static const _known = {'at', 'took', 'onTime', 'cat', 'src', 'title', 'series', 'late', 'missed', 'stages', 'mode', 'outside', 'est', 'act'};
+
+  /// Item 114 B: the estimate when it was ticked off and how long it really took (minutes).
+  final int? estMinutes;
+  final int? actMinutes;
+
+  DoneRecord withActual(int? minutes) => DoneRecord(
+        at: at,
+        tookMinutes: tookMinutes,
+        onTime: onTime,
+        categoryId: categoryId,
+        source: source,
+        title: title,
+        series: series,
+        lateMinutes: lateMinutes,
+        missed: missed,
+        stageMinutes: stageMinutes,
+        mode: mode,
+        outside: outside,
+        estMinutes: estMinutes,
+        actMinutes: minutes,
+        extra: extra,
+      );
 
   /// Item 102: the focus mode it was ticked off in ([everythingId] for none); null on older records.
   final String? mode;
@@ -1183,7 +1310,7 @@ class DoneRecord {
   /// The due time, when it had one and the record is new enough to know it.
   DateTime? get due => lateMinutes == null ? null : at.subtract(Duration(minutes: lateMinutes!));
 
-  factory DoneRecord.of(Task t, DateTime at, {String? mode, bool outside = false}) => DoneRecord(
+  factory DoneRecord.of(Task t, DateTime at, {String? mode, bool outside = false, int? est, int? act}) => DoneRecord(
         at: at,
         tookMinutes: at.difference(t.createdAt).inMinutes,
         onTime: t.dueAt == null ? null : !at.isAfter(t.dueAt!),
@@ -1196,6 +1323,8 @@ class DoneRecord {
         stageMinutes: t.moves.isEmpty ? null : minutesPerStage(t, at),
         mode: mode,
         outside: outside,
+        estMinutes: est,
+        actMinutes: act,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1212,6 +1341,8 @@ class DoneRecord {
         if (stageMinutes != null) 'stages': stageMinutes,
         if (mode != null) 'mode': mode,
         if (outside) 'outside': true,
+        if (estMinutes != null) 'est': estMinutes,
+        if (actMinutes != null) 'act': actMinutes,
       };
 
   factory DoneRecord.fromJson(Map<String, dynamic> j) => DoneRecord(
@@ -1229,6 +1360,8 @@ class DoneRecord {
             : null,
         mode: j['mode'] as String?,
         outside: j['outside'] as bool? ?? false,
+        estMinutes: (j['est'] as num?)?.toInt(),
+        actMinutes: (j['act'] as num?)?.toInt(),
         extra: unknownFields(j, _known),
       );
 }
@@ -1526,7 +1659,86 @@ class Repeat {
     this.every = 1,
     this.weekdays = const {},
     this.fromCompletion = false,
+    this.nth,
+    this.nthWeekday,
+    this.lastWorkday = false,
+    this.skipWeekends = false,
+    this.until,
+    this.left,
   });
+
+  /// Item 114 F: monthly (or yearly) on the [nth] [nthWeekday] of the month (1 to 4, or -1 for
+  /// the last), e.g. the last Friday.
+  final int? nth;
+  final int? nthWeekday;
+
+  /// Item 114 F: monthly on the last working day (Monday to Friday) of the month.
+  final bool lastWorkday;
+
+  /// Item 114 F: a date that falls on a weekend moves to the Monday after.
+  final bool skipWeekends;
+
+  /// Item 114 F: no repeats after this day.
+  final DateTime? until;
+
+  /// Item 114 F: how many more times it comes round after this one (null: no end).
+  final int? left;
+
+  Repeat copyWith({int? left}) => Repeat(
+        unit: unit,
+        every: every,
+        weekdays: weekdays,
+        fromCompletion: fromCompletion,
+        nth: nth,
+        nthWeekday: nthWeekday,
+        lastWorkday: lastWorkday,
+        skipWeekends: skipWeekends,
+        until: until,
+        left: left,
+      );
+
+  /// Whether the [k]th repeat after this one (1 = the next), due [next], still comes round.
+  bool allows(DateTime next, [int k = 1]) {
+    final l = left, u = until;
+    if (l != null && k > l) return false;
+    if (u != null && DateTime(next.year, next.month, next.day).isAfter(DateTime(u.year, u.month, u.day))) return false;
+    return true;
+  }
+
+  bool get _byMonthRule => (unit == RepeatUnit.month || unit == RepeatUnit.year) && (lastWorkday || (nth != null && nthWeekday != null));
+
+  /// The day the month rule picks in [year]/[month], at [like]'s time of day.
+  DateTime _ruleDay(int year, int month, DateTime like) {
+    if (lastWorkday) {
+      var d = DateTime(year, month + 1, 0, like.hour, like.minute);
+      while (d.weekday > DateTime.friday) {
+        d = DateTime(d.year, d.month, d.day - 1, d.hour, d.minute);
+      }
+      return d;
+    }
+    final wd = nthWeekday!;
+    if (nth! < 0) {
+      var d = DateTime(year, month + 1, 0, like.hour, like.minute);
+      while (d.weekday != wd) {
+        d = DateTime(d.year, d.month, d.day - 1, d.hour, d.minute);
+      }
+      return d;
+    }
+    var d = DateTime(year, month, 1, like.hour, like.minute);
+    while (d.weekday != wd) {
+      d = DateTime(d.year, d.month, d.day + 1, d.hour, d.minute);
+    }
+    return DateTime(d.year, d.month, d.day + 7 * (nth! - 1), d.hour, d.minute);
+  }
+
+  DateTime _workday(DateTime d) {
+    if (!skipWeekends) return d;
+    var x = d;
+    while (x.weekday > DateTime.friday) {
+      x = DateTime(x.year, x.month, x.day + 1, x.hour, x.minute);
+    }
+    return x;
+  }
 
   final RepeatUnit unit;
 
@@ -1547,16 +1759,27 @@ class Repeat {
       final base = due == null
           ? completedAt
           : DateTime(completedAt.year, completedAt.month, completedAt.day, due.hour, due.minute);
-      return _step(base);
+      return _workday(_step(base));
     }
     var next = _step(due);
-    while (!next.isAfter(completedAt)) {
+    while (!_workday(next).isAfter(completedAt)) {
       next = _step(next);
     }
-    return next;
+    return _workday(next);
   }
 
   DateTime _step(DateTime d) {
+    if (_byMonthRule) {
+      // Item 114 F: counted in whole months from the start of [d]'s month.
+      final first = _addMonths(DateTime(d.year, d.month, 1, d.hour, d.minute), unit == RepeatUnit.year ? 12 * every : every);
+      var x = _ruleDay(first.year, first.month, d);
+      // A weekend-moved date can land in the next month: step from the rule day it came from.
+      if (!x.isAfter(d)) {
+        final again = _addMonths(first, unit == RepeatUnit.year ? 12 * every : every);
+        x = _ruleDay(again.year, again.month, d);
+      }
+      return x;
+    }
     switch (unit) {
       case RepeatUnit.day:
         return DateTime(d.year, d.month, d.day + every, d.hour, d.minute);
@@ -1602,8 +1825,25 @@ class Repeat {
       RepeatUnit.month => n == 1 ? 'Every month' : 'Every $n months',
       RepeatUnit.year => n == 1 ? 'Every year' : 'Every $n years',
     };
-    return fromCompletion ? '$base after done' : base;
+    final rule = !_byMonthRule
+        ? ''
+        : lastWorkday
+            ? ' on the last working day'
+            : ' on the ${nthName(nth!)} ${_fullDays[nthWeekday! - 1]}';
+    final ends = [
+      if (skipWeekends) 'weekends moved to Monday',
+      if (left != null) left == 0 ? 'last time' : '$left more time${left == 1 ? '' : 's'}',
+      if (until != null) 'until ${until!.day} ${_months[until!.month - 1]} ${until!.year}',
+    ];
+    final text = '$base$rule${fromCompletion ? ' after done' : ''}';
+    return ends.isEmpty ? text : '$text (${ends.join(', ')})';
   }
+
+  /// "first", "second", "third", "fourth", "last".
+  static String nthName(int n) => switch (n) { 1 => 'first', 2 => 'second', 3 => 'third', 4 => 'fourth', _ => 'last' };
+
+  static const _fullDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   static const _dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -1614,6 +1854,12 @@ class Repeat {
         'every': every,
         if (weekdays.isNotEmpty) 'weekdays': (weekdays.toList()..sort()),
         if (fromCompletion) 'fromCompletion': true,
+        if (nth != null) 'nth': nth,
+        if (nthWeekday != null) 'nthDay': nthWeekday,
+        if (lastWorkday) 'lastWorkday': true,
+        if (skipWeekends) 'skipWeekends': true,
+        if (until != null) 'until': until!.toIso8601String(),
+        if (left != null) 'left': left,
       };
 
   factory Repeat.fromJson(Map<String, dynamic> j) => Repeat(
@@ -1621,6 +1867,12 @@ class Repeat {
         every: (j['every'] as num?)?.toInt() ?? 1,
         weekdays: {for (final d in j['weekdays'] as List? ?? []) (d as num).toInt()},
         fromCompletion: j['fromCompletion'] as bool? ?? false,
+        nth: (j['nth'] as num?)?.toInt(),
+        nthWeekday: (j['nthDay'] as num?)?.toInt(),
+        lastWorkday: j['lastWorkday'] as bool? ?? false,
+        skipWeekends: j['skipWeekends'] as bool? ?? false,
+        until: DateTime.tryParse(j['until'] as String? ?? ''),
+        left: (j['left'] as num?)?.toInt(),
       );
 }
 
@@ -1727,6 +1979,8 @@ class AppData {
     this.ganttStartOnProgress = true,
     DayPlanSettings? dayPlan,
     Map<String, SkipRecord>? skips,
+    Map<String, bool>? helpers,
+    Map<String, dynamic>? helperPrefs,
     DateTime? updatedAt,
     DateTime? orderUpdatedAt,
     DateTime? settingsUpdatedAt,
@@ -1773,6 +2027,8 @@ class AppData {
         templates = templates ?? [],
         done = done ?? {},
         skips = skips ?? {},
+        helpers = helpers ?? {},
+        helperPrefs = helperPrefs ?? {},
         stages = stages ?? KanbanStage.defaults(),
         eventCalendars = eventCalendars ?? {},
         dismissedEvents = dismissedEvents ?? {},
@@ -1888,6 +2144,15 @@ class AppData {
 
   /// Repeating tasks moved on without being done, by [SkipRecord.key], for the statistics.
   final Map<String, SkipRecord> skips;
+
+  /// Item 114: the Smart helpers switches in Settings, by [Helper] name. A name not here is at
+  /// its default ([Helper.offByDefault] lists those that start off).
+  final Map<String, bool> helpers;
+
+  /// Item 114: each helper's own options (times, days...), by name; see [HelperPrefs].
+  final Map<String, dynamic> helperPrefs;
+
+  bool helperOn(String name) => helpers[name] ?? !Helper.offByDefault.contains(name);
 
   /// Default extra reminder before the due time, in minutes (0 = only at the due time).
   int defaultRemindBefore;
@@ -2049,7 +2314,7 @@ class AppData {
   static const _known = {
     'version', 'newestApp', 'hoursToRed', 'colourByDue', 'archiveKeepDays', 'categories',
     'groupByCategory', 'collapsed', 'focusNext30', 'weeklyReview', 'weeklyDay', 'weeklyAt', 'sort',
-    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips',
+    'starredTop', 'dragInSort', 'showQuickFilters', 'stages', 'kanbanDone', 'kanbanHideFromList', 'boardSortLikeList', 'cardShading', 'stepShading', 'skips', 'helpers', 'helperPrefs',
     'ganttWeekends', 'ganttPush', 'ganttStartOnProgress', 'dayPlan',
     'defaultRemindBefore', 'templates', 'done', 'autoCategory', 'eventSuggest', 'eventCalendars',
     'dismissedEvents', 'eventDays', 'overdueMode', 'overdueAt', 'nudgeHours', 'quietStart', 'quietEnd',
@@ -2087,6 +2352,8 @@ class AppData {
         if (ganttPush != GanttPush.ask) 'ganttPush': ganttPush.name,
         if (!ganttStartOnProgress) 'ganttStartOnProgress': false,
         'dayPlan': dayPlan.toJson(),
+        if (helpers.isNotEmpty) 'helpers': helpers,
+        if (helperPrefs.isNotEmpty) 'helperPrefs': helperPrefs,
         if (lists && skips.isNotEmpty) 'skips': skips.map((k, v) => MapEntry(k, v.toJson())),
         'defaultRemindBefore': defaultRemindBefore,
         'templates': templates.map((t) => t.toJson()).toList(),
@@ -2196,6 +2463,11 @@ class AppData {
         ganttPush: GanttPush.values.where((v) => v.name == j['ganttPush']).firstOrNull ?? GanttPush.ask,
         ganttStartOnProgress: j['ganttStartOnProgress'] as bool? ?? true,
         dayPlan: DayPlanSettings.fromJson(j['dayPlan']),
+        helperPrefs: j['helperPrefs'] is Map ? Map<String, dynamic>.from(j['helperPrefs'] as Map) : null,
+        helpers: {
+          for (final e in (j['helpers'] as Map? ?? {}).entries)
+            if (e.value is bool) e.key as String: e.value as bool,
+        },
         skips: {
           for (final e in (j['skips'] as Map? ?? {}).entries)
             e.key as String: SkipRecord.fromJson(e.value as Map<String, dynamic>),
@@ -2407,6 +2679,8 @@ AppData mergeData(AppData a, AppData b) {
     ganttStartOnProgress: settingsFrom.ganttStartOnProgress,
     dayPlan: settingsFrom.dayPlan,
     skips: skips,
+    helpers: settingsFrom.helpers,
+    helperPrefs: settingsFrom.helperPrefs,
     defaultRemindBefore: settingsFrom.defaultRemindBefore,
     templates: _mergeById(settingsFrom.templates, olderSettings.templates, (c) => c.id, deleted),
     done: done,
@@ -2495,4 +2769,99 @@ enum MatrixBox {
   final bool important;
 
   static MatrixBox? byId(String? id) => values.where((b) => b.id == id).firstOrNull;
+}
+
+/// Item 114: the features under Settings → Smart helpers, each with its own switch. Turning one
+/// off hides it everywhere (buttons, menus, notifications); turning it back on keeps what it had.
+abstract final class Helper {
+  /// The simple card view button on the task list (item 114).
+  static const simpleView = 'simpleView';
+
+  /// Item 114 B: after ticking off a task with an estimate, ask how long it really took, and
+  /// show how good the estimates are on the Statistics page.
+  static const learnEstimates = 'learnEstimates';
+
+  /// Item 114 B: a notification each morning with the day ahead.
+  static const morningBrief = 'morningBrief';
+
+  /// Item 114 B: a notification at the end of the day to wrap it up, and the Wrap up screen.
+  static const wrapUp = 'wrapUp';
+
+  /// Item 114 C: the ✨ Plan my day button on the Day plan.
+  static const planMyDay = 'planMyDay';
+
+  /// Item 114 C: the "What should I do now?" button and widget.
+  static const whatNow = 'whatNow';
+
+  /// Item 114 D: the critical path button on the Gantt chart, the When should it happen? choices
+  /// on a bar, and Plan back from the due date.
+  static const criticalPath = 'criticalPath';
+
+  /// Item 114 E: the weekly review screen (from its notification or the ⋮ menu).
+  static const weeklyReview = 'weeklyReview';
+
+  /// Item 114 F: project templates (timed steps, New from template).
+  static const projectTemplates = 'projectTemplates';
+
+  /// Item 114 G: break a task into steps with AI (a Claude key, or Ollama on the home network).
+  static const aiBreakdown = 'aiBreakdown';
+
+  /// Item 114 (11): saved smart lists in the ☰ menu.
+  static const smartLists = 'smartLists';
+
+  static const all = [
+    simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview, projectTemplates, aiBreakdown,
+    smartLists,
+  ];
+
+  /// Helpers that start switched off (AI sends task text away, so it waits for a key).
+  static const offByDefault = <String>{aiBreakdown};
+}
+
+/// Item 114 B: when a daily helper notification (morning brief, wrap up) comes.
+class DailyAt {
+  const DailyAt({required this.at, required this.days, required this.follow});
+
+  /// Minutes after midnight.
+  final int at;
+
+  /// Weekdays (1 = Monday) it comes on.
+  final Set<int> days;
+
+  /// Follow the focus mode schedule: only on days that have a scheduled mode, the brief at its
+  /// time and the wrap up when the day's last scheduled mode ends (at [at] when that is later).
+  final bool follow;
+
+  static const weekdays = {1, 2, 3, 4, 5};
+
+  Map<String, dynamic> toJson() => {'at': at, 'days': (days.toList()..sort()), 'follow': follow};
+
+  static DailyAt from(Object? j, int defaultAt) {
+    if (j is! Map) return DailyAt(at: defaultAt, days: weekdays, follow: true);
+    return DailyAt(
+      at: (j['at'] as num?)?.toInt() ?? defaultAt,
+      days: {for (final d in j['days'] as List? ?? weekdays.toList()) if (d is num) d.toInt()},
+      follow: j['follow'] as bool? ?? true,
+    );
+  }
+}
+
+/// Item 114: the options of the Smart helpers, kept in [AppData.helperPrefs].
+extension HelperPrefs on AppData {
+  /// Morning brief, 7:30 by default.
+  DailyAt get briefAt => DailyAt.from(helperPrefs['brief'], 7 * 60 + 30);
+  set briefAt(DailyAt v) => helperPrefs['brief'] = v.toJson();
+
+  /// Wrap up the day, 17:30 by default.
+  DailyAt get wrapAt => DailyAt.from(helperPrefs['wrap'], 17 * 60 + 30);
+  set wrapAt(DailyAt v) => helperPrefs['wrap'] = v.toJson();
+
+  /// Item 114 B: ask how long a task really took: 'always' (the owner's choice), 'unrecorded'
+  /// (only when nothing was recorded) or 'never' (keep the recorded time).
+  String get askActual => helperPrefs['askActual'] as String? ?? 'always';
+  set askActual(String v) => helperPrefs['askActual'] = v;
+
+  /// Item 114 B: let planning (Plan my day, What now) allow for how far off estimates usually are.
+  bool get allowForEstimates => helperPrefs['allowEst'] as bool? ?? true;
+  set allowForEstimates(bool v) => helperPrefs['allowEst'] = v;
 }

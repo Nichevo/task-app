@@ -1701,3 +1701,185 @@ sat on top of it.
   its task, and plan just that step.
 - Tests: test/card_pace_test.dart (big text on a Fold-sized board, every shading),
   test/work_meetings_test.dart (step linked, moves, unlinked), test/day_plan_edit_test.dart.
+
+## 114. Smart helpers (next-level batch)
+
+Picked by the owner on 2026-11-19 from the "next level" ideas: Plan my day, What should I do now
+(button and widget), estimate vs actual, weekly review screen, AI step breakdown (Claude or a
+local Ollama), morning brief, project templates and smarter repeats, wrap up the day, saved smart
+lists, a security tidy-up, critical path and Gantt timing, and a simple card view. Every one has
+its own switch under Settings → Smart helpers (`AppData.helpers`, `Helper` names; a missing
+name means its default). Built as updates A to G; mock-ups in the project files
+(task-app/next-level/).
+
+### 114 A: security tidy-up, Smart helpers settings, simple view (version 1.13.0)
+
+- Simple view (`lib/widgets/simple_cards.dart`): a top bar button on the task list swaps the
+  list for big plain cards (name, due date or "Overdue · was due …", category, steps done) with
+  the open steps as smaller cards under each task. No drag, tick, swipe or add box; tapping does
+  nothing. Follows the list's sort, grouping, filters, tags and focus mode. Two columns from
+  640 points wide (open Fold, iPad). On or off per device (`simpleView` in
+  device_settings.json); adding from a widget or a share leaves it.
+- Settings → Smart helpers at the top, with the Simple view switch (hides the button).
+- Review item A-067: Dropbox and Google refresh tokens and the Google client secret are kept
+  in the system secure store (`lib/secrets.dart`, flutter_secure_storage: Android Keystore,
+  Keychain, Windows Credential Manager). On first start they are moved out of
+  device_settings.json; where the secure store can't be used they stay in the file as before.
+  The Dropbox device settings backup no longer carries the Google client secret. Android
+  `allowBackup` is off (Keystore keys can't be restored, and Dropbox is the backup).
+- Review item A-068: the build workflow has `permissions: contents: read`, actions pinned to
+  commit hashes, and checkout without kept credentials.
+- Review item A-069: packages brought up to date within their version ranges
+  (`flutter pub upgrade`).
+- Review item A-066 (the signing key copy in the project files) is left as it is for now, at
+  the owner's request.
+- Test fix: test/day_plan_3_test.dart used Monday 16 November 2026, which has now passed (its
+  planned times became missed and moved to the tray); it now uses a Monday a week ahead.
+- Tests: test/smart_helpers_a_test.dart.
+
+### 114 B: estimate vs actual, morning brief, wrap up (version 1.13.1)
+
+- Estimates (`lib/estimates.dart`): a task's estimate is its "How long" or a length in hours
+  under Takes (`estimateOf`). On ticking off, the recorded time (focus timer minutes or ticked
+  Day plan blocks, whichever is more) is saved as `Task.actual`, and the done record keeps
+  `est` and `act`. With the Learn from my estimates helper on, a sheet asks how long it really
+  took (`askActualTime`, through `AppStore.actualAsks` so any tick in the app can ask): every
+  time by default, as the owner wants as much data as possible; Settings can make it "only if
+  nothing was timed" or "never". Ticks from notifications and widgets never ask.
+- Statistics: "How good are your estimates?" (last 60 days): the overall ratio, by category,
+  the three biggest misses and "Allow for it when planning". `estimateFactor` is what Plan my
+  day and What now (update C) will use: the category's ratio from 5 tasks, else the overall
+  one from 10, kept between 0.5 and 3.
+- Morning brief and wrap up (`lib/daily_helpers.dart`, `Reminders.dailyHelpers`): one
+  notification each a day for the next week, worked out when the reminders are set (again on
+  every change and each day). Default 7:30 and 17:30 on weekdays; with a focus mode schedule
+  and "Follow my focus mode schedule" (on by default) only on days with a scheduled mode, the
+  wrap up when the day's last scheduled mode ends if that is later. Options in
+  `AppData.helperPrefs` (`HelperPrefs` extension).
+- Wrap up screen (`WrapUpPage`, from its notification or the ⋮ menu): today's done count and
+  focus time, each task due by today or planned today and unticked, with Tomorrow, Pick day,
+  Worked on it (ticks today as worked and carries it to tomorrow), Done and Drop (all undoable),
+  and tomorrow's meetings, plans and due tasks with a button to its Day plan.
+  `AppStore.rollTask` moves the due date (keeping the time) and that day's planned times.
+- Tests: test/smart_helpers_b_test.dart.
+
+### 114 C: Plan my day and What should I do now (version 1.13.2)
+
+- Ranking (`lib/auto_plan.dart`, `rankPicks`): overdue, due today, due within a week, the Do
+  box, starred, In progress, then age. Habits, snoozed, locked and delegated-and-waiting tasks
+  are left out. A task with steps is offered as its next open step that isn't waiting on
+  another (`nextStep`). Lengths are the plan length times `estimateFactor`, snapped.
+- Plan my day (`planDay`, the ✨ button on the Day plan): fills the day's free stretches (from
+  now on when it is today, without lunch) best first, each in the first stretch it fits, up to
+  85% of the free time by default. Already planned tasks and steps are skipped. The result is
+  shown with a teal border and Keep / Try again / Cancel; Try again shakes the order among
+  picks of similar weight. Options in `PlanPrefs` (time left free, lunch start and length).
+- What now (`whatNow`, `showWhatNow`): what is planned now comes first; otherwise picks that
+  fit before the next block, work meeting or phone event get a lift, quick wins when time is
+  short, and a matching saved place (from a fresh location fix, `AppStore.placeHere`) a large
+  lift while a different place counts against. The focus mode hides what it hides.
+- Do now widget (Android, `DoNowWidget.kt`): the top picks from `widgetJson` `doNow`, with
+  Focus, Open and Next (cycles the picks per widget). Deep link taskblocks://now opens the
+  sheet. iPad widget not built yet.
+- Tests: test/smart_helpers_c_test.dart.
+
+### 114 D: critical path and Gantt timing (version 1.13.3)
+
+- Engine (`lib/critical_path.dart`): `criticalPath` over tasks (`taskItems`) or one task's steps
+  (`stepItems`): a forward pass from where the bars are (or, with `from`, as early as the links
+  allow), a backward pass from the finish or a due date (`anchor`), spare working days per item
+  and the tightest chain marked critical. Weekends follow the task's setting; task waits (lag)
+  count.
+- Timing (`Task.timing`, `TaskStep.timing`, json `timing`): asap, alap, fixed, finishBy.
+  `applyStepTimings` / `applyTaskTimings` run with the existing push (`keepStepOrder`,
+  `ganttChanged`, `moveOnGantt`, `resizeOnGantt`). Null keeps the old rule (own dates, pushed
+  later only), so existing tasks don't move. New tasks and steps get the Settings default
+  (as soon as possible). A start set by hand (drag, the task page, the step dialog, ±1 day)
+  turns as soon / as late as possible into fixed, so it stays put.
+- Gantt page: the Critical path button (critical bars in red-orange, spare time hatched after
+  each bar, a summary card with the finish against the due date); tapping a bar opens
+  `showTimingSheet` (the four timings, −1/+1 day, shorter/longer, open). With the helper off,
+  tapping a bar opens the task as before.
+- `PlanBackPage`: latest (or earliest) start of every open step from a finish date, with
+  "Start no later than", and `AppStore.setStepDates` to set them all.
+- Not built: best/likely/worst ranges and finish-date odds (optional, offered for later).
+- Tests: test/smart_helpers_d_test.dart; gantt_test and step_links_test turn the helper off
+  where they test the old push-later-only rule.
+
+### 114 E: weekly review screen (version 1.13.4)
+
+- Piles (`lib/weekly_review.dart`): `lastWeek` (done, added, focus minutes, a few done titles),
+  `slipped` (open, due before today), `ageing` (no due date, ageing colour 2/3 of the way to
+  red or more, not snoozed), `stalled` (open steps, no step ticked for 14 days, task older than
+  that), `nextWeek` (from Monday when reviewing Friday to Sunday, else tomorrow; per day what
+  is due and its estimates, work meetings, free time from the Day plan layout; empty weekend
+  days left out). Habits are left out.
+- `WeeklyReviewPage`: one pile per page with a progress bar, empty piles skipped, each task
+  greyed with what happened once handled (undo in a snackbar). Actions: next working day, next
+  week (Monday), pick date (`AppStore.rollTask` keeps the time and moves that day's planned
+  times), delegate (Delegate box + waiting on), keep (marks it worked on today, so the colour
+  resets), drop, done; stalled tasks open. The last page sums up the review and, with Plan my
+  day on, opens next Monday's Day plan and runs it (`DayPlanPage.autoPlan`).
+- The weekly review notification opens the screen when the Weekly review screen helper is on
+  (otherwise the list on the coming week, as before). Also in the ⋮ menu.
+- Tests: test/smart_helpers_e_test.dart.
+
+### 114 F: project templates and smarter repeats (version 1.13.5)
+
+- Templates (`ChecklistTemplate.items`, `TemplateStep`: days, minutes, offset in days from the
+  task's date, after = earlier steps by place; plus category, tags and `dateLabel`). `steps`
+  (titles) is still written, so older versions read a plain checklist. `stepSpecs` falls back
+  to plain titles if the two lists ever disagree; `updateTemplate` keeps timing by title.
+- `AppStore.newFromTemplate` (due at 17:00 on the date, category, tags, dated and linked steps,
+  on the Gantt chart; timed steps are fixed to their date), `applyTemplate` on a task with a
+  due date does the same, `templateFromTask` saves lengths, links and offsets from the due
+  date. `TemplatePage` edits it; `newFromTemplate` (sheet) asks for the name and date.
+- Starter templates (`lib/templates.dart`): demand forecast, safety stock and reorder points,
+  late supplier delivery prediction, quick analysis request; each step after the one before.
+- Repeats (`Repeat`): `nth` + `nthWeekday` (1 to 4 or -1 = last), `lastWorkday`,
+  `skipWeekends` (only the returned date moves; the schedule steps from the rule), `until`,
+  `left` (times after this one; the next copy gets one less; `Task.nextRepeat` returns null
+  at the end and no copy is made). Skip counts one off. The calendar and statistics stop
+  projecting at the end. Public holidays are not known to the app, so only weekends move.
+- Tests: test/smart_helpers_f_test.dart.
+
+### 114 G: AI step breakdown with Claude or Ollama (version 1.13.6)
+
+- `lib/ai_breakdown.dart`: `breakDown(data, task, claudeKey:)` asks for 3 to 10 steps
+  (`title`, `minutes`, `after` = earlier places) using structured output (JSON schema) and
+  `stepsFrom` turns the ticked ones into steps with `takesMinutes`/`takesDays` and links.
+  - Claude: raw HTTP to `/v1/messages` (no official Dart SDK), the key from `Secrets.claudeKey`
+    (secure storage, never in backups), low effort, a 2 minute time-out, the server-side
+    fallback beta so a safety-check stop answers with another Claude model; `refusal` is
+    still checked. Errors are mapped to plain words (no key, bad key, out of credit, busy).
+  - Ollama: `POST <address>/api/chat` with `format` = the same schema, `stream: false`.
+    Plain http on the home network is allowed: Android `network_security_config.xml`, iOS
+    and macOS `NSAllowsLocalNetworking` + the local network usage text.
+- Sent: the task's title, notes, category, due date and current step names, plus the optional
+  "About me" line. Nothing else.
+- `lib/widgets/ai_sheet.dart`: the sheet (spinner, error, tick boxes, Add N steps, Try again).
+  `AppStore.addAiSteps` sets the default timing, puts them in the first board stage when the
+  task's steps are on the board, and keeps the step order.
+- Settings, Smart helpers: "AI step breakdown" (off by default), Claude or Ollama, the key,
+  the Ollama address and model, About me.
+- Tests: test/smart_helpers_g_test.dart (mock HTTP client).
+
+### 114 (11): saved smart lists (version 1.13.7)
+
+- `lib/smart_lists.dart`: `SmartList` (name, emoji, categories incl. '' = none, tags, matrix
+  box, starred, `due` = `SmartDue`, `maxMinutes` by `planLength`, behind by `taskPace`, waiting
+  true/false/either, place name, `opens` list/board/matrix), kept in
+  `helperPrefs['smartLists']` so they sync. `passesSmartList`, `describeSmartList`,
+  `starterSmartLists`.
+- `AppStore.smartListId` (this device), `activeSmartList` (null when the helper is off or the
+  list is gone), `setSmartList`, `saveSmartList`, `deleteSmartList`, `moveSmartList`,
+  `addStarterSmartLists`.
+- Home: a ☰ drawer (`lib/widgets/smart_list_drawer.dart`): All tasks, My lists with counts
+  (tap, long-press to change, drag to reorder), New list, starters, and the views.
+  `SmartListChip` above the list, board and matrix (✕ clears); "Save as list" chip when a date
+  chip or tags are picked (`smartListFromChips`). Board and matrix follow the list too.
+- `lib/screens/smart_list_page.dart`: make or change a list, with a live count and preview.
+- Settings, Smart helpers: "My lists". Not built: a list widget and a focus mode opening on a
+  list (from the mock-up).
+- The "Tasks ▾" title now shortens instead of overflowing when the ☰ button takes room.
+- Tests: test/smart_lists_test.dart.

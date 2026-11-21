@@ -9,7 +9,11 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'day_plan.dart' show PlanMove;
+import 'daily_helpers.dart' show rollPlan;
+import 'auto_plan.dart' show PlannedPick;
 import 'dropbox.dart';
+import 'critical_path.dart';
+import 'estimates.dart';
 import 'focus_timer.dart';
 import 'gantt.dart';
 import 'google.dart';
@@ -22,6 +26,9 @@ import 'modes.dart';
 import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
+import 'secrets.dart';
+import 'smart_lists.dart';
+import 'templates.dart';
 import 'tags.dart';
 import 'task_list.dart';
 import 'work_meetings.dart';
@@ -58,7 +65,7 @@ enum OwnSteps {
 }
 
 class AppStore extends ChangeNotifier {
-  AppStore({this.reminders, this.widgets, this.location}) {
+  AppStore({this.reminders, this.widgets, this.location, this.secrets}) {
     // 1.12.5: the Day plan's driving estimates start from a saved place called Home.
     savedPlaces = places;
   }
@@ -73,6 +80,10 @@ class AppStore extends ChangeNotifier {
 
   /// Location fixes for tasks; null in tests.
   final LocationRecorder? location;
+
+  /// Item 114: where sign-ins are kept (the system's secure store); null in tests, which keep
+  /// them in device_settings.json as before.
+  final Secrets? secrets;
 
   /// Save where tasks are added and ticked off (device-only: each phone allows location itself).
   bool recordLocation = false;
@@ -89,6 +100,9 @@ class AppStore extends ChangeNotifier {
   /// secret, typed in Settings, and the signed-in client.
   String googleClientId = '';
   String googleClientSecret = '';
+
+  /// Item 114 G: this device's Claude API key (kept in the secure store, never synced or backed up).
+  String claudeKey = '';
   GoogleClient? google;
 
   /// When the app last offered tasks from calendar events on its own (device-only).
@@ -101,6 +115,9 @@ class AppStore extends ChangeNotifier {
   /// [untaggedFilter] = tasks with no tag. Device-only.
   final Set<String> tagFilter = {};
 
+  /// Item 114 (11): the smart list picked on this device, if any.
+  String? smartListId;
+
   /// Item 60: the Matrix page's last filter on this device (category null = all, '' = none).
   QuickFilter matrixFilter = QuickFilter.all;
   String? matrixCategory;
@@ -108,6 +125,23 @@ class AppStore extends ChangeNotifier {
   /// Kanban board on this device (item 56): every task's steps unfolded, and the lanes view.
   bool boardShowSteps = false;
   bool boardLanes = false;
+
+  /// Item 114: the task list shows as the simple card view on this device.
+  bool simpleView = false;
+
+  void setSimpleView(bool on) {
+    simpleView = on;
+    notifyListeners();
+    unawaited(saveDeviceSettings());
+  }
+
+  /// Item 114: a Smart helpers switch in Settings ([Helper] names).
+  void setHelper(String name, bool on) {
+    data.helpers[name] = on;
+    if (name == Helper.simpleView && !on && simpleView) simpleView = false;
+    changed(settings: true);
+    unawaited(saveDeviceSettings());
+  }
 
   /// Item 74: top bar icons switched off on this device ([TopIcon] names).
   final Set<String> hiddenTopIcons = {};
@@ -164,6 +198,11 @@ class AppStore extends ChangeNotifier {
         ].join(' ');
       }
     }
+    // Item 114: sign-ins from the secure store win; ones still in the file (from before 1.13.0)
+    // are moved there by the save below.
+    final fileHadSecrets = s != null && Secrets.names.any((n) => s![n] != null);
+    final sec = await secrets?.readAll();
+    if (sec != null && sec.isNotEmpty) s = {...?s, ...sec};
     if (s case final s?) {
       dropboxAppKey = s['dropboxAppKey'] as String? ?? '';
       final refresh = s['dropboxRefreshToken'] as String?;
@@ -186,17 +225,20 @@ class AppStore extends ChangeNotifier {
       arrivalSummary = s['arrivalSummary'] as bool? ?? false;
       boardShowSteps = s['boardShowSteps'] as bool? ?? false;
       boardLanes = s['boardLanes'] as bool? ?? false;
+      simpleView = s['simpleView'] as bool? ?? false;
       calendarMode = s['calendarMode'] as String? ?? 'month';
       dayPlanTwoDays = s['dayPlanTwoDays'] as bool? ?? false;
       hiddenTopIcons.addAll([for (final n in s['hiddenTopIcons'] as List? ?? []) ?n as String?]);
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
       tagFilter.addAll([for (final x in s['tagFilter'] as List? ?? []) ?x as String?]);
+      smartListId = s['smartList'] as String?;
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
       emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? 0;
       _readPanel(s);
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
+      claudeKey = s[Secrets.claudeKey] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
       if (googleClientId.isNotEmpty && gRefresh != null) {
         google = GoogleClient(googleClientId, googleClientSecret,
@@ -207,7 +249,7 @@ class AppStore extends ChangeNotifier {
     if (!filterSaved && data.focusNext30) quickFilter = QuickFilter.month;
     // Review fix: this install's key in the mode log, kept from the first start on.
     modeDevice = deviceKey;
-    if (s?['deviceKey'] is! String) unawaited(saveDeviceSettings());
+    if (s?['deviceKey'] is! String || (fileHadSecrets && sec != null)) unawaited(saveDeviceSettings());
     refreshMode(applyStart: false);
     // Item 102: a focus timer left running moves on to where it would be now.
     if (focusNow != null && !tickFocus()) _focusChanged();
@@ -381,16 +423,25 @@ class AppStore extends ChangeNotifier {
     if (dir == null) return Future.value();
     return _settingsWriting = _settingsWriting.catchError((_) {}).then((_) async {
       final tmp = File('${dir.path}/device_settings.json.tmp');
-      await tmp.writeAsString(_deviceSettingsText(), flush: true);
+      // Item 114: sign-ins go to the secure store; only if that fails do they stay in the file.
+      final safe = await secrets?.writeAll(_secretValues()) ?? false;
+      await tmp.writeAsString(_deviceSettingsText(withSecrets: !safe), flush: true);
       await tmp.rename('${dir.path}/device_settings.json');
     });
   }
 
   Future<void> _settingsWriting = Future.value();
 
-  String _deviceSettingsText() => jsonEncode({
+  Map<String, String?> _secretValues() => {
+        Secrets.dropboxRefresh: dropbox?.refreshToken,
+        Secrets.googleRefresh: google?.refreshToken,
+        Secrets.googleSecret: googleClientSecret,
+        Secrets.claudeKey: claudeKey,
+      };
+
+  String _deviceSettingsText({bool withSecrets = true}) => jsonEncode({
       'dropboxAppKey': dropboxAppKey,
-      'dropboxRefreshToken': dropbox?.refreshToken,
+      if (withSecrets) 'dropboxRefreshToken': dropbox?.refreshToken,
       'eventPromptAt': eventPromptAt?.toIso8601String(),
       'recordLocation': recordLocation,
       'quickFilter': quickFilter.name,
@@ -402,19 +453,22 @@ class AppStore extends ChangeNotifier {
       if (arrivalSummary) 'arrivalSummary': true,
       if (boardShowSteps) 'boardShowSteps': true,
       if (boardLanes) 'boardLanes': true,
+      if (simpleView) 'simpleView': true,
       if (calendarMode != 'month') 'calendarMode': calendarMode,
       if (dayPlanTwoDays) 'dayPlanTwoDays': true,
       if (hiddenTopIcons.isNotEmpty) 'hiddenTopIcons': hiddenTopIcons.toList(),
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (tagFilter.isNotEmpty) 'tagFilter': tagFilter.toList(),
+      if (smartListId != null) 'smartList': smartListId,
       if (deviceBackupChecked) 'deviceBackupChecked': true,
       if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       ..._panelJson(),
       if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
-      if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
-      if (google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
+      if (withSecrets && googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
+      if (withSecrets && google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
       if (google?.email != null) 'googleEmail': google!.email,
+      if (withSecrets && claudeKey.isNotEmpty) Secrets.claudeKey: claudeKey,
     });
 
   /// Call after any change to [data]. Pass the [task] that changed, [order] if the
@@ -660,8 +714,8 @@ class AppStore extends ChangeNotifier {
         'matrixFilter': matrixFilter.name,
         if (matrixCategory != null) 'matrixCategory': matrixCategory,
         'tagFilter': tagFilter.toList(),
+        // Item 114: the Google client secret stays on the device (it goes in the secure store).
         if (googleClientId.isNotEmpty) 'googleClientId': googleClientId,
-        if (googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
         if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
         ..._panelJson(),
       };
@@ -906,6 +960,7 @@ class AppStore extends ChangeNotifier {
       ..notes = notes
       ..eventId = eventId;
     data.active.add(t);
+    if (data.helperOn(Helper.criticalPath)) t.timing = data.newTiming.id;
     _applyNew(t, box: box, board: board, star: star, gantt: gantt, stage: stage, plan: plan, tags: tags);
     changed(order: true);
     _locate([t]);
@@ -1148,9 +1203,21 @@ class AppStore extends ChangeNotifier {
     if (t.kanban && last != null && t.stageId != last.id) _move(t, last, MoveHow.done, at: now, locate: false);
     t.closedAt = now;
     data.archived.insert(0, t);
+    // Item 114 B: keep the estimate and the time recorded on it, for the estimates statistics.
+    final est = estimateOf(t, data);
+    final recorded = recordedMinutes(t);
+    if (est != null && recorded > 0) t.actual = recorded;
     data.done[t.id] = DoneRecord.of(t, now,
         mode: modeNow.mode?.id ?? everythingId,
-        outside: modeNow.mode?.showFor(data, t.categoryId) == CatShow.hide);
+        outside: modeNow.mode?.showFor(data, t.categoryId) == CatShow.hide,
+        est: est,
+        act: est == null ? null : t.actual);
+    if (est != null &&
+        at == null &&
+        data.helperOn(Helper.learnEstimates) &&
+        (data.askActual == 'always' || (data.askActual == 'unrecorded' && recorded == 0))) {
+      _actualAsks.add(t);
+    }
     _release(t.id, now);
     for (final other in data.active) {
       for (final s in other.steps.where((s) => s.taskId == t.id && !s.done)) {
@@ -1163,17 +1230,29 @@ class AppStore extends ChangeNotifier {
     if (t.repeat != null) {
       next = t.nextRepeat(now);
       // The next one goes back on the board at the start.
-      if (t.kanban && data.stages.isNotEmpty) {
+      if (next != null && t.kanban && data.stages.isNotEmpty) {
         _move(next, data.stages.first, MoveHow.repeat, at: now, locate: false);
         if (next.stepsOnBoard) _stepsOn(next, MoveHow.repeat, at: now);
       }
-      data.active.insert(index.clamp(0, data.active.length), next);
+      if (next != null) data.active.insert(index.clamp(0, data.active.length), next);
     }
     changed(task: t, order: true);
     // Only when ticked off just now: a tick made earlier on a widget or notification and picked
     // up later would get the wrong place.
     if (at == null || DateTime.now().difference(at).inMinutes < 2) _locate([t], done: true);
     return next;
+  }
+
+  /// Item 114 B: tasks just ticked off in the app whose real time should be asked for.
+  final _actualAsks = StreamController<Task>.broadcast();
+  Stream<Task> get actualAsks => _actualAsks.stream;
+
+  /// Item 114 B: how long [t] (ticked off) really took, in minutes.
+  void setActual(Task t, int minutes) {
+    t.actual = minutes;
+    final r = data.done[t.id];
+    if (r != null) data.done[t.id] = r.withActual(minutes);
+    changed(task: t);
   }
 
   /// Moves a repeating task on to its next due date without ticking it off: same task, checklist
@@ -1185,7 +1264,11 @@ class AppStore extends ChangeNotifier {
     final oldMoves = {for (final st in t.steps) st.id: st.moves.length};
     final record = SkipRecord(taskId: t.id, series: t.series, at: now, due: oldDue, missed: missedCycles(t, now));
     data.skips[record.key] = record;
+    final oldRepeat = t.repeat;
     t.dueAt = t.repeat!.nextDue(due: oldDue, completedAt: now);
+    // Item 114 F: a skipped time counts towards "after N times".
+    final left = t.repeat!.left;
+    if (left != null) t.repeat = t.repeat!.copyWith(left: left > 0 ? left - 1 : 0);
     t.snoozedUntil = null;
     final first = data.stages.firstOrNull;
     for (final st in t.steps) {
@@ -1198,6 +1281,7 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
     return () {
       data.skips.remove(record.key);
+      t.repeat = oldRepeat;
       t.dueAt = oldDue;
       t.snoozedUntil = oldSnooze;
       for (final st in t.steps) {
@@ -1500,6 +1584,27 @@ class AppStore extends ChangeNotifier {
     return s;
   }
 
+  /// Item 114 C: plans every suggestion of Plan my day; returns what was added, to take back.
+  List<(Task, TimeSlot)> planPicks(List<PlannedPick> picks) {
+    final out = <(Task, TimeSlot)>[];
+    for (final p in picks) {
+      final s = TimeSlot.create(p.start, p.pick.minutes, stepId: p.pick.step?.id);
+      p.pick.task.slots.add(s);
+      p.pick.task.dayPlan = true;
+      out.add((p.pick.task, s));
+    }
+    changed(order: true);
+    return out;
+  }
+
+  /// Item 114 C: the saved place the phone is at now (a fresh fix), or null.
+  Future<String?> placeHere() async {
+    if (location == null || places.isEmpty) return null;
+    final p = await location!.current();
+    if (p == null) return placeNow;
+    return placeAt(places, p.lat, p.lng)?.name;
+  }
+
   /// Changes a planned time; [gap] -1 means the default.
   void updateSlot(Task t, TimeSlot s, {DateTime? start, int? minutes, int? gap, bool? shared}) {
     if (start != null) s.start = start;
@@ -1742,6 +1847,7 @@ class AppStore extends ChangeNotifier {
   /// Call after the task page changes a Gantt field (start, length, dates).
   void ganttChanged(Task t) {
     _notePlan(t);
+    keepTaskTimings();
     changed(task: t);
   }
 
@@ -1755,7 +1861,10 @@ class AppStore extends ChangeNotifier {
       if (bar != null) t.startAt = bar.start;
     }
     shiftDates(t, days);
+    // Item 114 D: a bar dragged by hand stays where it was put.
+    if (t.timing == Timing.asap.id || t.timing == Timing.alap.id) t.timing = Timing.fixed.id;
     changed(task: t);
+    keepTaskTimings();
     return pushPlan(t, data);
   }
 
@@ -1774,6 +1883,7 @@ class AppStore extends ChangeNotifier {
       t.dueAt = DateTime(day.year, day.month, day.day, old?.hour ?? 17, old?.minute ?? 0);
     }
     changed(task: t);
+    keepTaskTimings();
     return pushPlan(t, data);
   }
 
@@ -2628,6 +2738,50 @@ class AppStore extends ChangeNotifier {
   String? _tagKeysKey;
   Set<String>? _tagKeys;
 
+  /// Item 114 (11): the smart list in use (none when the helper is off or the list is gone).
+  SmartList? get activeSmartList => data.helperOn(Helper.smartLists) ? data.smartList(smartListId) : null;
+
+  /// Picks smart list [id] (null = none) on this device.
+  void setSmartList(String? id) {
+    smartListId = id;
+    notifyListeners();
+    saveDeviceSettings();
+  }
+
+  /// Adds [l] or puts it in place of the list with its id.
+  void saveSmartList(SmartList l) {
+    final all = data.smartLists;
+    final i = all.indexWhere((x) => x.id == l.id);
+    i < 0 ? all.add(l) : all[i] = l;
+    data.smartLists = all;
+    changed(settings: true);
+  }
+
+  void deleteSmartList(String id) {
+    data.smartLists = [for (final l in data.smartLists) if (l.id != id) l];
+    if (smartListId == id) smartListId = null;
+    changed(settings: true);
+    saveDeviceSettings();
+  }
+
+  /// Moves list [from] to place [to] (the place after taking it out).
+  void moveSmartList(int from, int to) {
+    final all = data.smartLists;
+    all.insert(to, all.removeAt(from));
+    data.smartLists = all;
+    changed(settings: true);
+  }
+
+  /// Adds the starter lists that aren't there yet (by name). Returns how many.
+  int addStarterSmartLists() {
+    final all = data.smartLists;
+    final have = {for (final l in all) l.name.toLowerCase()};
+    final add = [for (final l in starterSmartLists()) if (!have.contains(l.name.toLowerCase())) l];
+    data.smartLists = [...all, ...add];
+    changed(settings: true);
+    return add.length;
+  }
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -2696,6 +2850,22 @@ class AppStore extends ChangeNotifier {
     changed(task: t);
   }
 
+  /// Item 114 B (wrap up): moves what [t] had left on [from] to [to]: its due date when it was
+  /// due by then, and its unticked planned times that day. Returns how to undo it.
+  VoidCallback rollTask(Task t, DateTime from, DateTime to) {
+    final plan = rollPlan(t, from, to);
+    final oldDue = t.dueAt;
+    final oldStarts = {for (final s in plan.slots.keys) s: s.start};
+    if (plan.due != null) t.dueAt = plan.due;
+    plan.slots.forEach((s, at) => s.start = at);
+    changed(task: t);
+    return () {
+      t.dueAt = oldDue;
+      oldStarts.forEach((s, at) => s.start = at);
+      changed(task: t);
+    };
+  }
+
   void setDue(Task t, DateTime? due) {
     t.dueAt = due;
     changed(task: t);
@@ -2709,6 +2879,7 @@ class AppStore extends ChangeNotifier {
     final typed = readTags ? takeStepTags(data, title) : null;
     final s = TaskStep.create(typed?.title ?? title);
     if (typed != null) s.tags.addAll(typed.tags);
+    if (data.helperOn(Helper.criticalPath)) s.timing = data.newTiming.id;
     t.steps.add(s);
     if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
     changed(task: t);
@@ -2916,6 +3087,11 @@ class AppStore extends ChangeNotifier {
   /// Item 72: a step's start day and days of work on the Gantt chart (null clears).
   /// [minutes] (1.12.10): the length in hours, when it was given that way.
   void setStepPlan(Task t, TaskStep s, {DateTime? start, int? takes, int? minutes, int? progress}) {
+    // Item 114 D: a start picked by hand stays put.
+    final was = s.startAt;
+    if (start != null && (was == null || daysBetween(was, start) != 0) && s.timing != null && s.timing != Timing.fixed.id) {
+      s.timing = Timing.fixed.id;
+    }
     s.startAt = start == null ? null : dayOf(start);
     s.takesDays = takes == null || takes < 1 ? null : takes;
     s.takesMinutes = s.takesDays == null ? null : minutes;
@@ -2926,7 +3102,62 @@ class AppStore extends ChangeNotifier {
 
   /// Item 85: moves steps that come after others later where they would start too early, unless
   /// Settings, Gantt chart, "When a task moves later" says never. Returns how many moved.
-  int keepStepOrder(Task t) => data.ganttPush == GanttPush.never ? 0 : pushSteps(t, data);
+  /// Item 114 D: steps with a timing go where it says first (as soon or as late as possible).
+  int keepStepOrder(Task t) {
+    final timed = data.helperOn(Helper.criticalPath) ? applyStepTimings(t, data) : 0;
+    return timed + (data.ganttPush == GanttPush.never ? 0 : pushSteps(t, data));
+  }
+
+  /// Item 114 D: tasks on the chart with a timing go where it says. Returns the ones moved.
+  Set<Task> keepTaskTimings() {
+    if (!data.helperOn(Helper.criticalPath)) return const {};
+    final moved = applyTaskTimings(data);
+    for (final t in moved) {
+      changed(task: t);
+    }
+    return moved;
+  }
+
+  /// Item 114 D: sets when [t] (or its step [s]) should happen, and puts it (and what follows) there.
+  void setTiming(Task t, TaskStep? s, Timing? timing) {
+    if (s == null) {
+      t.timing = timing?.id;
+      if (timing == Timing.finishBy && t.dueAt == null) {
+        final bar = barFor(t, data);
+        if (bar != null) t.dueAt = DateTime(bar.end.year, bar.end.month, bar.end.day, 17);
+      }
+      if (timing == Timing.fixed && t.startAt == null) t.startAt = barFor(t, data)?.start;
+      keepTaskTimings();
+    } else {
+      s.timing = timing?.id;
+      if (timing == Timing.finishBy && s.dueAt == null) {
+        final bar = stepBar(t, s, data);
+        if (bar != null) s.dueAt = DateTime(bar.end.year, bar.end.month, bar.end.day, 17);
+      }
+      if (timing == Timing.fixed && s.startAt == null) s.startAt = stepBar(t, s, data)?.start;
+      keepStepOrder(t);
+    }
+    changed(task: t);
+  }
+
+  /// Item 114 D: Plan back from the due date: gives each open step of [t] the start in [starts]
+  /// (by step id) and its days of work in [days], keeping a due date's time.
+  void setStepDates(Task t, Map<String, DateTime> starts, Map<String, int> days) {
+    final weekends = weekendsFor(t, data);
+    for (final s in t.steps) {
+      final start = starts[s.id];
+      if (s.done || start == null) continue;
+      s.startAt = dayOf(start);
+      s.takesDays = days[s.id] ?? s.takesDays ?? 1;
+      s.takesMinutes = null;
+      final due = s.dueAt;
+      if (due != null) {
+        final end = workEnd(start, s.takesDays!, weekends: weekends);
+        s.dueAt = DateTime(end.year, end.month, end.day, due.hour, due.minute);
+      }
+    }
+    changed(task: t);
+  }
 
   /// Item 85: sets which steps [s] comes after (others of the same task), then keeps the order.
   int setStepAfter(Task t, TaskStep s, Iterable<String> ids) {
@@ -3097,16 +3328,144 @@ class AppStore extends ChangeNotifier {
   }
 
   void applyTemplate(Task t, ChecklistTemplate tpl) {
-    t.steps.addAll([for (final s in tpl.steps) TaskStep.create(s)]);
+    if (data.helperOn(Helper.projectTemplates) && tpl.project) {
+      // Item 114 F: timed steps, dated from the task's due date when it has one.
+      t.steps.addAll(_templateSteps(tpl, t.dueAt, weekendsFor(t, data)));
+      if (t.dueAt != null && !t.gantt) setOnGantt(t, true);
+      keepStepOrder(t);
+    } else {
+      t.steps.addAll([for (final s in tpl.steps) TaskStep.create(s)]);
+    }
     changed(task: t);
+  }
+
+  /// Item 114 F: the steps of [tpl] as new steps, each [TemplateStep.offset] days from [date]
+  /// (undated without one), with their lengths and links.
+  List<TaskStep> _templateSteps(ChecklistTemplate tpl, DateTime? date, bool weekends) {
+    final specs = tpl.stepSpecs;
+    final out = [for (final sp in specs) TaskStep.create(sp.title)];
+    for (var i = 0; i < specs.length; i++) {
+      final sp = specs[i], st = out[i];
+      if (data.helperOn(Helper.criticalPath)) st.timing = data.newTiming.id;
+      if (sp.minutes != null) {
+        st.takesMinutes = sp.minutes;
+        st.takesDays = sp.days ?? daysForMinutes(sp.minutes!, data);
+      } else {
+        st.takesDays = sp.days;
+      }
+      if (date != null && sp.offset != null) {
+        final d = DateTime(date.year, date.month, date.day + sp.offset!);
+        st.startAt = d;
+        // A timed step keeps the date it was given.
+        if (st.timing != null) st.timing = Timing.fixed.id;
+      }
+      for (final j in sp.after) {
+        if (j >= 0 && j < out.length && j != i) st.afterIds.add(out[j].id);
+      }
+    }
+    return out;
+  }
+
+  /// Item 114 F: a new task from [tpl]: its category and tags, due on [date], with the timed
+  /// steps placed around that date (on the Gantt chart when it has dates).
+  Task newFromTemplate(ChecklistTemplate tpl, {required String title, DateTime? date}) {
+    final due = date == null ? null : DateTime(date.year, date.month, date.day, date.hour == 0 && date.minute == 0 ? 17 : date.hour, date.minute);
+    final t = addTask(title, due: due, categoryId: data.category(tpl.categoryId) == null ? null : tpl.categoryId, tags: tpl.tags);
+    t.steps.addAll(_templateSteps(tpl, due, weekendsFor(t, data)));
+    if (due != null && tpl.project) setOnGantt(t, true);
+    keepStepOrder(t);
+    changed(task: t);
+    return t;
+  }
+
+  /// Item 114 F: a project template from [t]: its steps with their lengths, links and when each
+  /// starts against the task's due date.
+  ChecklistTemplate templateFromTask(Task t, String name) {
+    final tpl = ChecklistTemplate.create(name, [for (final s in t.steps) s.title.trim()]);
+    final due = t.dueAt == null ? null : dayOf(t.dueAt!);
+    final index = {for (var i = 0; i < t.steps.length; i++) t.steps[i].id: i};
+    tpl.items.addAll([
+      for (final s in t.steps)
+        TemplateStep(
+          title: s.title.trim(),
+          days: s.takesMinutes == null ? s.takesDays : null,
+          minutes: s.takesMinutes,
+          offset: () {
+            final bar = stepBar(t, s, data);
+            return due == null || bar == null || stepIsPoint(s) ? null : daysBetween(due, bar.start);
+          }(),
+          after: [for (final id in s.afterIds) ?index[id]],
+        ),
+    ]);
+    tpl.categoryId = t.categoryId;
+    tpl.tags.addAll(t.tags);
+    data.templates.add(tpl);
+    changed(settings: true);
+    return tpl;
+  }
+
+  /// Item 114 G: adds the AI's steps to [t] (lengths and links kept). Returns how many.
+  int addAiSteps(Task t, List<TaskStep> steps) {
+    for (final s in steps) {
+      if (data.helperOn(Helper.criticalPath)) s.timing = data.newTiming.id;
+      t.steps.add(s);
+      if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
+    }
+    keepStepOrder(t);
+    changed(task: t);
+    return steps.length;
+  }
+
+  /// Item 114 F: call after editing a template's fields on its page.
+  void templateChanged(ChecklistTemplate tpl) {
+    tpl.steps
+      ..clear()
+      ..addAll([for (final i in tpl.items) i.title]);
+    changed(settings: true);
+  }
+
+  /// Item 114 F: adds the supply-chain starter templates that aren't there yet (by name).
+  /// Returns how many were added.
+  int addStarterTemplates() {
+    var n = 0;
+    for (final tpl in starterTemplates()) {
+      if (data.templates.any((t) => t.name.toLowerCase() == tpl.name.toLowerCase())) continue;
+      data.templates.add(tpl);
+      n++;
+    }
+    if (n > 0) changed(settings: true);
+    return n;
   }
 
   void updateTemplate(ChecklistTemplate tpl, {String? name, List<String>? steps}) {
     if (name != null) tpl.name = name.trim();
     if (steps != null) {
+      final lines = [for (final s in steps) s.trim()].where((s) => s.isNotEmpty).toList();
+      if (tpl.items.isNotEmpty) {
+        // Item 114 F: keep each step's timing by its title; links follow the steps they name.
+        final old = tpl.stepSpecs;
+        final byTitle = {for (final i in old) i.title: i};
+        final newIndex = {for (var i = 0; i < lines.length; i++) lines[i]: i};
+        final items = [
+          for (final l in lines)
+            TemplateStep(
+              title: l,
+              days: byTitle[l]?.days,
+              minutes: byTitle[l]?.minutes,
+              offset: byTitle[l]?.offset,
+              after: [
+                for (final j in byTitle[l]?.after ?? const <int>[])
+                  if (j < old.length) ?newIndex[old[j].title],
+              ],
+            ),
+        ];
+        tpl.items
+          ..clear()
+          ..addAll(items);
+      }
       tpl.steps
         ..clear()
-        ..addAll([for (final s in steps) s.trim()].where((s) => s.isNotEmpty));
+        ..addAll(lines);
     }
     changed(settings: true);
   }

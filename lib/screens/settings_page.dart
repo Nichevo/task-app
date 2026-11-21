@@ -11,6 +11,10 @@ import '../inbox_files.dart';
 import '../input_parse.dart';
 import '../location.dart';
 import '../day_plan.dart' show describeLength;
+import '../auto_plan.dart' show PlanPrefs;
+import '../critical_path.dart' show Timing, TimingPrefs;
+import '../ai_breakdown.dart' show AiPrefs;
+import '../smart_lists.dart' show SmartListPrefs;
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -24,6 +28,7 @@ import 'places_page.dart';
 import 'side_panel.dart' show PanelSettingsPage;
 import '../widgets/task_colors.dart';
 import 'modes_page.dart';
+import 'template_page.dart' show TemplatePage;
 import 'work_import_page.dart' show importWorkMeetings;
 import '../tags.dart';
 import '../widgets/tag_widgets.dart';
@@ -572,6 +577,321 @@ class _SettingsPageState extends State<SettingsPage> {
   static String _time(int minutes) =>
       '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
+  /// Item 114 B: estimates, morning brief and wrap up.
+  List<Widget> _helperSettings() {
+    final hint = TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor);
+    String describe(DailyAt d, {bool end = false}) {
+      final scheduled = d.follow && data.modeSchedule.isNotEmpty;
+      if (scheduled) {
+        return end
+            ? 'At ${_time(d.at)} or when your scheduled focus modes end, on days that have one'
+            : 'At ${_time(d.at)} on days with a scheduled focus mode';
+      }
+      final days = d.days.length == 7
+          ? 'every day'
+          : d.days.length == 5 && DailyAt.weekdays.containsAll(d.days)
+              ? 'weekdays'
+              : (d.days.toList()..sort()).map((x) => _weekdays[x - 1].substring(0, 3)).join(', ');
+      return 'At ${_time(d.at)}, $days';
+    }
+
+    Widget daily(String name, IconData icon, String title, String about, DailyAt d, void Function(DailyAt) set,
+        {bool end = false}) {
+      final on = data.helperOn(name);
+      return Column(children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(icon),
+          title: Text(title),
+          subtitle: Text(on ? describe(d, end: end) : about),
+          value: on,
+          onChanged: (v) => store.setHelper(name, v),
+        ),
+        if (on)
+          Padding(
+            padding: const EdgeInsets.only(left: 56),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(spacing: 6, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                ActionChip(
+                  avatar: const Icon(Icons.schedule, size: 18),
+                  label: Text(_time(d.at)),
+                  onPressed: () async {
+                    final t = await _pickTime(d.at);
+                    if (t != null) _set(() => set(DailyAt(at: t.hour * 60 + t.minute, days: d.days, follow: d.follow)));
+                  },
+                ),
+                if (!(d.follow && data.modeSchedule.isNotEmpty))
+                  for (var i = 1; i <= 7; i++)
+                    FilterChip(
+                      label: Text(_weekdays[i - 1].substring(0, 2)),
+                      selected: d.days.contains(i),
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (v) => _set(() => set(DailyAt(
+                          at: d.at, days: v ? {...d.days, i} : ({...d.days}..remove(i)), follow: d.follow))),
+                    ),
+              ]),
+              if (data.modeSchedule.isNotEmpty)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Follow my focus mode schedule'),
+                  value: d.follow,
+                  onChanged: (v) => _set(() => set(DailyAt(at: d.at, days: d.days, follow: v))),
+                ),
+            ]),
+          ),
+      ]);
+    }
+
+    return [
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.timer_outlined),
+        title: const Text('Learn from my estimates'),
+        subtitle: const Text('Keeps how long tasks with a "How long" really took, and shows how good the guesses are '
+            'on the Statistics page'),
+        value: data.helperOn(Helper.learnEstimates),
+        onChanged: (v) => store.setHelper(Helper.learnEstimates, v),
+      ),
+      if (data.helperOn(Helper.learnEstimates))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Row(children: [
+            Expanded(child: Text('Ask how long it took', style: hint)),
+            DropdownButton<String>(
+              value: data.askActual,
+              items: const [
+                DropdownMenuItem(value: 'always', child: Text('Every time')),
+                DropdownMenuItem(value: 'unrecorded', child: Text('Only if nothing was timed')),
+                DropdownMenuItem(value: 'never', child: Text('Never (use the timed time)')),
+              ],
+              onChanged: (v) => _set(() => data.askActual = v ?? 'always'),
+            ),
+          ]),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.auto_awesome),
+        title: const Text('Plan my day'),
+        subtitle: const Text('A button on the Day plan that fills the free time between meetings with what matters most; '
+            'you check it before keeping it'),
+        value: data.helperOn(Helper.planMyDay),
+        onChanged: (v) => store.setHelper(Helper.planMyDay, v),
+      ),
+      if (data.helperOn(Helper.planMyDay))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Column(children: [
+            Row(children: [
+              Expanded(child: Text('Leave free', style: hint)),
+              DropdownButton<double>(
+                value: const [0.0, 0.1, 0.15, 0.2, 0.3].contains(data.planLeaveFree) ? data.planLeaveFree : 0.15,
+                items: [
+                  for (final f in const [0.0, 0.1, 0.15, 0.2, 0.3])
+                    DropdownMenuItem(value: f, child: Text(f == 0 ? 'Nothing' : '${(f * 100).round()}% of the free time')),
+                ],
+                onChanged: (v) => _set(() => data.planLeaveFree = v ?? 0.15),
+              ),
+            ]),
+            Row(children: [
+              Expanded(child: Text('Keep lunch free', style: hint)),
+              TextButton(
+                onPressed: () async {
+                  final t = await _pickTime(data.lunchStart ?? 12 * 60);
+                  if (t != null) _set(() => data.lunchStart = t.hour * 60 + t.minute);
+                },
+                child: Text(data.lunchStart == null
+                    ? 'No'
+                    : '${_time(data.lunchStart!)} to ${_time(data.lunchStart! + data.lunchMinutes)}'),
+              ),
+              if (data.lunchStart != null)
+                IconButton(
+                  tooltip: 'No lunch break',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => _set(() => data.lunchStart = null),
+                ),
+            ]),
+          ]),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.my_location_outlined),
+        title: const Text('What should I do now?'),
+        subtitle: const Text('A top bar button (and a widget) that picks one task or step for the time you have'),
+        value: data.helperOn(Helper.whatNow),
+        onChanged: (v) => store.setHelper(Helper.whatNow, v),
+      ),
+      if (data.helperOn(Helper.whatNow))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Use where I am'),
+            subtitle: const Text('Tasks at the saved place you\'re at go first; ones for somewhere else wait'),
+            value: data.nowUsesPlace,
+            onChanged: (v) => _set(() => data.nowUsesPlace = v),
+          ),
+        ),
+      daily(Helper.morningBrief, Icons.wb_sunny_outlined, 'Morning brief',
+          'A notification each morning with the day\'s meetings, plan and what is due', data.briefAt, (v) => data.briefAt = v),
+      daily(Helper.wrapUp, Icons.nightlight_outlined, 'Wrap up the day',
+          'A notification at the end of the day to move on what is left (also in the ⋮ menu)', data.wrapAt,
+          (v) => data.wrapAt = v,
+          end: true),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.route_outlined),
+        title: const Text('Critical path and timing'),
+        subtitle: const Text('On the Gantt chart: the critical path button, tap a bar to say when it should happen, '
+            'and Plan back from the due date'),
+        value: data.helperOn(Helper.criticalPath),
+        onChanged: (v) => store.setHelper(Helper.criticalPath, v),
+      ),
+      if (data.helperOn(Helper.criticalPath))
+        Padding(
+          padding: const EdgeInsets.only(left: 56),
+          child: Row(children: [
+            Expanded(child: Text('New tasks and steps', style: hint)),
+            DropdownButton<Timing>(
+              value: data.newTiming,
+              items: [
+                for (final x in Timing.values) DropdownMenuItem(value: x, child: Text(x.label)),
+              ],
+              onChanged: (v) => _set(() => data.newTiming = v ?? Timing.asap),
+            ),
+          ]),
+        ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.fact_check_outlined),
+        title: const Text('Weekly review screen'),
+        subtitle: const Text('Last week, what slipped, what is ageing or stalled, and next week, one pile at a time. '
+            'Opens from the weekly review notification (Reminders) or the ⋮ menu'),
+        value: data.helperOn(Helper.weeklyReview),
+        onChanged: (v) => store.setHelper(Helper.weeklyReview, v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.view_timeline_outlined),
+        title: const Text('Project templates'),
+        subtitle: Text('Templates with timed steps and links; New from template in the ⋮ menu · '
+            '${data.templates.length} template${data.templates.length == 1 ? '' : 's'}'),
+        value: data.helperOn(Helper.projectTemplates),
+        onChanged: (v) => store.setHelper(Helper.projectTemplates, v),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.auto_awesome_outlined),
+        title: const Text('AI step breakdown'),
+        subtitle: const Text('A ✨ button by a task\'s steps asks Claude or your own Ollama model for steps. '
+            'Only the title, notes, category, due date, step names and the line about you are sent'),
+        value: data.helperOn(Helper.aiBreakdown),
+        onChanged: (v) => store.setHelper(Helper.aiBreakdown, v),
+      ),
+      if (data.helperOn(Helper.aiBreakdown)) ..._aiSettings(),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.playlist_add_check),
+        title: const Text('My lists'),
+        subtitle: Text('Saved mixes of filters in the ☰ menu, also on the board and matrix · '
+            '${data.smartLists.length} list${data.smartLists.length == 1 ? '' : 's'}'),
+        value: data.helperOn(Helper.smartLists),
+        onChanged: (v) => store.setHelper(Helper.smartLists, v),
+      ),
+    ];
+  }
+
+  /// Item 114 G: which AI, the Claude key (kept on this device only) or the Ollama address.
+  List<Widget> _aiSettings() {
+    final hint = Theme.of(context).textTheme.bodySmall;
+    Future<void> text(String title, String initial, void Function(String) set) async {
+      final v = await askText(context, title, initial: initial);
+      if (v != null) _set(() => set(v));
+    }
+
+    return [
+      Padding(
+        padding: const EdgeInsets.only(left: 56),
+        child: Row(children: [
+          Expanded(child: Text('Use', style: hint)),
+          DropdownButton<String>(
+            value: data.aiProvider,
+            items: const [
+              DropdownMenuItem(value: 'claude', child: Text('Claude (your API key)')),
+              DropdownMenuItem(value: 'ollama', child: Text('Ollama (home network)')),
+            ],
+            onChanged: (v) => _set(() => data.aiProvider = v ?? 'claude'),
+          ),
+        ]),
+      ),
+      if (data.aiProvider == 'claude')
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Claude API key'),
+          subtitle: Text(store.claudeKey.isEmpty
+              ? 'Not set. Get one at console.anthropic.com. Kept on this device only, never in backups'
+              : 'Set (…${store.claudeKey.substring(store.claudeKey.length < 4 ? 0 : store.claudeKey.length - 4)}). Kept on this device only'),
+          trailing: const Icon(Icons.key_outlined),
+          onTap: () async {
+            final v = await _askKey();
+            if (v == null) return;
+            setState(() => store.claudeKey = v.trim());
+            await store.saveDeviceSettings();
+          },
+        )
+      else ...[
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Ollama address'),
+          subtitle: Text(data.ollamaUrl.isEmpty
+              ? 'Not set, e.g. http://192.168.1.20:11434. Ollama must listen on the network (OLLAMA_HOST=0.0.0.0) '
+                  'and you need to be on the same Wi-Fi'
+              : data.ollamaUrl),
+          onTap: () => text('Ollama address', data.ollamaUrl, (v) => data.ollamaUrl = v),
+        ),
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Ollama model'),
+          subtitle: Text(data.ollamaModel),
+          onTap: () => text('Ollama model', data.ollamaModel, (v) => data.ollamaModel = v.isEmpty ? 'llama3.1' : v),
+        ),
+      ],
+      ListTile(
+        contentPadding: const EdgeInsets.only(left: 56),
+        title: const Text('About me'),
+        subtitle: Text(data.aiAbout.isEmpty ? 'Optional, e.g. "Data analyst in supply chain", so the steps fit your work' : data.aiAbout),
+        onTap: () => text('About me', data.aiAbout, (v) => data.aiAbout = v),
+      ),
+    ];
+  }
+
+  Future<String?> _askKey() {
+    final field = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Claude API key'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: field,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(hintText: 'sk-ant-…'),
+          ),
+          const SizedBox(height: 8),
+          const Text('Leave empty and press Save to remove the key.'),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, field.text), child: const Text('Save')),
+        ],
+      ),
+    );
+  }
+
   /// Item 101: the Day plan.
   List<Widget> _dayPlanSettings() {
     final d = data.dayPlan;
@@ -732,6 +1052,19 @@ class _SettingsPageState extends State<SettingsPage> {
         return Scaffold(
           appBar: AppBar(title: const Text('Settings')),
           body: ListView(padding: const EdgeInsets.all(16), children: [
+            // Item 114: one switch per helper; off hides it everywhere and keeps what it had.
+            _heading('Smart helpers'),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.view_agenda_outlined),
+              title: const Text('Simple view'),
+              subtitle: const Text('A button on the task list that shows just big task cards with their steps '
+                  'under them, for reading only (no dragging or ticking)'),
+              value: data.helperOn(Helper.simpleView),
+              onChanged: (v) => store.setHelper(Helper.simpleView, v),
+            ),
+            ..._helperSettings(),
+            const Divider(height: 40),
             _heading('Colour speed'),
             Text('Tasks go from green to red in ${describeHours(speedSteps[idx])}.'),
             Slider(
@@ -1054,13 +1387,31 @@ class _SettingsPageState extends State<SettingsPage> {
             if (data.templates.isEmpty)
               const Text('Save a task\'s checklist as a template from the Templates button on the task, '
                   'then add it to any task in one tap.'),
+            if (data.helperOn(Helper.projectTemplates))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Add the supply-chain starter templates'),
+                  onPressed: () {
+                    final n = store.addStarterTemplates();
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(n == 0 ? 'They are already there' : 'Added $n starter template${n == 1 ? '' : 's'}')));
+                  },
+                ),
+              ),
             for (final t in data.templates)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.checklist),
+                leading: Icon(t.project ? Icons.view_timeline_outlined : Icons.checklist),
                 title: Text(t.name),
                 subtitle: Text(t.steps.join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis),
                 onTap: () async {
+                  if (data.helperOn(Helper.projectTemplates)) {
+                    // Item 114 F: each step's length, timing and links.
+                    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => TemplatePage(store: store, template: t)));
+                    return;
+                  }
                   final lines = await askLines(context, t.name, initial: t.steps);
                   if (lines != null) store.updateTemplate(t, steps: lines);
                 },

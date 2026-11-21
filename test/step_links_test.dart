@@ -36,6 +36,8 @@ void main() {
 
     test('never moves anything earlier, and Settings "never" leaves a red clash', () {
       final s = AppStore();
+      // Item 114 D: with timing (as soon as possible) off, the old rule.
+      s.setHelper(Helper.criticalPath, false);
       final t = s.addTask('Garden')..countWeekends = true;
       final a = s.addStep(t, 'Dig')..startAt = DateTime(2026, 12, 1);
       final b = s.addStep(t, 'Plant')..startAt = DateTime(2026, 12, 10);

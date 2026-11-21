@@ -19,6 +19,11 @@ import '../native.dart';
 import '../photo_import.dart';
 import '../store.dart';
 import '../task_list.dart';
+import '../widgets/simple_cards.dart';
+import '../widgets/what_now_sheet.dart';
+import 'template_page.dart';
+import 'weekly_review_page.dart';
+import 'wrap_up_page.dart';
 import '../widgets/plan_time_sheet.dart';
 import '../widgets/add_dialogs.dart';
 import '../widgets/mode_chip.dart';
@@ -44,6 +49,9 @@ import 'stats_page.dart';
 import 'task_page.dart';
 import '../widgets/tag_widgets.dart';
 import '../tags.dart';
+import '../smart_lists.dart';
+import '../widgets/smart_list_drawer.dart';
+import 'smart_list_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.store});
@@ -235,13 +243,84 @@ class HomePageState extends State<HomePage> {
   /// and [categoryId] already chosen.
   void focusAdd({String? text, String? categoryId, String? source}) {
     _select(null);
+    // Item 114: the simple view has no add box, so adding (a widget, a share) leaves it.
+    if (store.simpleView) {
+      store.setSimpleView(false);
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _addBar.currentState?.focus(text: text, categoryId: categoryId, source: source));
+      return;
+    }
     _addBar.currentState?.focus(text: text, categoryId: categoryId, source: source);
   }
 
   void openCalendar(DateTime? day) => _open(context, CalendarPage(store: store, initialDay: day));
 
   /// Item 101: the Day plan (the Calendar's Day mode).
-  void openDayPlan() => _open(context, CalendarPage(store: store, mode: 'day'));
+  void openDayPlan([DateTime? day, bool autoPlan = false]) =>
+      _open(context, CalendarPage(store: store, mode: 'day', initialDay: day, autoPlan: autoPlan));
+
+  /// Item 114 F: pick a template, then name it and give its date.
+  Future<void> openNewFromTemplate() async {
+    final data = store.data;
+    final choice = await showDialog<Object>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        title: const Text('New from template'),
+        children: [
+          for (final t in data.templates)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, t),
+              child: Text('${t.name} (${t.steps.length} step${t.steps.length == 1 ? '' : 's'})'),
+            ),
+          if (data.templates.isEmpty)
+            const Padding(padding: EdgeInsets.fromLTRB(24, 8, 24, 8), child: Text('No templates yet.')),
+          const Divider(),
+          SimpleDialogOption(onPressed: () => Navigator.pop(c, 'starters'), child: const Text('Add the supply-chain starter templates')),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'starters') {
+      final n = store.addStarterTemplates();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(n == 0 ? 'The starter templates are already there' : 'Added $n starter template${n == 1 ? '' : 's'}')));
+      if (n > 0) return openNewFromTemplate();
+      return;
+    }
+    final t = await newFromTemplate(context, store, choice as ChecklistTemplate);
+    if (t != null && mounted) openTask(t.id);
+  }
+
+  /// Item 114 E: the weekly review screen (its notification, or the ⋮ menu).
+  void openWeeklyReview() => _open(
+      context,
+      WeeklyReviewPage(
+        store: store,
+        onOpenTask: (t) => openTask(t.id),
+        onPlanDay: (d) {
+          Navigator.of(context).pop();
+          openDayPlan(d, true);
+        },
+      ));
+
+  /// Item 114 C: "What should I do now?" (top bar button and its widget).
+  void openWhatNow() => showWhatNow(
+        context,
+        store,
+        onFocus: (t, step) => openFocusTimer(op: 'start', taskId: t.id, stepId: step?.id),
+        onOpen: (t) => openTask(t.id),
+      );
+
+  /// Item 114 B: the Wrap up screen (from its notification or the ⋮ menu).
+  void openWrapUp() => _open(
+      context,
+      WrapUpPage(
+        store: store,
+        onOpenDay: (d) {
+          Navigator.of(context).pop();
+          openDayPlan(d);
+        },
+      ));
 
   void openStats() => _open(context, StatsPage(store: store));
 
@@ -364,8 +443,15 @@ class HomePageState extends State<HomePage> {
             modeNow.showOf(data, t) == show &&
             passesFilter(t, _filter, now) &&
             passesTagFilter(t, store.liveTagFilter) &&
+            _inList(t, now) &&
             !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
+  }
+
+  /// Item 114 (11): whether [t] is on the smart list picked in the ☰ menu (true when none is).
+  bool _inList(Task t, DateTime now) {
+    final l = store.activeSmartList;
+    return l == null || passesSmartList(t, l, data, now);
   }
 
   /// Item 102: tasks the mode hides that still need attention, with why.
@@ -629,10 +715,16 @@ class HomePageState extends State<HomePage> {
             .where((t) =>
                 !t.habit &&
                 !t.isSnoozed(now) &&
+                _inList(t, now) &&
                 !(passesFilter(t, _filter, now) && passesTagFilter(t, tagFilter)) &&
                 !(data.kanbanHideFromList && t.kanban))
             .length;
     final showSearchIcon = store.topIconShown(TopIcon.search);
+    // Item 114: the simple card view button, unless Settings → Smart helpers turned it off.
+    final simpleOn = data.helperOn(Helper.simpleView);
+    final simple = simpleOn && store.simpleView && !_searching;
+    // Item 114 C: the "What should I do now?" button.
+    final nowOn = data.helperOn(Helper.whatNow);
     // Item 102: in a mode, its tools decide the icons; in Everything, Settings does. Icons that
     // don't fit beside the title move into the ⋮ menu.
     bool want(String icon, ModeTool tool) =>
@@ -645,7 +737,7 @@ class HomePageState extends State<HomePage> {
       if (want(TopIcon.dayPlan, ModeTool.dayPlan)) (TopIcon.dayPlan, ModeTool.dayPlan),
     ];
     // Room: the pane's width less the title (about 160 for the mode chip), the menu and search.
-    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
+    final room = ((width - 16 - 160 - 48 - (showSearchIcon ? 48 : 0) - (simpleOn ? 48 : 0) - (nowOn ? 48 : 0)) / 48).floor().clamp(0, candidates.length);
     final icons = {for (final c in candidates.take(room)) c.$1};
     final showBoardIcon = icons.contains(TopIcon.board);
     final showMatrixIcon = icons.contains(TopIcon.matrix);
@@ -657,7 +749,17 @@ class HomePageState extends State<HomePage> {
     final resting = modeNow.filtering && !searching
         ? data.active.where((t) => !t.habit && modeNow.showOf(data, t) == CatShow.hide).length - breaking.length
         : 0;
+    final listsOn = data.helperOn(Helper.smartLists);
     return Scaffold(
+      drawer: listsOn && !_searching
+          ? SmartListDrawer(
+              store: store,
+              onOpenBoard: openBoard,
+              onOpenMatrix: openMatrix,
+              onOpenDayPlan: openDayPlan,
+              onOpenGantt: openGantt,
+            )
+          : null,
       appBar: AppBar(
         leading: _searching
             ? IconButton(tooltip: 'Close search', icon: const Icon(Icons.arrow_back), onPressed: _closeSearch)
@@ -672,6 +774,16 @@ class HomePageState extends State<HomePage> {
               )
             : ModeTitle(store: store),
         actions: [
+          if (nowOn && !_searching)
+            IconButton(tooltip: 'What should I do now?', icon: const Icon(Icons.my_location_outlined), onPressed: openWhatNow),
+          if (simpleOn && !_searching)
+            IconButton(
+              tooltip: simple ? 'Back to the full list' : 'Simple view',
+              isSelected: simple,
+              icon: const Icon(Icons.view_agenda_outlined),
+              selectedIcon: const Icon(Icons.view_list),
+              onPressed: () => store.setSimpleView(!store.simpleView),
+            ),
           if (_searching)
             IconButton(
               tooltip: 'Search everything (steps, emails, archive)',
@@ -711,6 +823,9 @@ class HomePageState extends State<HomePage> {
               'archive' => openArchive(),
               'calendar' => openCalendar(null),
               'dayplan' => openDayPlan(),
+              'wrap' => openWrapUp(),
+              'review' => openWeeklyReview(),
+              'template' => openNewFromTemplate(),
               'stats' => openStats(),
               'achievements' => openAchievements(),
               'habits' => openHabits(),
@@ -748,6 +863,9 @@ class HomePageState extends State<HomePage> {
                 const PopupMenuItem(value: 'calendar', child: Text('Calendar')),
               if (!icons.contains(TopIcon.dayPlan) && tool(ModeTool.dayPlan))
                 const PopupMenuItem(value: 'dayplan', child: Text('Day plan')),
+              if (data.helperOn(Helper.wrapUp)) const PopupMenuItem(value: 'wrap', child: Text('Wrap up the day')),
+              if (data.helperOn(Helper.weeklyReview)) const PopupMenuItem(value: 'review', child: Text('Weekly review')),
+              if (data.helperOn(Helper.projectTemplates)) const PopupMenuItem(value: 'template', child: Text('New from template…')),
               const PopupMenuItem(value: 'search', child: Text('Search everything')),
               if (Native.supported && tool(ModeTool.events)) const PopupMenuItem(value: 'events', child: Text('Upcoming events')),
               if (tool(ModeTool.starred)) const PopupMenuItem(value: 'starred', child: Text('Starred emails')),
@@ -845,11 +963,11 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty) && !_searching)
+        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty || listsOn) && !_searching)
           _filterChips(),
-        if (data.habits.isNotEmpty && !_searching && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
-        if (breaking.isNotEmpty) _stillNeedsYou(breaking, now),
-        if (estimate != null)
+        if (data.habits.isNotEmpty && !_searching && !simple && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
+        if (breaking.isNotEmpty && !simple) _stillNeedsYou(breaking, now),
+        if (estimate != null && !simple)
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 2, 14, 0),
             child: Align(
@@ -858,6 +976,20 @@ class HomePageState extends State<HomePage> {
                   style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor)),
             ),
           ),
+        if (simple)
+          Expanded(
+            child: SimpleCards(
+              data: data,
+              entries: [
+                for (final r in rows)
+                  switch (r) {
+                    _Header h => SimpleHeading(h.name),
+                    _TaskRow t => SimpleTask(t.task),
+                  },
+              ],
+            ),
+          )
+        else
         Expanded(
           child: rows.isEmpty && hiddenCount == 0 && snoozedCount == 0 && resting <= 0 && !modeNow.peek
               ? Center(child: Text(searching ? 'No open task matches "$_query".' : 'No tasks. Type one below.'))
@@ -873,7 +1005,7 @@ class HomePageState extends State<HomePage> {
                   },
                 ),
         ),
-        _AddBar(key: _addBar, store: store),
+        if (!simple) _AddBar(key: _addBar, store: store),
       ]),
     );
   }
@@ -938,6 +1070,8 @@ class HomePageState extends State<HomePage> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           children: [
+            // Item 114 (11): the smart list in use, and saving the chips as a new one.
+            SmartListChip(store: store),
             // Item 107.
             TagFilterChip(store: store),
             if (data.showQuickFilters)
@@ -949,6 +1083,18 @@ class HomePageState extends State<HomePage> {
                   selected: store.quickFilter == f,
                   visualDensity: VisualDensity.compact,
                   onSelected: (_) => store.setQuickFilter(f),
+                ),
+              ),
+            if (data.helperOn(Helper.smartLists) &&
+                store.activeSmartList == null &&
+                (_filter != QuickFilter.all || store.liveTagFilter.isNotEmpty))
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ActionChip(
+                  avatar: const Icon(Icons.playlist_add, size: 18),
+                  label: const Text('Save as list'),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => editSmartList(context, store, smartListFromChips(store, _filter)),
                 ),
               ),
           ],

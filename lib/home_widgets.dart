@@ -9,7 +9,10 @@ import 'day_plan.dart' show layoutDay;
 import 'focus_timer.dart';
 import 'gantt.dart';
 import 'habits.dart';
+import 'auto_plan.dart' show whatNow;
+import 'day_plan.dart' show describeLength;
 import 'models.dart';
+import 'widgets/task_colors.dart' show ageColor;
 import 'modes.dart';
 import 'stats.dart';
 
@@ -74,6 +77,7 @@ class HomeWidgets {
     'app.taskblocks.DayPlanWidget', // Item 101.
     'app.taskblocks.ModeWidget', // Item 102.
     'app.taskblocks.FocusTimerWidget', // Item 102, part 4.
+    'app.taskblocks.DoNowWidget', // Item 114 C.
   ];
 
   /// Writes what the widgets show and asks them to redraw.
@@ -103,6 +107,28 @@ class HomeWidgets {
 
   /// What the widgets are given (read by WidgetData.kt). Snoozed tasks are marked `snoozed` with
   /// `snoozedUntil`: list widgets hide them until then, board widgets count them like the board does.
+  /// Item 114 C: what the Do now widget shows.
+  static Map<String, dynamic> doNowData(AppData data, DateTime now) {
+    final a = whatNow(data, now);
+    return {
+      'head': a.freeMinutes == null ? 'Do now' : 'Do now · ${describeLength(a.freeMinutes!)} free',
+      'picks': [
+        for (final p in a.picks)
+          {
+            'id': p.task.id,
+            if (p.step != null) 'step': p.step!.id,
+            'title': p.task.title,
+            'meta': [
+              if (p.step != null) p.step!.title,
+              describeLength(p.minutes),
+              ...p.why.take(2),
+            ].join(' · '),
+            'color': ageColor(p.task, data.hoursToRed, byDue: data.colourByDue, now: now).toARGB32(),
+          },
+      ],
+    };
+  }
+
   static String widgetJson(AppData data, DateTime now) {
     final stats = Stats(data, now);
     final fortnight = dayKey(now.subtract(const Duration(days: 14)));
@@ -119,6 +145,8 @@ class HomeWidgets {
       ],
       // Item 108: the Focus timer widget's buttons work without the app, Do not disturb too.
       if (data.focusSettings.dnd) 'focusDnd': true,
+      // Item 114 C: the Do now widget's picks, worked out when anything changes.
+      if (data.helperOn(Helper.whatNow)) 'doNow': doNowData(data, now),
       'today': dayKey(now),
       'hoursToRed': data.hoursToRed,
       'colourByDue': data.colourByDue,

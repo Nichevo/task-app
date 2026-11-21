@@ -13,11 +13,16 @@
     <!-- Place reminders (Settings, Places): Android watches saved places while the app is closed. -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Item 114: no Android cloud backup of the app's files. Sign-ins are in the Keystore, which
+         a restored copy could not read, and tasks are already backed up to Dropbox. -->
     <application
         android:label="Task Blocks"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -138,6 +143,13 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_checklist" />
+        </receiver>
+        <!-- Item 114 C. -->
+        <receiver android:name=".DoNowWidget" android:exported="true" android:label="Do now">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_do_now" />
         </receiver>
         <receiver android:name=".StatsWidget" android:exported="true" android:label="Task stats">
             <intent-filter>

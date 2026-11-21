@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 114 C: the Do now widget's buttons, on the task's colour. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#66FFFFFF" />
+    <corners android:radius="17dp" />
+</shape>

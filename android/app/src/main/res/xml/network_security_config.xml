@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Item 114 G: AI step breakdown can use Ollama on the home network, which answers on plain
+     http at a local address (any address, so it can't be listed here). Everything else the app
+     calls is https. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -7,9 +7,15 @@ import 'package:task_blocks/screens/day_plan_page.dart';
 import 'package:task_blocks/screens/side_panel.dart';
 import 'package:task_blocks/store.dart';
 
-// Monday 16 November 2026.
-final mon = DateTime(2026, 11, 16);
-DateTime at(int h, [int m = 0, int day = 16]) => DateTime(2026, 11, day, h, m);
+// A Monday at least a week ahead, so nothing planned on it has been missed yet (a fixed date
+// started failing once it had passed: missed times go back to the To plan tray). [day] counts
+// from 16 as that Monday, as when the tests used Monday 16 November 2026.
+final mon = () {
+  final n = DateTime.now();
+  final d = DateTime(n.year, n.month, n.day + 7);
+  return DateTime(d.year, d.month, d.day + (DateTime.monday - d.weekday + 7) % 7);
+}();
+DateTime at(int h, [int m = 0, int day = 16]) => DateTime(mon.year, mon.month, mon.day + day - 16, h, m);
 
 /// Item 101, part 3 (1.11.2): the Fold side panel, two days side by side and the widget data.
 void main() {
@@ -58,7 +64,7 @@ void main() {
     expect(s.dayPlanTwoDays, isTrue);
     expect(find.text('Monday task'), findsOneWidget);
     expect(find.text('Tuesday task'), findsOneWidget);
-    expect(find.textContaining('Tuesday 17 Nov'), findsOneWidget);
+    expect(find.textContaining('Tuesday ${at(0, 0, 17).day} '), findsOneWidget);
     // The tray panel still fits beside both days.
     expect(find.text('To plan · drag onto a time'), findsOneWidget);
   });

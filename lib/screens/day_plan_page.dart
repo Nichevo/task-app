@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../auto_plan.dart';
 import '../day_plan.dart';
 import '../models.dart';
 import '../native.dart';
@@ -27,7 +28,11 @@ import 'work_import_page.dart';
 ///
 /// Also the Calendar page's Day mode: [onMode] then switches back to 'month' or 'week'.
 class DayPlanPage extends StatefulWidget {
-  const DayPlanPage({super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false});
+  const DayPlanPage(
+      {super.key, required this.store, this.initialDay, this.onMode, this.events, this.embedded = false, this.autoPlan = false});
+
+  /// Item 114 E: run Plan my day once it opens.
+  final bool autoPlan;
 
   final AppStore store;
   final DateTime? initialDay;
@@ -181,7 +186,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
     super.initState();
     // 1.12.8: opening the Day plan in a focus mode starts from the mode's own categories.
     modeChipTweaks.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToStart();
+      if (widget.autoPlan && mounted) _planMyDay(0);
+    });
     _loadEvents();
   }
 
@@ -267,6 +275,88 @@ class _DayPlanPageState extends State<DayPlanPage> {
 
   Color _colour(Task t) => ageColor(t, data.hoursToRed, byDue: data.colourByDue);
 
+  // --- Item 114 C: Plan my day ---
+
+  /// The planned times Plan my day just added, until kept or taken back.
+  List<(Task, TimeSlot)>? _proposal;
+  int _attempt = 0;
+  DateTime? _proposalDay;
+  Set<String> get _proposed => {for (final (_, s) in _proposal ?? const <(Task, TimeSlot)>[]) s.id};
+
+  void _dropProposal() {
+    for (final (t, sl) in _proposal ?? const <(Task, TimeSlot)>[]) {
+      store.removeSlot(t, sl);
+    }
+  }
+
+  void _planMyDay(int attempt) {
+    _dropProposal();
+    final picks = planDay(data, _day, events: _events, attempt: attempt);
+    if (picks.isEmpty) {
+      setState(() => _proposal = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Nothing to add: the free time is full, or nothing open fits it.')));
+      return;
+    }
+    final added = store.planPicks(picks);
+    setState(() {
+      _proposal = added;
+      _attempt = attempt;
+      _proposalDay = _day;
+    });
+  }
+
+  Widget _proposalBar(BuildContext context) {
+    final p = _proposal!;
+    final minutes = p.fold(0, (a, x) => a + x.$2.minutes);
+    final day = _proposalDay ?? _day;
+    final free = layoutDay(data, day, events: _events).freeMinutes;
+    return Material(
+      elevation: 6,
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text('${p.length} planned, ${describeLength(minutes)}', style: Theme.of(context).textTheme.titleMedium),
+            Text('${describeLength(free)} left free. The new blocks have a dark edge until you keep them.',
+                style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              FilledButton(
+                onPressed: () {
+                  final kept = _proposal!;
+                  setState(() => _proposal = null);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Kept ${kept.length} planned times'),
+                    action: SnackBarAction(
+                      label: 'Undo',
+                      onPressed: () {
+                        for (final (t, sl) in kept) {
+                          store.removeSlot(t, sl);
+                        }
+                      },
+                    ),
+                  ));
+                },
+                child: const Text('Keep'),
+              ),
+              OutlinedButton(onPressed: () => _planMyDay(_attempt + 1), child: const Text('Try again')),
+              TextButton(
+                onPressed: () {
+                  _dropProposal();
+                  setState(() => _proposal = null);
+                },
+                child: const Text('Cancel'),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -296,6 +386,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
             actions: [
               IconButton(tooltip: 'Today', icon: const Icon(Icons.today), onPressed: () => _goTo(DateTime.now())),
               IconButton(tooltip: 'Plan a task', icon: const Icon(Icons.add), onPressed: _planAny),
+              if (data.helperOn(Helper.planMyDay) && _proposal == null)
+                IconButton(tooltip: 'Plan my day', icon: const Icon(Icons.auto_awesome), onPressed: () => _planMyDay(0)),
               if (Native.supported)
                 IconButton(
                   tooltip: 'Import work meetings',
@@ -376,7 +468,8 @@ class _DayPlanPageState extends State<DayPlanPage> {
                     ])
                   : _timeline(context, layouts),
             ),
-            if (!wide) _trayBar(context, tray),
+            if (_proposal != null) _proposalBar(context),
+            if (!wide && _proposal == null) _trayBar(context, tray),
           ]),
         );
       }),
@@ -1109,7 +1202,10 @@ class _DayPlanPageState extends State<DayPlanPage> {
           ),
           foregroundDecoration: b.clash
               ? BoxDecoration(border: Border.all(color: const Color(0xFFD32F2F), width: 2.5), borderRadius: BorderRadius.circular(12))
-              : null,
+              // Item 114 C: a Plan my day suggestion not kept yet.
+              : _proposed.contains(b.slot.id)
+                  ? BoxDecoration(border: Border.all(color: const Color(0xFF0B5D5D), width: 2.5), borderRadius: BorderRadius.circular(12))
+                  : null,
           padding: EdgeInsets.fromLTRB(10, compact ? 0 : 6, 2, 0),
           child: compact
               ? Row(children: [

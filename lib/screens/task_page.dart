@@ -19,7 +19,10 @@ import '../widgets/takes_dialog.dart';
 import '../widgets/task_where.dart';
 import '../widgets/worked_week.dart';
 import 'calendar_page.dart';
+import '../critical_path.dart' show Timing;
 import 'gantt_page.dart' show GanttPage, editStepPlan;
+import 'plan_back_page.dart';
+import '../widgets/ai_sheet.dart';
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -300,7 +303,12 @@ class _TaskPageState extends State<TaskPage> {
     } else if (choice == 'save') {
       final name = await askText(context, 'Template name', initial: task.title);
       if (name != null && name.trim().isNotEmpty) {
-        widget.store.saveTemplate(name, [for (final s in task.steps) s.title]);
+        if (data.helperOn(Helper.projectTemplates)) {
+          // Item 114 F: with each step's length, links and timing.
+          widget.store.templateFromTask(task, name.trim());
+        } else {
+          widget.store.saveTemplate(name, [for (final s in task.steps) s.title]);
+        }
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved template "${name.trim()}"')));
       }
     } else if (choice == 'new') {
@@ -425,7 +433,7 @@ class _TaskPageState extends State<TaskPage> {
   Future<void> _editRepeat() async {
     final r = await showDialog<Repeat>(
       context: context,
-      builder: (_) => RepeatDialog(initial: task.repeat),
+      builder: (_) => RepeatDialog(initial: task.repeat, due: task.dueAt),
     );
     if (r != null) _update(() => task.repeat = r);
   }
@@ -601,11 +609,15 @@ class _TaskPageState extends State<TaskPage> {
             PopupMenuButton<String>(
               onSelected: (v) => switch (v) {
                 'step' => _makeStep(),
+                'back' => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => PlanBackPage(store: widget.store, task: task))),
                 'always' => _update(() => task.alwaysShow = !task.alwaysShow),
                 _ => null,
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'step', child: Text('Make into a step of…')),
+                // Item 114 D.
+                if (task.steps.any((s) => !s.done) && widget.store.data.helperOn(Helper.criticalPath))
+                  const PopupMenuItem(value: 'back', child: Text('Plan back from the due date')),
                 // Item 102: shows in every focus mode, whatever it hides.
                 if (widget.store.data.modes.isNotEmpty || task.alwaysShow)
                   CheckedPopupMenuItem(value: 'always', checked: task.alwaysShow, child: const Text('Always show in every mode')),
@@ -715,6 +727,19 @@ class _TaskPageState extends State<TaskPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // Item 114 G.
+            if (!archived && data.helperOn(Helper.aiBreakdown))
+              IconButton(
+                tooltip: 'Break it down (AI)',
+                icon: const Icon(Icons.auto_awesome),
+                onPressed: () async {
+                  final n = await showAiBreakdown(context, widget.store, task);
+                  if (n > 0 && context.mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $n step${n == 1 ? '' : 's'}')));
+                  }
+                },
+              ),
             if (canEditAll && narrow)
               IconButton(tooltip: 'Edit all steps', icon: const Icon(Icons.edit_calendar_outlined), onPressed: editAll),
             if (canEditAll && !narrow)
@@ -940,7 +965,9 @@ class _TaskPageState extends State<TaskPage> {
         ListTile(
           leading: const Icon(Icons.timer_outlined),
           title: const Text('Time needed'),
-          subtitle: Text(task.estimate == null ? 'Not set' : 'About ${describeMinutes(task.estimate!)}'),
+          subtitle: Text(task.estimate == null
+              ? 'Not set'
+              : 'About ${describeMinutes(task.estimate!)}${task.actual == null ? '' : ' · took ${describeMinutes(task.actual!)}'}'),
           onTap: archived ? null : _pickEstimate,
           trailing: task.estimate == null || archived
               ? null
@@ -1329,7 +1356,13 @@ class _TaskPageState extends State<TaskPage> {
               : () async {
                   final d = await _pickDay(
                       'When does it start?', task.startAt ?? earliestStart(task, data) ?? dayOf(DateTime.now()));
-                  if (d != null) changedGantt(() => task.startAt = d);
+                  if (d != null) {
+                    changedGantt(() {
+                      task.startAt = d;
+                      // Item 114 D: a start picked by hand stays put.
+                      if (task.timing == Timing.asap.id || task.timing == Timing.alap.id) task.timing = Timing.fixed.id;
+                    });
+                  }
                 },
           trailing: task.startAt == null || archived
               ? null

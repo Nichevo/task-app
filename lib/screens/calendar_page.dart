@@ -15,11 +15,14 @@ import 'task_page.dart';
 /// Item 101: a third mode, Day, is the Day plan. The page opens in the mode last used on this
 /// device ([AppStore.calendarMode]) unless [mode] says.
 class CalendarPage extends StatefulWidget {
-  const CalendarPage({super.key, required this.store, this.initialDay, this.mode});
+  const CalendarPage({super.key, required this.store, this.initialDay, this.mode, this.autoPlan = false});
 
   final AppStore store;
   final DateTime? initialDay;
   final String? mode;
+
+  /// Item 114 E: run Plan my day on opening (from the weekly review).
+  final bool autoPlan;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -54,7 +57,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final r = t.repeat;
       if (r == null || r.fromCompletion) continue;
       var next = r.nextDue(due: due, completedAt: due);
-      for (var i = 0; i < 60 && next.isBefore(to); i++) {
+      for (var i = 0; i < 60 && next.isBefore(to) && r.allows(next, i + 1); i++) {
         if (!next.isBefore(from)) add(next, t, true);
         next = r.nextDue(due: next, completedAt: next);
       }
@@ -87,6 +90,7 @@ class _CalendarPageState extends State<CalendarPage> {
         store: store,
         initialDay: _day,
         onMode: _setMode,
+        autoPlan: widget.autoPlan && _day == Stats.dayOf(widget.initialDay ?? DateTime.now()),
       );
     }
     return ListenableBuilder(

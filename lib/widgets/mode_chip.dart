@@ -104,7 +104,7 @@ class ModeTitle extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(modeNow.peek ? 'Tasks (peek)' : 'Tasks'),
+            Flexible(child: Text(modeNow.peek ? 'Tasks (peek)' : 'Tasks', overflow: TextOverflow.ellipsis, softWrap: false)),
             const Icon(Icons.arrow_drop_down),
           ]),
         ),

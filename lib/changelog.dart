@@ -9,6 +9,54 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.7', 'November 2026', [
+    'My lists: save any mix of filters as a list with a name and an emoji: category, tag, matrix box, starred, when it is due, how long it takes, behind, waiting on someone and place. Open them from the new ☰ menu, which also has the Day plan, board, matrix and Gantt chart.',
+    'A list narrows the main list, the board and the matrix until you clear its chip. Pick a date chip or tags and tap "Save as list" to keep that mix. Lists can open straight on the board or matrix, and sync to your other devices.',
+    'Four to start with if you like: Quick wins (15 minutes or less), Waiting on others, At risk and Due this week. Turn My lists off in Settings, Smart helpers.',
+  ]),
+  Release('1.13.6', 'November 2026', [
+    'Break it down with AI: a ✨ button by a task\'s steps asks Claude, with your own API key, or a model in Ollama on your home network for 3 to 10 steps, each with a rough length and which steps it comes after. Tick the ones you want and they are added with their lengths and links, ready for the Gantt chart.',
+    'Only the task\'s title, notes, category, due date and current step names are sent, plus an optional line about you (Settings, Smart helpers, About me) so the steps fit your work.',
+    'The Claude key is kept in this device\'s secure storage, never in backups or the synced data. If Claude\'s safety check stops an answer, the request falls back to another Claude model instead of failing. Ollama needs to listen on the network and your phone or iPad on the same Wi-Fi.',
+    'Off until you turn it on in Settings, Smart helpers, where you also pick Claude or Ollama.',
+  ]),
+  Release('1.13.5', 'November 2026', [
+    'Project templates: a template\'s steps can now each have a length, a start a set time before or after the task\'s date ("8 weeks before the departure date") and steps they come after. Pick "New from template…" in the ⋮ menu, give a name and the date, and the task arrives with every step dated and linked, on the Gantt chart ready to go. Edit templates in Settings; "Save this checklist as a template" now keeps each step\'s timing.',
+    'Four starter templates for supply-chain analysis: demand forecast, safety stock and reorder points, late supplier delivery prediction and a quick analysis request. Add them from New from template or Settings.',
+    'Smarter repeats: monthly on, say, the last Friday or the second Tuesday, or the last working day; move a date that lands on a weekend to the Monday; and end the repeat on a date or after a number of times. Skipping one counts as one of the times.',
+    'Project templates can be turned off in Settings, Smart helpers (templates then work as plain checklists, as before).',
+  ]),
+  Release('1.13.4', 'November 2026', [
+    'Weekly review screen: tap the weekly review notification (or pick Weekly review in the ⋮ menu) for one pile at a time. Last week (done, added, focus time), what slipped past its date, tasks without a date going red, tasks with steps where nothing has been ticked for two weeks, and next week day by day with meetings, what is due and free time ("too full" when the estimates don\'t fit).',
+    'Each task gets one-tap choices: the next working day, next week, pick a date, delegate (into the Delegate box with who it waits on), drop or done, all undoable. Ageing ones can be kept, which makes them fresh again.',
+    'The last page sums up what you changed and, with Plan my day on, plans next Monday for you. Turn the screen off in Settings, Smart helpers to go back to the old notification.',
+  ]),
+  Release('1.13.3', 'November 2026', [
+    'Critical path on the Gantt chart: tap the new route button to colour the chain of tasks (or, for an opened-out task, steps) that sets the finish date, and see the spare time of the rest hatched after their bars. A card at the bottom says when it all finishes against the due date and what is on the critical path.',
+    'Tap a bar to say when it should happen: as soon as possible (straight after what it comes after, and earlier when that finishes early), as late as possible (right before what needs it), start on a date, or must finish by (worked back from its due date). Quick moves: a day earlier or later, shorter or longer. Moving a bar by hand pins it to that date.',
+    'Plan back from the due date (task ⋮ menu, or the critical path card): from the finish date it works out the latest start of every step using your links and lengths, says when you must start, and sets all the dates in one tap. Switch to Earliest starts to see them from today instead.',
+    'New tasks and steps start as soon as possible; change that, or turn the whole thing off, in Settings, Smart helpers. Tasks you already have keep their dates as they are until you pick a timing for them.',
+  ]),
+  Release('1.13.2', 'November 2026', [
+    'Plan my day: tap the ✨ button on the Day plan and the app fills your free time around meetings with the most important open tasks and steps (overdue first, then due soonest, the Do box, starred, In progress, then the oldest). It keeps lunch free and leaves some time spare. Nothing is saved until you tap Keep; Try again gives a different mix and Cancel takes it all back.',
+    'What should I do now? Tap the new target button at the top of the task list for one suggestion that fits the time before your next meeting, your focus mode and where you are, with Start focus, Open and Something else. Something planned for now always comes first.',
+    'A new Android home screen widget, Do now, shows the same suggestion with Focus, Open and Next buttons.',
+    'Both use how far off your estimates usually are, and both can be turned off or changed (time left free, lunch, using your location) in Settings, Smart helpers.',
+  ]),
+  Release('1.13.1', 'November 2026', [
+    'Learn from your estimates: when you tick off a task that has a "How long", the app asks how long it really took. The time from the focus timer and ticked Day plan blocks is picked already, so most answers are one tap. Settings, Smart helpers can ask only when nothing was timed, or never.',
+    'Statistics has a new "How good are your estimates?" card: how much longer things take than you guess (overall and by category) and your biggest misses. Once about 10 tasks have both times, planning can allow for it.',
+    'Morning brief: a notification each weekday at 7:30 with the day\'s meetings, what is planned and due, and anything overdue. Tap it to open the Day plan.',
+    'Wrap up the day: a notification at 17:30 with what is still open. Tap it (or pick "Wrap up the day" in the ⋮ menu) to move each one to tomorrow or another day, mark it worked on, done, or drop it, and see what tomorrow holds.',
+    'Both follow your focus mode schedule when you have one (only on days with a scheduled mode; the wrap up comes when the last one ends). Change the times and days, or turn them off, in Settings, Smart helpers.',
+  ]),
+  Release('1.13.0', 'November 2026', [
+    'Simple view: tap the new cards button at the top of the task list to see just big, plain task cards (name, due date, category) with their open steps as smaller cards under them. Nothing can be dragged or ticked there, so it is safe for a quick look. On an open Fold or the iPad it shows two columns. Tap the button again for the full list.',
+    'Settings has a new Smart helpers section at the top. Each helper has its own switch, and turning one off hides it everywhere. Simple view is the first; more are coming in the next updates.',
+    'Safer sign-ins: Dropbox and Google sign-ins are now kept in your device\'s secure storage instead of the app\'s own files. They move over by themselves, so you stay signed in.',
+    'The settings backup in Dropbox no longer includes the Google client secret. On a new device, enter it once when you sign in to Google.',
+    'Android no longer copies the app\'s files to its own cloud backup (your tasks are already backed up in Dropbox).',
+  ]),
   Release('1.12.19', 'November 2026', [
     'Work meetings from a photo: the times are now read properly from the hour labels down the left, instead of every meeting landing at 23:55. Stray numbers (a keyboard key under the screen) no longer throw them off.',
     'The Windows taskbar and anything below it (its clock, date and "ENG") are no longer read as meetings, and notes like "WFH" at the top of a day are all-day notes again.',

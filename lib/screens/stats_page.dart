@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../focus_timer.dart';
+import '../estimates.dart';
 import '../models.dart';
 import '../modes.dart';
 import '../stats.dart';
 import '../store.dart';
+import '../task_list.dart' show describeMinutes;
 
 /// How things are going: done per week, on-time share, time to finish, open trend,
 /// per-category totals and the streak.
@@ -79,6 +81,7 @@ class _StatsPageState extends State<StatsPage> {
             ..._kanban(context, s, from),
             ..._modes(context, from),
             ..._focus(context, from),
+            ..._estimates(context),
             const SizedBox(height: 24),
             Text('By category', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
@@ -203,6 +206,77 @@ class _StatsPageState extends State<StatsPage> {
   }
 
   /// Item 102, part 4: time on the focus timer: the last 14 days, and the tasks it went on.
+  /// Item 114 B: estimates against how long things really took (last 60 days).
+  List<Widget> _estimates(BuildContext context) {
+    final store = widget.store;
+    final data = store.data;
+    if (!data.helperOn(Helper.learnEstimates)) return [];
+    final s = estimateStats(data, DateTime.now());
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    final scheme = Theme.of(context).colorScheme;
+    if (s.count == 0) {
+      return [
+        _heading(context, 'How good are your estimates?'),
+        Text('Give tasks a "How long" and tick them off; the real time is saved beside the guess. '
+            'After about $enoughToLearn this shows how far off you usually are.', style: hint),
+      ];
+    }
+    Color colourFor(double r) => r > 1.25 ? Colors.red.shade400 : r > 1.05 ? Colors.amber.shade600 : Colors.green.shade500;
+    final most = s.byCategory.map((c) => c.$2).fold(1.0, (a, b) => a > b ? a : b);
+    return [
+      _heading(context, 'How good are your estimates?', 'Last 60 days · ${s.count} task${s.count == 1 ? '' : 's'} with both times'),
+      Text(describeRatio(s.ratio!), style: Theme.of(context).textTheme.displaySmall),
+      Text(s.ratio! >= 1
+          ? 'Things take you about ${((s.ratio! - 1) * 100).round()}% longer than you guess.'
+          : 'Things take you about ${((1 - s.ratio!) * 100).round()}% less time than you guess.'),
+      if (s.count < enoughToLearn)
+        Text('Planning starts allowing for this after $enoughToLearn tasks.', style: hint),
+      const SizedBox(height: 12),
+      for (final (cat, r, n) in s.byCategory)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text('${data.category(cat)?.name ?? 'No category'} ($n)')),
+              Text(describeRatio(r), style: const TextStyle(fontWeight: FontWeight.bold)),
+            ]),
+            const SizedBox(height: 3),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: r / most,
+                minHeight: 8,
+                color: colourFor(r),
+                backgroundColor: scheme.surfaceContainerHighest,
+              ),
+            ),
+          ]),
+        ),
+      if (s.misses.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Text('Biggest misses', style: Theme.of(context).textTheme.titleSmall),
+        for (final m in s.misses)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(m.title),
+            subtitle: Text('Guessed ${describeMinutes(m.est)}'),
+            trailing: Text('took ${describeMinutes(m.act)}'),
+          ),
+      ],
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Allow for it when planning'),
+        subtitle: const Text('Plan my day and What now stretch estimates by how far off you usually are'),
+        value: data.allowForEstimates,
+        onChanged: (v) {
+          data.allowForEstimates = v;
+          store.changed(settings: true);
+        },
+      ),
+    ];
+  }
+
   List<Widget> _focus(BuildContext context, DateTime? from) {
     final data = widget.store.data;
     final tasks = [...data.active, ...data.archived];

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -51,9 +52,9 @@ void main() {
       final t = Task.create('Bins')
         ..repeat = const Repeat(unit: RepeatUnit.week)
         ..estimate = 10;
-      final next = t.nextRepeat(now);
+      final next = t.nextRepeat(now)!;
       expect(next.series, t.id);
-      expect(next.nextRepeat(now).series, t.id);
+      expect(next.nextRepeat(now)!.series, t.id);
       expect(next.estimate, 10);
 
       final a = SkipRecord(taskId: 'x', series: 'x', at: now, due: now);
@@ -191,7 +192,9 @@ void main() {
 
   group('40 about', () {
     test('changelog is newest first and matches pubspec', () {
-      expect(releases.first.version, '1.12.19');
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      final version = RegExp(r'^version: ([0-9.]+)', multiLine: true).firstMatch(pubspec)!.group(1);
+      expect(releases.first.version, version);
     });
   });
 }

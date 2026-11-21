@@ -35,7 +35,7 @@ void main() {
       final s = AppStore();
       final t = s.addTask('Pay rent', box: MatrixBox.decide, due: DateTime(2026, 11, 1, 9))
         ..repeat = Repeat(unit: RepeatUnit.month);
-      expect(t.nextRepeat(DateTime(2026, 11, 1)).matrixBox, 'decide');
+      expect(t.nextRepeat(DateTime(2026, 11, 1))!.matrixBox, 'decide');
     });
 
     test('"Urgent?" shows only in a not-urgent box, when due within the days set', () {

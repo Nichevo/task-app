@@ -192,6 +192,8 @@ void main() {
   group('moving on the chart', () {
     test('moving later works out how far the tasks after it must move, only as needed', () {
       final s = AppStore();
+      // Item 114 D: with timing (as soon as possible) off, the old rule.
+      s.setHelper(Helper.criticalPath, false);
       final a = s.addTask('A')
         ..startAt = mon
         ..takesDays = 2
