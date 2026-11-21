@@ -1842,3 +1842,44 @@ name means its default). Built as updates A to G; mock-ups in the project files
   at the end and no copy is made). Skip counts one off. The calendar and statistics stop
   projecting at the end. Public holidays are not known to the app, so only weekends move.
 - Tests: test/smart_helpers_f_test.dart.
+
+### 114 G: AI step breakdown with Claude or Ollama (version 1.13.6)
+
+- `lib/ai_breakdown.dart`: `breakDown(data, task, claudeKey:)` asks for 3 to 10 steps
+  (`title`, `minutes`, `after` = earlier places) using structured output (JSON schema) and
+  `stepsFrom` turns the ticked ones into steps with `takesMinutes`/`takesDays` and links.
+  - Claude: raw HTTP to `/v1/messages` (no official Dart SDK), the key from `Secrets.claudeKey`
+    (secure storage, never in backups), low effort, a 2 minute time-out, the server-side
+    fallback beta so a safety-check stop answers with another Claude model; `refusal` is
+    still checked. Errors are mapped to plain words (no key, bad key, out of credit, busy).
+  - Ollama: `POST <address>/api/chat` with `format` = the same schema, `stream: false`.
+    Plain http on the home network is allowed: Android `network_security_config.xml`, iOS
+    and macOS `NSAllowsLocalNetworking` + the local network usage text.
+- Sent: the task's title, notes, category, due date and current step names, plus the optional
+  "About me" line. Nothing else.
+- `lib/widgets/ai_sheet.dart`: the sheet (spinner, error, tick boxes, Add N steps, Try again).
+  `AppStore.addAiSteps` sets the default timing, puts them in the first board stage when the
+  task's steps are on the board, and keeps the step order.
+- Settings, Smart helpers: "AI step breakdown" (off by default), Claude or Ollama, the key,
+  the Ollama address and model, About me.
+- Tests: test/smart_helpers_g_test.dart (mock HTTP client).
+
+### 114 (11): saved smart lists (version 1.13.7)
+
+- `lib/smart_lists.dart`: `SmartList` (name, emoji, categories incl. '' = none, tags, matrix
+  box, starred, `due` = `SmartDue`, `maxMinutes` by `planLength`, behind by `taskPace`, waiting
+  true/false/either, place name, `opens` list/board/matrix), kept in
+  `helperPrefs['smartLists']` so they sync. `passesSmartList`, `describeSmartList`,
+  `starterSmartLists`.
+- `AppStore.smartListId` (this device), `activeSmartList` (null when the helper is off or the
+  list is gone), `setSmartList`, `saveSmartList`, `deleteSmartList`, `moveSmartList`,
+  `addStarterSmartLists`.
+- Home: a ☰ drawer (`lib/widgets/smart_list_drawer.dart`): All tasks, My lists with counts
+  (tap, long-press to change, drag to reorder), New list, starters, and the views.
+  `SmartListChip` above the list, board and matrix (✕ clears); "Save as list" chip when a date
+  chip or tags are picked (`smartListFromChips`). Board and matrix follow the list too.
+- `lib/screens/smart_list_page.dart`: make or change a list, with a live count and preview.
+- Settings, Smart helpers: "My lists". Not built: a list widget and a focus mode opening on a
+  list (from the mock-up).
+- The "Tasks ▾" title now shortens instead of overflowing when the ☰ button takes room.
+- Tests: test/smart_lists_test.dart.

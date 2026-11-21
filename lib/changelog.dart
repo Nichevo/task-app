@@ -9,6 +9,17 @@ class Release {
 }
 
 const releases = [
+  Release('1.13.7', 'November 2026', [
+    'My lists: save any mix of filters as a list with a name and an emoji: category, tag, matrix box, starred, when it is due, how long it takes, behind, waiting on someone and place. Open them from the new ☰ menu, which also has the Day plan, board, matrix and Gantt chart.',
+    'A list narrows the main list, the board and the matrix until you clear its chip. Pick a date chip or tags and tap "Save as list" to keep that mix. Lists can open straight on the board or matrix, and sync to your other devices.',
+    'Four to start with if you like: Quick wins (15 minutes or less), Waiting on others, At risk and Due this week. Turn My lists off in Settings, Smart helpers.',
+  ]),
+  Release('1.13.6', 'November 2026', [
+    'Break it down with AI: a ✨ button by a task\'s steps asks Claude, with your own API key, or a model in Ollama on your home network for 3 to 10 steps, each with a rough length and which steps it comes after. Tick the ones you want and they are added with their lengths and links, ready for the Gantt chart.',
+    'Only the task\'s title, notes, category, due date and current step names are sent, plus an optional line about you (Settings, Smart helpers, About me) so the steps fit your work.',
+    'The Claude key is kept in this device\'s secure storage, never in backups or the synced data. If Claude\'s safety check stops an answer, the request falls back to another Claude model instead of failing. Ollama needs to listen on the network and your phone or iPad on the same Wi-Fi.',
+    'Off until you turn it on in Settings, Smart helpers, where you also pick Claude or Ollama.',
+  ]),
   Release('1.13.5', 'November 2026', [
     'Project templates: a template\'s steps can now each have a length, a start a set time before or after the task\'s date ("8 weeks before the departure date") and steps they come after. Pick "New from template…" in the ⋮ menu, give a name and the date, and the task arrives with every step dated and linked, on the Gantt chart ready to go. Edit templates in Settings; "Save this checklist as a template" now keeps each step\'s timing.',
     'Four starter templates for supply-chain analysis: demand forecast, safety stock and reorder points, late supplier delivery prediction and a quick analysis request. Add them from New from template or Settings.',

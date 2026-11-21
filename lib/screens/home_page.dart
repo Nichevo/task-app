@@ -49,6 +49,9 @@ import 'stats_page.dart';
 import 'task_page.dart';
 import '../widgets/tag_widgets.dart';
 import '../tags.dart';
+import '../smart_lists.dart';
+import '../widgets/smart_list_drawer.dart';
+import 'smart_list_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.store});
@@ -440,8 +443,15 @@ class HomePageState extends State<HomePage> {
             modeNow.showOf(data, t) == show &&
             passesFilter(t, _filter, now) &&
             passesTagFilter(t, store.liveTagFilter) &&
+            _inList(t, now) &&
             !(data.kanbanHideFromList && t.kanban));
     return sortTasks(shown.toList(), data, now);
+  }
+
+  /// Item 114 (11): whether [t] is on the smart list picked in the ☰ menu (true when none is).
+  bool _inList(Task t, DateTime now) {
+    final l = store.activeSmartList;
+    return l == null || passesSmartList(t, l, data, now);
   }
 
   /// Item 102: tasks the mode hides that still need attention, with why.
@@ -705,6 +715,7 @@ class HomePageState extends State<HomePage> {
             .where((t) =>
                 !t.habit &&
                 !t.isSnoozed(now) &&
+                _inList(t, now) &&
                 !(passesFilter(t, _filter, now) && passesTagFilter(t, tagFilter)) &&
                 !(data.kanbanHideFromList && t.kanban))
             .length;
@@ -738,7 +749,17 @@ class HomePageState extends State<HomePage> {
     final resting = modeNow.filtering && !searching
         ? data.active.where((t) => !t.habit && modeNow.showOf(data, t) == CatShow.hide).length - breaking.length
         : 0;
+    final listsOn = data.helperOn(Helper.smartLists);
     return Scaffold(
+      drawer: listsOn && !_searching
+          ? SmartListDrawer(
+              store: store,
+              onOpenBoard: openBoard,
+              onOpenMatrix: openMatrix,
+              onOpenDayPlan: openDayPlan,
+              onOpenGantt: openGantt,
+            )
+          : null,
       appBar: AppBar(
         leading: _searching
             ? IconButton(tooltip: 'Close search', icon: const Icon(Icons.arrow_back), onPressed: _closeSearch)
@@ -942,7 +963,7 @@ class HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty) && !_searching)
+        if ((data.showQuickFilters || store.liveTagFilter.isNotEmpty || store.tagKeysInUse.isNotEmpty || listsOn) && !_searching)
           _filterChips(),
         if (data.habits.isNotEmpty && !_searching && !simple && modeNow.toolOn(ModeTool.habits)) _habitsLine(now),
         if (breaking.isNotEmpty && !simple) _stillNeedsYou(breaking, now),
@@ -1049,6 +1070,8 @@ class HomePageState extends State<HomePage> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           children: [
+            // Item 114 (11): the smart list in use, and saving the chips as a new one.
+            SmartListChip(store: store),
             // Item 107.
             TagFilterChip(store: store),
             if (data.showQuickFilters)
@@ -1060,6 +1083,18 @@ class HomePageState extends State<HomePage> {
                   selected: store.quickFilter == f,
                   visualDensity: VisualDensity.compact,
                   onSelected: (_) => store.setQuickFilter(f),
+                ),
+              ),
+            if (data.helperOn(Helper.smartLists) &&
+                store.activeSmartList == null &&
+                (_filter != QuickFilter.all || store.liveTagFilter.isNotEmpty))
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ActionChip(
+                  avatar: const Icon(Icons.playlist_add, size: 18),
+                  label: const Text('Save as list'),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => editSmartList(context, store, smartListFromChips(store, _filter)),
                 ),
               ),
           ],

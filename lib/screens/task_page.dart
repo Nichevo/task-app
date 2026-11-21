@@ -22,6 +22,7 @@ import 'calendar_page.dart';
 import '../critical_path.dart' show Timing;
 import 'gantt_page.dart' show GanttPage, editStepPlan;
 import 'plan_back_page.dart';
+import '../widgets/ai_sheet.dart';
 import 'kanban_page.dart' show moveWithRule, describeSpell;
 import 'matrix_page.dart' show putInBox;
 import 'settings_page.dart' show askText, askLines, remindOptions;
@@ -726,6 +727,19 @@ class _TaskPageState extends State<TaskPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            // Item 114 G.
+            if (!archived && data.helperOn(Helper.aiBreakdown))
+              IconButton(
+                tooltip: 'Break it down (AI)',
+                icon: const Icon(Icons.auto_awesome),
+                onPressed: () async {
+                  final n = await showAiBreakdown(context, widget.store, task);
+                  if (n > 0 && context.mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $n step${n == 1 ? '' : 's'}')));
+                  }
+                },
+              ),
             if (canEditAll && narrow)
               IconButton(tooltip: 'Edit all steps', icon: const Icon(Icons.edit_calendar_outlined), onPressed: editAll),
             if (canEditAll && !narrow)

@@ -2803,10 +2803,19 @@ abstract final class Helper {
   /// Item 114 F: project templates (timed steps, New from template).
   static const projectTemplates = 'projectTemplates';
 
-  static const all = [simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview, projectTemplates];
+  /// Item 114 G: break a task into steps with AI (a Claude key, or Ollama on the home network).
+  static const aiBreakdown = 'aiBreakdown';
 
-  /// Helpers that start switched off.
-  static const offByDefault = <String>{};
+  /// Item 114 (11): saved smart lists in the ☰ menu.
+  static const smartLists = 'smartLists';
+
+  static const all = [
+    simpleView, learnEstimates, morningBrief, wrapUp, planMyDay, whatNow, criticalPath, weeklyReview, projectTemplates, aiBreakdown,
+    smartLists,
+  ];
+
+  /// Helpers that start switched off (AI sends task text away, so it waits for a key).
+  static const offByDefault = <String>{aiBreakdown};
 }
 
 /// Item 114 B: when a daily helper notification (morning brief, wrap up) comes.

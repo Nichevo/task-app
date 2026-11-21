@@ -15,7 +15,10 @@ class Secrets {
   static const dropboxRefresh = 'dropboxRefreshToken';
   static const googleRefresh = 'googleRefreshToken';
   static const googleSecret = 'googleClientSecret';
-  static const names = [dropboxRefresh, googleRefresh, googleSecret];
+
+  /// Item 114 G: the Claude API key for AI step breakdown.
+  static const claudeKey = 'claudeApiKey';
+  static const names = [dropboxRefresh, googleRefresh, googleSecret, claudeKey];
 
   /// False once a read or write failed: everything then stays in the settings file.
   bool works = true;

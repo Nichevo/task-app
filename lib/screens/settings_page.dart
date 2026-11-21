@@ -13,6 +13,8 @@ import '../location.dart';
 import '../day_plan.dart' show describeLength;
 import '../auto_plan.dart' show PlanPrefs;
 import '../critical_path.dart' show Timing, TimingPrefs;
+import '../ai_breakdown.dart' show AiPrefs;
+import '../smart_lists.dart' show SmartListPrefs;
 import '../models.dart';
 import '../native.dart';
 import '../store.dart';
@@ -779,7 +781,115 @@ class _SettingsPageState extends State<SettingsPage> {
         value: data.helperOn(Helper.projectTemplates),
         onChanged: (v) => store.setHelper(Helper.projectTemplates, v),
       ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.auto_awesome_outlined),
+        title: const Text('AI step breakdown'),
+        subtitle: const Text('A ✨ button by a task\'s steps asks Claude or your own Ollama model for steps. '
+            'Only the title, notes, category, due date, step names and the line about you are sent'),
+        value: data.helperOn(Helper.aiBreakdown),
+        onChanged: (v) => store.setHelper(Helper.aiBreakdown, v),
+      ),
+      if (data.helperOn(Helper.aiBreakdown)) ..._aiSettings(),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.playlist_add_check),
+        title: const Text('My lists'),
+        subtitle: Text('Saved mixes of filters in the ☰ menu, also on the board and matrix · '
+            '${data.smartLists.length} list${data.smartLists.length == 1 ? '' : 's'}'),
+        value: data.helperOn(Helper.smartLists),
+        onChanged: (v) => store.setHelper(Helper.smartLists, v),
+      ),
     ];
+  }
+
+  /// Item 114 G: which AI, the Claude key (kept on this device only) or the Ollama address.
+  List<Widget> _aiSettings() {
+    final hint = Theme.of(context).textTheme.bodySmall;
+    Future<void> text(String title, String initial, void Function(String) set) async {
+      final v = await askText(context, title, initial: initial);
+      if (v != null) _set(() => set(v));
+    }
+
+    return [
+      Padding(
+        padding: const EdgeInsets.only(left: 56),
+        child: Row(children: [
+          Expanded(child: Text('Use', style: hint)),
+          DropdownButton<String>(
+            value: data.aiProvider,
+            items: const [
+              DropdownMenuItem(value: 'claude', child: Text('Claude (your API key)')),
+              DropdownMenuItem(value: 'ollama', child: Text('Ollama (home network)')),
+            ],
+            onChanged: (v) => _set(() => data.aiProvider = v ?? 'claude'),
+          ),
+        ]),
+      ),
+      if (data.aiProvider == 'claude')
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Claude API key'),
+          subtitle: Text(store.claudeKey.isEmpty
+              ? 'Not set. Get one at console.anthropic.com. Kept on this device only, never in backups'
+              : 'Set (…${store.claudeKey.substring(store.claudeKey.length < 4 ? 0 : store.claudeKey.length - 4)}). Kept on this device only'),
+          trailing: const Icon(Icons.key_outlined),
+          onTap: () async {
+            final v = await _askKey();
+            if (v == null) return;
+            setState(() => store.claudeKey = v.trim());
+            await store.saveDeviceSettings();
+          },
+        )
+      else ...[
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Ollama address'),
+          subtitle: Text(data.ollamaUrl.isEmpty
+              ? 'Not set, e.g. http://192.168.1.20:11434. Ollama must listen on the network (OLLAMA_HOST=0.0.0.0) '
+                  'and you need to be on the same Wi-Fi'
+              : data.ollamaUrl),
+          onTap: () => text('Ollama address', data.ollamaUrl, (v) => data.ollamaUrl = v),
+        ),
+        ListTile(
+          contentPadding: const EdgeInsets.only(left: 56),
+          title: const Text('Ollama model'),
+          subtitle: Text(data.ollamaModel),
+          onTap: () => text('Ollama model', data.ollamaModel, (v) => data.ollamaModel = v.isEmpty ? 'llama3.1' : v),
+        ),
+      ],
+      ListTile(
+        contentPadding: const EdgeInsets.only(left: 56),
+        title: const Text('About me'),
+        subtitle: Text(data.aiAbout.isEmpty ? 'Optional, e.g. "Data analyst in supply chain", so the steps fit your work' : data.aiAbout),
+        onTap: () => text('About me', data.aiAbout, (v) => data.aiAbout = v),
+      ),
+    ];
+  }
+
+  Future<String?> _askKey() {
+    final field = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Claude API key'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: field,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(hintText: 'sk-ant-…'),
+          ),
+          const SizedBox(height: 8),
+          const Text('Leave empty and press Save to remove the key.'),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, field.text), child: const Text('Save')),
+        ],
+      ),
+    );
   }
 
   /// Item 101: the Day plan.

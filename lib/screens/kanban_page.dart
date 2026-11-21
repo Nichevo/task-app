@@ -13,6 +13,8 @@ import '../widgets/card_shading.dart';
 import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
+import '../smart_lists.dart' show passesSmartList;
+import '../widgets/smart_list_drawer.dart' show SmartListChip;
 import '../widgets/tag_widgets.dart';
 import '../tags.dart';
 
@@ -233,6 +235,7 @@ class _KanbanPageState extends State<KanbanPage> {
         ? matchesSearch(t, q, store.data) || t.boardSteps.any((st) => st.title.toLowerCase().contains(q.toLowerCase()))
         : passesFilter(t, _filter, now) &&
             passesTagFilter(t, store.liveTagFilter) &&
+            (store.activeSmartList == null || passesSmartList(t, store.activeSmartList!, data, now)) &&
             (_category == null ||
                 (_category!.isEmpty ? data.category(t.categoryId) == null : t.categoryId == _category)));
     return sortTasks(shown.toList(), data, now);
@@ -514,6 +517,7 @@ class _KanbanPageState extends State<KanbanPage> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         children: [
           // Item 107.
+          SmartListChip(store: store),
           TagFilterChip(store: store),
           if (cats.isNotEmpty)
             Padding(

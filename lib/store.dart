@@ -27,6 +27,7 @@ import 'native.dart';
 import 'places.dart';
 import 'reminders.dart';
 import 'secrets.dart';
+import 'smart_lists.dart';
 import 'templates.dart';
 import 'tags.dart';
 import 'task_list.dart';
@@ -99,6 +100,9 @@ class AppStore extends ChangeNotifier {
   /// secret, typed in Settings, and the signed-in client.
   String googleClientId = '';
   String googleClientSecret = '';
+
+  /// Item 114 G: this device's Claude API key (kept in the secure store, never synced or backed up).
+  String claudeKey = '';
   GoogleClient? google;
 
   /// When the app last offered tasks from calendar events on its own (device-only).
@@ -110,6 +114,9 @@ class AppStore extends ChangeNotifier {
   /// Item 107: tags picked in the tag filter (list, board and matrix); empty = every task,
   /// [untaggedFilter] = tasks with no tag. Device-only.
   final Set<String> tagFilter = {};
+
+  /// Item 114 (11): the smart list picked on this device, if any.
+  String? smartListId;
 
   /// Item 60: the Matrix page's last filter on this device (category null = all, '' = none).
   QuickFilter matrixFilter = QuickFilter.all;
@@ -225,11 +232,13 @@ class AppStore extends ChangeNotifier {
       matrixFilter = QuickFilter.values.where((f) => f.name == s['matrixFilter']).firstOrNull ?? QuickFilter.all;
       matrixCategory = s['matrixCategory'] as String?;
       tagFilter.addAll([for (final x in s['tagFilter'] as List? ?? []) ?x as String?]);
+      smartListId = s['smartList'] as String?;
       deviceBackupChecked = s['deviceBackupChecked'] as bool? ?? false;
       emailCheckMinutes = (s['emailCheckMinutes'] as num?)?.toInt() ?? 0;
       _readPanel(s);
       googleClientId = s['googleClientId'] as String? ?? '';
       googleClientSecret = s['googleClientSecret'] as String? ?? '';
+      claudeKey = s[Secrets.claudeKey] as String? ?? '';
       final gRefresh = s['googleRefreshToken'] as String?;
       if (googleClientId.isNotEmpty && gRefresh != null) {
         google = GoogleClient(googleClientId, googleClientSecret,
@@ -427,6 +436,7 @@ class AppStore extends ChangeNotifier {
         Secrets.dropboxRefresh: dropbox?.refreshToken,
         Secrets.googleRefresh: google?.refreshToken,
         Secrets.googleSecret: googleClientSecret,
+        Secrets.claudeKey: claudeKey,
       };
 
   String _deviceSettingsText({bool withSecrets = true}) => jsonEncode({
@@ -450,6 +460,7 @@ class AppStore extends ChangeNotifier {
       if (matrixFilter != QuickFilter.all) 'matrixFilter': matrixFilter.name,
       if (matrixCategory != null) 'matrixCategory': matrixCategory,
       if (tagFilter.isNotEmpty) 'tagFilter': tagFilter.toList(),
+      if (smartListId != null) 'smartList': smartListId,
       if (deviceBackupChecked) 'deviceBackupChecked': true,
       if (emailCheckMinutes > 0) 'emailCheckMinutes': emailCheckMinutes,
       ..._panelJson(),
@@ -457,6 +468,7 @@ class AppStore extends ChangeNotifier {
       if (withSecrets && googleClientSecret.isNotEmpty) 'googleClientSecret': googleClientSecret,
       if (withSecrets && google?.refreshToken != null) 'googleRefreshToken': google!.refreshToken,
       if (google?.email != null) 'googleEmail': google!.email,
+      if (withSecrets && claudeKey.isNotEmpty) Secrets.claudeKey: claudeKey,
     });
 
   /// Call after any change to [data]. Pass the [task] that changed, [order] if the
@@ -2726,6 +2738,50 @@ class AppStore extends ChangeNotifier {
   String? _tagKeysKey;
   Set<String>? _tagKeys;
 
+  /// Item 114 (11): the smart list in use (none when the helper is off or the list is gone).
+  SmartList? get activeSmartList => data.helperOn(Helper.smartLists) ? data.smartList(smartListId) : null;
+
+  /// Picks smart list [id] (null = none) on this device.
+  void setSmartList(String? id) {
+    smartListId = id;
+    notifyListeners();
+    saveDeviceSettings();
+  }
+
+  /// Adds [l] or puts it in place of the list with its id.
+  void saveSmartList(SmartList l) {
+    final all = data.smartLists;
+    final i = all.indexWhere((x) => x.id == l.id);
+    i < 0 ? all.add(l) : all[i] = l;
+    data.smartLists = all;
+    changed(settings: true);
+  }
+
+  void deleteSmartList(String id) {
+    data.smartLists = [for (final l in data.smartLists) if (l.id != id) l];
+    if (smartListId == id) smartListId = null;
+    changed(settings: true);
+    saveDeviceSettings();
+  }
+
+  /// Moves list [from] to place [to] (the place after taking it out).
+  void moveSmartList(int from, int to) {
+    final all = data.smartLists;
+    all.insert(to, all.removeAt(from));
+    data.smartLists = all;
+    changed(settings: true);
+  }
+
+  /// Adds the starter lists that aren't there yet (by name). Returns how many.
+  int addStarterSmartLists() {
+    final all = data.smartLists;
+    final have = {for (final l in all) l.name.toLowerCase()};
+    final add = [for (final l in starterSmartLists()) if (!have.contains(l.name.toLowerCase())) l];
+    data.smartLists = [...all, ...add];
+    changed(settings: true);
+    return add.length;
+  }
+
   /// Picks a quick filter chip and remembers it on this device.
   void setQuickFilter(QuickFilter f) {
     quickFilter = f;
@@ -3346,6 +3402,18 @@ class AppStore extends ChangeNotifier {
     data.templates.add(tpl);
     changed(settings: true);
     return tpl;
+  }
+
+  /// Item 114 G: adds the AI's steps to [t] (lengths and links kept). Returns how many.
+  int addAiSteps(Task t, List<TaskStep> steps) {
+    for (final s in steps) {
+      if (data.helperOn(Helper.criticalPath)) s.timing = data.newTiming.id;
+      t.steps.add(s);
+      if (t.boardSteps.isNotEmpty && data.stages.isNotEmpty) _moveStep(t, s, data.stages.first, MoveHow.added, locate: false);
+    }
+    keepStepOrder(t);
+    changed(task: t);
+    return steps.length;
   }
 
   /// Item 114 F: call after editing a template's fields on its page.

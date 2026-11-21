@@ -7,6 +7,8 @@ import '../task_list.dart';
 import '../widgets/task_colors.dart';
 import 'settings_page.dart' show askText;
 import 'task_page.dart';
+import '../smart_lists.dart' show passesSmartList;
+import '../widgets/smart_list_drawer.dart' show SmartListChip;
 import '../widgets/tag_widgets.dart';
 import '../tags.dart';
 
@@ -103,6 +105,7 @@ class _MatrixPageState extends State<MatrixPage> {
         if (t.matrixBox == b.id &&
             passesFilter(t, store.matrixFilter, now) &&
             passesTagFilter(t, store.liveTagFilter) &&
+            (store.activeSmartList == null || passesSmartList(t, store.activeSmartList!, data, now)) &&
             (cat == null || (cat.isEmpty ? data.category(t.categoryId) == null : t.categoryId == cat)) &&
             (q.isEmpty || matchesSearch(t, q, data)))
           t,
@@ -203,6 +206,7 @@ class _MatrixPageState extends State<MatrixPage> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         children: [
           // Item 107.
+          SmartListChip(store: store),
           TagFilterChip(store: store),
           if (cats.isNotEmpty)
             Padding(
