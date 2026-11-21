@@ -1903,3 +1903,8 @@ Picked from the 4x2 mock-ups (A, B, G, H, I, J; /mnt/project-files/task-app/widg
   `WeekProvider` redrawing each minute for the clocks, `WeekOpAction` for the arrows, toggle and
   day pick, per widget kind), iPad calendar events via `Events.between`.
 - Tests: test/week_widgets_test.dart.
+
+### 115 fix: week widgets couldn't load on Android (version 1.13.9)
+
+- The clock strip (`widget_clock_strip.xml`) used a plain `View` as a spacer, which home screen
+  widgets can't draw, so all six showed "Can't load widget". It is now a `FrameLayout`.
